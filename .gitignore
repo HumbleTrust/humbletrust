@@ -1,7 +1,39 @@
-.anchor
+# Anchor / Solana build artifacts
+target/
+.anchor/
+test-ledger/
+
+# Solana keypairs (VERY IMPORTANT)
+*.json
+*.key
+*.pem
+id.json
+wallet.json
+keypair.json
+upgrade-authority.json
+authority.json
+
+# Node / Vite
+node_modules/
+dist/
+build/
+.cache/
+*.tsbuildinfo
+
+# Yarn
+.yarn/
+.yarnrc.yml
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# OS junk
 .DS_Store
-target
-**/*.rs.bk
-node_modules
-test-ledger
-.yarn
+Thumbs.db
+
+# IDE junk
+.vscode/
+.idea/
+*.swp
