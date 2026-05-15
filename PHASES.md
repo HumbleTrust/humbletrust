@@ -72,13 +72,16 @@
 - Shows in Phantom as "Humble.Trust Launch Certificate #N"
 - Implementation: Token-2022 with NonTransferable extension
 
-## 📋 Phase 5 — Mainnet readiness
-- Wash trading detection (off-chain via metrics_authority)
-- Pyth Oracle for dynamic USD pricing
-- Multisig upgrade authority (squads.so)
-- Audit (CertiK / Halborn / OtterSec)
-- Fresh mainnet deploy (new Program ID)
-- Marketing campaign + X presence
+## 🚧 Phase 5 — Mainnet readiness (in progress)
+- ✅ Wash trading detection — record_trade is oracle-only, suspected_wash from oracle
+- ✅ Dynamic fees — GlobalState holds configurable standard/premium lamports
+- ✅ update_fee_parameters — authority adjusts fees without redeploy (tracks SOL price)
+- ✅ Emergency pause — toggle_launches_pause halts new launches instantly
+- ✅ upgrade_authority field — points to Squads multisig before mainnet
+- 📋 Pyth Oracle live integration — read SOL/USD price feed, auto-compute fee lamports
+- 📋 Squads v4 multisig setup — transfer BPFUpgradeableLoader upgrade authority
+- 📋 Security audit — CertiK / Halborn / OtterSec
+- 📋 Fresh mainnet deploy (new Program ID, new IDL)
 
 ## 📋 Phase 6 — Advanced features
 - Time-bound tax breaks (higher launch fee + 0% trade fees first 30 days)

@@ -5,9 +5,10 @@ import { Footer } from "./components/Footer";
 import { Landing } from "./pages/Landing";
 import { Launch } from "./pages/Launch";
 import { Discover } from "./pages/Discover";
+import { Trade } from "./pages/Trade";
 import { About } from "./pages/About";
 
-export type Page = "home" | "launch" | "discover" | "about";
+export type Page = "home" | "launch" | "discover" | "trade" | "about";
 
 export const App = () => {
   const [page, setPage] = useState<Page>("home");
@@ -21,6 +22,7 @@ export const App = () => {
       {page === "home" && <Landing goLaunch={() => setPage("launch")} goDiscover={() => setPage("discover")} />}
       {page === "launch" && <Launch />}
       {page === "discover" && <Discover />}
+      {page === "trade" && <Trade goDiscover={() => setPage("discover")} />}
       {page === "about" && <About />}
       <Footer setPage={setPage} />
     </>

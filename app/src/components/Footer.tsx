@@ -19,25 +19,28 @@ export const Footer = ({ setPage }: { setPage: (p: Page) => void }) => (
       <div>
         <div className="foot-h">Product</div>
         <ul className="foot-list">
-          <li><a onClick={() => setPage("launch")}>Launch token</a></li>
-          <li><a onClick={() => setPage("discover")}>Discover</a></li>
-          <li><a onClick={() => setPage("about")}>How it works</a></li>
+          <li><a href="#" onClick={(e) => { e.preventDefault(); setPage("launch"); }}>Launch token</a></li>
+          <li><a href="#" onClick={(e) => { e.preventDefault(); setPage("discover"); }}>Discover</a></li>
+          <li><a href="#" onClick={(e) => { e.preventDefault(); setPage("trade"); }}>Trade</a></li>
+          <li><a href="#" onClick={(e) => { e.preventDefault(); setPage("about"); }}>How it works</a></li>
         </ul>
       </div>
       <div>
         <div className="foot-h">Network</div>
         <ul className="foot-list">
-          <li><a href="https://solscan.io/?cluster=devnet" target="_blank" rel="noreferrer">Solscan</a></li>
+          <li><a href="https://solscan.io/?cluster=devnet" target="_blank" rel="noreferrer">Solscan (devnet)</a></li>
           <li><a href="https://explorer.solana.com/?cluster=devnet" target="_blank" rel="noreferrer">Explorer</a></li>
-          <li><a href="https://faucet.solana.com" target="_blank" rel="noreferrer">Faucet</a></li>
+          <li><a href="https://faucet.solana.com" target="_blank" rel="noreferrer">Devnet Faucet</a></li>
+          <li><a href="https://jup.ag" target="_blank" rel="noreferrer">Jupiter Swap</a></li>
         </ul>
       </div>
       <div>
         <div className="foot-h">Resources</div>
         <ul className="foot-list">
-          <li><a href="#">Docs</a></li>
-          <li><a href="#">Whitepaper</a></li>
-          <li><a href="#">Audit</a></li>
+          <li><a href="https://github.com/HumbleTrust/humbletrust" target="_blank" rel="noreferrer">GitHub</a></li>
+          <li><a href={`https://solscan.io/account/Gcz7NMtCqKdvzh53DF1ecoEYe7Hma9kWwdtCmmeBaxRi?cluster=devnet`} target="_blank" rel="noreferrer">Program on Solscan</a></li>
+          <li><a href="#" onClick={(e) => { e.preventDefault(); setPage("about"); }}>Whitepaper</a></li>
+          <li><a href="#" onClick={(e) => { e.preventDefault(); setPage("about"); }}>Roadmap</a></li>
         </ul>
       </div>
     </div>

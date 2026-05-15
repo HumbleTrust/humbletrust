@@ -987,6 +987,11 @@ pub mod humbletrust {
         lp_lock.total_fees_claimed_lamports = 0;
         lp_lock.bump = ctx.bumps.lp_lock;
         lp_lock.lp_vault_bump = ctx.bumps.lp_vault;
+        lp_lock.lp_fee_pool_bump = ctx.bumps.lp_fee_pool;
+
+        let fee_pool = &mut ctx.accounts.lp_fee_pool;
+        fee_pool.token_mint = mint_key;
+        fee_pool.bump = ctx.bumps.lp_fee_pool;
 
         emit!(LpLocked {
             token_mint: mint_key,
@@ -1034,8 +1039,7 @@ pub mod humbletrust {
             .checked_sub(creator_share).and_then(|v| v.checked_sub(treasury_share))
             .ok_or(error!(HumbleError::MathOverflow))?;
 
-        // Transfer lamports out of fee pool (using system program lamport manipulation)
-        **ctx.accounts.lp_fee_pool.try_borrow_mut_lamports()? -= pool_lamports;
+        **ctx.accounts.lp_fee_pool.to_account_info().try_borrow_mut_lamports()? -= pool_lamports;
         **ctx.accounts.creator.try_borrow_mut_lamports()? += creator_share;
         **ctx.accounts.fee_wallet.try_borrow_mut_lamports()? += treasury_share;
         **ctx.accounts.rewards_sol_wallet.try_borrow_mut_lamports()? += rewards_share;
@@ -1124,7 +1128,61 @@ pub mod humbletrust {
         let global = &mut ctx.accounts.global_state;
         global.certificate_counter = 0;
         global.authority = ctx.accounts.authority.key();
+        global.standard_fee_lamports = LAUNCH_FEE_STANDARD;
+        global.premium_fee_lamports = LAUNCH_FEE_PREMIUM;
+        global.upgrade_authority = ctx.accounts.authority.key();
+        global.is_launches_paused = false;
         global.bump = ctx.bumps.global_state;
+        Ok(())
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Phase 5 — Mainnet governance & safety
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Adjust launch fees without redeployment (e.g. when SOL price changes).
+    // standard_fee < premium_fee always enforced.
+    pub fn update_fee_parameters(
+        ctx: Context<Phase5Authority>,
+        standard_fee_lamports: u64,
+        premium_fee_lamports: u64,
+    ) -> Result<()> {
+        let global = &mut ctx.accounts.global_state;
+        require_keys_eq!(ctx.accounts.authority.key(), global.authority, HumbleError::Unauthorized);
+        require!(standard_fee_lamports > 0, HumbleError::InvalidSupply);
+        require!(premium_fee_lamports > standard_fee_lamports, HumbleError::InvalidSupply);
+        global.standard_fee_lamports = standard_fee_lamports;
+        global.premium_fee_lamports = premium_fee_lamports;
+        emit!(FeeParametersUpdated {
+            standard_fee_lamports,
+            premium_fee_lamports,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+        Ok(())
+    }
+
+    // Point upgrade_authority to a Squads multisig before mainnet launch.
+    // After calling this, the multisig controls program upgrade authority.
+    pub fn set_upgrade_authority(
+        ctx: Context<Phase5Authority>,
+        new_upgrade_authority: Pubkey,
+    ) -> Result<()> {
+        let global = &mut ctx.accounts.global_state;
+        require_keys_eq!(ctx.accounts.authority.key(), global.authority, HumbleError::Unauthorized);
+        global.upgrade_authority = new_upgrade_authority;
+        Ok(())
+    }
+
+    // Emergency pause: flip is_launches_paused. Prevents new token launches.
+    // Used if a critical vulnerability is discovered before audit completes.
+    pub fn toggle_launches_pause(ctx: Context<Phase5Authority>) -> Result<()> {
+        let global = &mut ctx.accounts.global_state;
+        require_keys_eq!(ctx.accounts.authority.key(), global.authority, HumbleError::Unauthorized);
+        global.is_launches_paused = !global.is_launches_paused;
+        emit!(LaunchesPauseToggled {
+            is_paused: global.is_launches_paused,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
         Ok(())
     }
 }
@@ -1498,10 +1556,8 @@ pub struct LockLpTokens<'info> {
 
     pub token_mint: Account<'info, Mint>,
 
-    // The LP token mint (from Raydium/Orca pool)
     pub lp_mint: Account<'info, Mint>,
 
-    // Creator's LP token account (they provide these after adding liquidity on DEX)
     #[account(
         mut,
         constraint = creator_lp_account.owner == creator.key() @ HumbleError::InvalidTokenAccountOwner,
@@ -1528,6 +1584,17 @@ pub struct LockLpTokens<'info> {
     )]
     pub lp_vault: Account<'info, TokenAccount>,
 
+    // Fee pool: program-owned PDA that accumulates SOL from Raydium harvest CPIs.
+    // Initialized here so claim_lp_fees can manipulate its lamports.
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + LpFeePool::INIT_SPACE,
+        seeds = [b"lp_fee_pool", token_mint.key().as_ref()],
+        bump
+    )]
+    pub lp_fee_pool: Account<'info, LpFeePool>,
+
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
@@ -1545,10 +1612,12 @@ pub struct ClaimLpFees<'info> {
     )]
     pub lp_lock: Account<'info, LpLock>,
 
-    // SOL pool account that accumulates Raydium LP fees (funded by oracle harvest CPI)
-    /// CHECK: lamport-only account, checked by key constraint
-    #[account(mut, seeds = [b"lp_fee_pool", lp_lock.token_mint.as_ref()], bump)]
-    pub lp_fee_pool: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        seeds = [b"lp_fee_pool", lp_lock.token_mint.as_ref()],
+        bump = lp_lock.lp_fee_pool_bump
+    )]
+    pub lp_fee_pool: Account<'info, LpFeePool>,
 
     /// CHECK: verified as FEE_WALLET constant
     #[account(mut, constraint = fee_wallet.key() == FEE_WALLET @ HumbleError::InvalidFeeWallet)]
@@ -1559,6 +1628,20 @@ pub struct ClaimLpFees<'info> {
     pub rewards_sol_wallet: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
+}
+
+// ─── Phase 5 ───────────────────────────────────────────────────────────────
+
+#[derive(Accounts)]
+pub struct Phase5Authority<'info> {
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Account<'info, GlobalState>,
 }
 
 // ─── Phase 4.6 ─────────────────────────────────────────────────────────────
@@ -1734,6 +1817,14 @@ pub struct LpLock {
     pub total_fees_claimed_lamports: u64,
     pub bump: u8,
     pub lp_vault_bump: u8,
+    pub lp_fee_pool_bump: u8,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct LpFeePool {
+    pub token_mint: Pubkey,
+    pub bump: u8,
 }
 
 // ─── Phase 4.6 ─────────────────────────────────────────────────────────────
@@ -1743,6 +1834,13 @@ pub struct LpLock {
 pub struct GlobalState {
     pub certificate_counter: u32,
     pub authority: Pubkey,
+    // Phase 5: fees kept in state so authority can adjust without redeployment
+    pub standard_fee_lamports: u64,
+    pub premium_fee_lamports: u64,
+    // Phase 5: intended multisig (Squads v4 or similar) for upgrade authority hand-off
+    pub upgrade_authority: Pubkey,
+    // Phase 5: emergency pause — blocks new token launches
+    pub is_launches_paused: bool,
     pub bump: u8,
 }
 
@@ -1863,6 +1961,19 @@ pub struct LpFeesClaimed {
 }
 
 #[event]
+pub struct FeeParametersUpdated {
+    pub standard_fee_lamports: u64,
+    pub premium_fee_lamports: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct LaunchesPauseToggled {
+    pub is_paused: bool,
+    pub timestamp: i64,
+}
+
+#[event]
 pub struct LaunchCertificateIssued {
     pub serial_number: u32,
     pub token_mint: Pubkey,
@@ -1950,6 +2061,10 @@ pub enum HumbleError {
     AlreadyInitialized,
     #[msg("Certificate already issued for this token")]
     CertificateAlreadyIssued,
+    #[msg("New token launches are temporarily paused")]
+    LaunchesPaused,
+    #[msg("Premium fee must be greater than standard fee")]
+    InvalidFeeParameters,
 }
 
 fn percent_of(amount: u64, percent: u64) -> Result<u64> {
