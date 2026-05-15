@@ -94,4 +94,82 @@ export const launchToken = async (
   return { signature: tx, mint: mintKp.publicKey, pdas };
 };
 
+// ─── Phase 4.5 ───────────────────────────────────────────────────────────────
+
+export const findCreatorReputationPda = (creator: PublicKey) =>
+  PublicKey.findProgramAddressSync(
+    [Buffer.from("creator_reputation"), creator.toBuffer()],
+    PROGRAM_ID_PK
+  );
+
+export const initCreatorReputation = async (
+  program: Program,
+  creator: PublicKey
+) => {
+  const [creatorReputation] = findCreatorReputationPda(creator);
+  const tx = await program.methods
+    .initCreatorReputation()
+    .accounts({ creator, creatorReputation, systemProgram: SystemProgram.programId })
+    .rpc();
+  return { signature: tx, creatorReputation };
+};
+
+// ─── Phase 4 ─────────────────────────────────────────────────────────────────
+
+export const findLpLockPda = (tokenMint: PublicKey) =>
+  PublicKey.findProgramAddressSync(
+    [Buffer.from("lp_lock"), tokenMint.toBuffer()],
+    PROGRAM_ID_PK
+  );
+
+export const findLpVaultPda = (tokenMint: PublicKey) =>
+  PublicKey.findProgramAddressSync(
+    [Buffer.from("lp_vault"), tokenMint.toBuffer()],
+    PROGRAM_ID_PK
+  );
+
+export const lockLpTokens = async (
+  program: Program,
+  creator: PublicKey,
+  tokenMint: PublicKey,
+  lpMint: PublicKey,
+  creatorLpAccount: PublicKey,
+  lpAmount: number,
+  lockDays: number
+) => {
+  const [tokenMetadata] = PublicKey.findProgramAddressSync(
+    [Buffer.from("token_metadata"), tokenMint.toBuffer()],
+    PROGRAM_ID_PK
+  );
+  const [lpLock] = findLpLockPda(tokenMint);
+  const [lpVault] = findLpVaultPda(tokenMint);
+
+  const tx = await program.methods
+    .lockLpTokens(new BN(lpAmount), lockDays)
+    .accounts({
+      creator,
+      tokenMetadata,
+      tokenMint,
+      lpMint,
+      creatorLpAccount,
+      lpLock,
+      lpVault,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+  return { signature: tx, lpLock, lpVault };
+};
+
+// ─── Phase 4.6 ───────────────────────────────────────────────────────────────
+
+export const findGlobalStatePda = () =>
+  PublicKey.findProgramAddressSync([Buffer.from("global_state")], PROGRAM_ID_PK);
+
+export const findLaunchCertPda = (tokenMint: PublicKey) =>
+  PublicKey.findProgramAddressSync(
+    [Buffer.from("launch_cert"), tokenMint.toBuffer()],
+    PROGRAM_ID_PK
+  );
+
 export { BN, PublicKey, Keypair };

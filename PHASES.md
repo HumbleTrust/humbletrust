@@ -30,7 +30,7 @@
 - 📋 **Phase 3.5 (TODO):** Real Premium perks (custom vesting, featured listing, score boost, airdrop priority)
 - 📋 **Phase 3.6 (TODO):** Jupiter swap integration in Trade tab + TrustScore badges on all tokens
 
-## 📋 Phase 4 — Initial Liquidity (URGENT)
+## 🚧 Phase 4 — Initial Liquidity (devnet, in progress)
 **Goal:** Created tokens automatically appear on DEXes (Raydium → Jupiter → DexScreener → Birdeye)
 
 ### What we add to contract:
@@ -58,14 +58,14 @@
   - **20%** DAO / airdrop pool
 - **No additional fee on top** — we share Raydium's existing fee
 
-## 📋 Phase 4.5 — Creator Reputation
+## 🚧 Phase 4.5 — Creator Reputation (devnet, in progress)
 - New PDA `creator_reputation` per wallet
 - Tracks: total_launches, avg_trust_score, total_locked_value, complaints_count, successful_unlocks
 - Bonus: each successful launch (no complaints, completed vesting) → +5 to next launch's initial TrustScore
 - Penalty: complaints or freeze → score reset
 - Displayed on creator profile page (DISCOVER)
 
-## 📋 Phase 4.6 — Launch Certificate NFT (Soulbound)
+## 🚧 Phase 4.6 — Launch Certificate NFT (Soulbound) (devnet, in progress)
 - Non-transferable NFT minted to creator at launch
 - Metadata includes: lock %, lock days, vesting schedule, initial TrustScore, timestamp, Program ID
 - Functions as proof-of-launch (verifiable on-chain)

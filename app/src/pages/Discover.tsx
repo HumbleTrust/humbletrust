@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Award, Lock } from "lucide-react";
 import { HexLogo } from "../components/HexLogo";
 import { listTokens, SavedToken } from "../lib/image";
 
@@ -56,6 +56,18 @@ export const Discover = () => {
                 <span className="tok-card-score-v" style={{ color: scoreColor }}>
                   {t.trustScore} / 100 <ExternalLink size={12} style={{ display: "inline", marginLeft: 4, opacity: 0.5 }} />
                 </span>
+              </div>
+              <div style={{ display: "flex", gap: 6, marginTop: ".5rem", flexWrap: "wrap" }}>
+                {t.hasCertificate && (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: ".68rem", background: "rgba(20,102,255,.12)", color: "var(--solana-blue)", borderRadius: 4, padding: "2px 6px" }}>
+                    <Award size={10} /> Certificate
+                  </span>
+                )}
+                {t.hasLpLock && (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: ".68rem", background: "rgba(153,69,255,.12)", color: "var(--solana-purple)", borderRadius: 4, padding: "2px 6px" }}>
+                    <Lock size={10} /> LP Locked
+                  </span>
+                )}
               </div>
             </div>
           );

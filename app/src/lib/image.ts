@@ -33,6 +33,8 @@ export interface SavedToken {
   trustScore: number;
   tier: 0 | 1;
   signature: string;
+  hasCertificate?: boolean;   // Phase 4.6
+  hasLpLock?: boolean;        // Phase 4
 }
 
 const KEY = "humbletrust:tokens";

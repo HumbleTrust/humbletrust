@@ -3,6 +3,11 @@
 
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Burn, Mint, MintTo, Token, TokenAccount, Transfer};
+use anchor_spl::token_2022::Token2022;
+use anchor_spl::token_interface::{
+    Mint as InterfaceMint, TokenAccount as InterfaceTokenAccount,
+    MintTo as InterfaceMintTo, mint_to as interface_mint_to,
+};
 
 declare_id!("Gcz7NMtCqKdvzh53DF1ecoEYe7Hma9kWwdtCmmeBaxRi");
 
@@ -11,6 +16,13 @@ const LAUNCH_FEE_STANDARD: u64 = 56_818_181;
 const LAUNCH_FEE_PREMIUM: u64 = 281_818_181;
 const SECONDS_PER_DAY: i64 = 86_400;
 const SECONDS_PER_MONTH: i64 = 2_592_000;
+
+// Phase 4: LP fee distribution bps
+const LP_FEE_CREATOR_STANDARD_BPS: u64 = 5_000;  // 50%
+const LP_FEE_CREATOR_PREMIUM_BPS: u64  = 6_000;  // 60%
+const LP_FEE_TREASURY_BPS: u64         = 3_000;  // 30%
+const LP_FEE_REWARDS_BPS: u64          = 2_000;  // 20%
+const LP_CLAIM_COOLDOWN: i64           = SECONDS_PER_MONTH;
 
 #[program]
 pub mod humbletrust {
@@ -856,6 +868,263 @@ pub mod humbletrust {
         meta.metrics_authority = new_metrics_authority;
         Ok(())
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Phase 4.5 — Creator Reputation
+    // ─────────────────────────────────────────────────────────────────────────
+
+    pub fn init_creator_reputation(ctx: Context<InitCreatorReputation>) -> Result<()> {
+        let rep = &mut ctx.accounts.creator_reputation;
+        rep.creator = ctx.accounts.creator.key();
+        rep.total_launches = 0;
+        rep.trust_score_sum = 0;
+        rep.successful_unlocks = 0;
+        rep.complaints_total = 0;
+        rep.score_bonus = 0;
+        rep.bump = ctx.bumps.creator_reputation;
+        Ok(())
+    }
+
+    // Called by metrics_authority after verifiable on-chain events.
+    // event_type: 1 = successful_unlock, 2 = new_launch, 3 = complaint, 4 = freeze
+    pub fn record_reputation_event(
+        ctx: Context<RecordReputationEvent>,
+        event_type: u8,
+        initial_trust_score: u8,
+    ) -> Result<()> {
+        let meta = &ctx.accounts.token_metadata;
+        require_keys_eq!(
+            ctx.accounts.metrics_authority.key(),
+            meta.metrics_authority,
+            HumbleError::Unauthorized
+        );
+        require!(matches!(event_type, 1..=4), HumbleError::InvalidAction);
+
+        let rep = &mut ctx.accounts.creator_reputation;
+        require_keys_eq!(rep.creator, meta.creator, HumbleError::Unauthorized);
+
+        match event_type {
+            1 => {
+                // Successful unlock (no complaints, vesting honored)
+                rep.successful_unlocks = rep.successful_unlocks.saturating_add(1);
+                // Earn +5 bonus for next launch if last 3 launches all clean
+                if rep.successful_unlocks >= 3 && rep.complaints_total == 0 {
+                    rep.score_bonus = 5;
+                }
+            }
+            2 => {
+                // New launch recorded — track score for avg calculation
+                rep.total_launches = rep.total_launches.saturating_add(1);
+                rep.trust_score_sum = rep.trust_score_sum.saturating_add(initial_trust_score as u32);
+            }
+            3 => {
+                // Complaint received — accumulate
+                rep.complaints_total = rep.complaints_total.saturating_add(1);
+                if rep.complaints_total >= 5 {
+                    rep.score_bonus = 0;
+                }
+            }
+            4 => {
+                // Token frozen — full reset
+                rep.score_bonus = 0;
+                rep.successful_unlocks = 0;
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Phase 4 — LP Token Lock
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Creator provides LP tokens (obtained from Raydium/Orca after adding liquidity)
+    // and locks them here. The protocol enforces the lock; fee distribution happens
+    // via claim_lp_fees after each cooldown period.
+    pub fn lock_lp_tokens(
+        ctx: Context<LockLpTokens>,
+        lp_amount: u64,
+        lock_days: u16,
+    ) -> Result<()> {
+        require!(lp_amount > 0, HumbleError::InvalidTradeAmount);
+        require!(lock_days >= 30, HumbleError::InvalidLockDays);
+        require!(
+            ctx.accounts.creator_lp_account.amount >= lp_amount,
+            HumbleError::InsufficientVaultBalance
+        );
+
+        let meta = &ctx.accounts.token_metadata;
+        require_keys_eq!(meta.creator, ctx.accounts.creator.key(), HumbleError::Unauthorized);
+
+        let now = Clock::get()?.unix_timestamp;
+        let mint_key = ctx.accounts.token_mint.key();
+
+        // Transfer LP tokens from creator to lp_vault PDA
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.creator_lp_account.to_account_info(),
+            to: ctx.accounts.lp_vault.to_account_info(),
+            authority: ctx.accounts.creator.to_account_info(),
+        };
+        token::transfer(
+            CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts),
+            lp_amount,
+        )?;
+
+        let lp_lock = &mut ctx.accounts.lp_lock;
+        lp_lock.token_mint = mint_key;
+        lp_lock.lp_mint = ctx.accounts.lp_mint.key();
+        lp_lock.creator = ctx.accounts.creator.key();
+        lp_lock.is_premium = meta.is_premium;
+        lp_lock.lp_amount = lp_amount;
+        lp_lock.lock_days = lock_days;
+        lp_lock.unlock_time = now + (lock_days as i64 * SECONDS_PER_DAY);
+        lp_lock.locked_at = now;
+        lp_lock.last_claim_time = 0;
+        lp_lock.total_fees_claimed_lamports = 0;
+        lp_lock.bump = ctx.bumps.lp_lock;
+        lp_lock.lp_vault_bump = ctx.bumps.lp_vault;
+
+        emit!(LpLocked {
+            token_mint: mint_key,
+            lp_mint: lp_lock.lp_mint,
+            creator: lp_lock.creator,
+            lp_amount,
+            lock_days,
+            unlock_time: lp_lock.unlock_time,
+            timestamp: now,
+        });
+
+        Ok(())
+    }
+
+    // Distributes accumulated SOL LP fees according to the economic model.
+    // Requires Raydium CPI to harvest fees from the AMM pool — implemented in Phase 4 v2.
+    // Until then, the creator can send SOL directly to fund the distribution.
+    pub fn claim_lp_fees(ctx: Context<ClaimLpFees>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let lp_lock = &mut ctx.accounts.lp_lock;
+
+        require_keys_eq!(lp_lock.creator, ctx.accounts.creator.key(), HumbleError::Unauthorized);
+        require!(
+            lp_lock.last_claim_time == 0 || now - lp_lock.last_claim_time >= LP_CLAIM_COOLDOWN,
+            HumbleError::AirdropTooEarly
+        );
+
+        // Fee pool = lamports held by lp_fee_pool account (funded by Raydium harvest CPI or manual)
+        let pool_lamports = ctx.accounts.lp_fee_pool.lamports();
+        require!(pool_lamports > 0, HumbleError::InsufficientVaultBalance);
+
+        let creator_bps = if lp_lock.is_premium {
+            LP_FEE_CREATOR_PREMIUM_BPS
+        } else {
+            LP_FEE_CREATOR_STANDARD_BPS
+        };
+
+        let creator_share = pool_lamports
+            .checked_mul(creator_bps).and_then(|v| v.checked_div(10_000))
+            .ok_or(error!(HumbleError::MathOverflow))?;
+        let treasury_share = pool_lamports
+            .checked_mul(LP_FEE_TREASURY_BPS).and_then(|v| v.checked_div(10_000))
+            .ok_or(error!(HumbleError::MathOverflow))?;
+        let rewards_share = pool_lamports
+            .checked_sub(creator_share).and_then(|v| v.checked_sub(treasury_share))
+            .ok_or(error!(HumbleError::MathOverflow))?;
+
+        // Transfer lamports out of fee pool (using system program lamport manipulation)
+        **ctx.accounts.lp_fee_pool.try_borrow_mut_lamports()? -= pool_lamports;
+        **ctx.accounts.creator.try_borrow_mut_lamports()? += creator_share;
+        **ctx.accounts.fee_wallet.try_borrow_mut_lamports()? += treasury_share;
+        **ctx.accounts.rewards_sol_wallet.try_borrow_mut_lamports()? += rewards_share;
+
+        lp_lock.total_fees_claimed_lamports = lp_lock
+            .total_fees_claimed_lamports
+            .checked_add(pool_lamports)
+            .ok_or(error!(HumbleError::MathOverflow))?;
+        lp_lock.last_claim_time = now;
+
+        emit!(LpFeesClaimed {
+            token_mint: lp_lock.token_mint,
+            creator_share,
+            treasury_share,
+            rewards_share,
+            timestamp: now,
+        });
+
+        Ok(())
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Phase 4.6 — Launch Certificate (Soulbound, stored as PDA)
+    // Token-2022 NonTransferable NFT mint is handled client-side and linked here.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    pub fn mint_launch_certificate(ctx: Context<MintLaunchCertificate>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let meta = &ctx.accounts.token_metadata;
+
+        require_keys_eq!(meta.creator, ctx.accounts.creator.key(), HumbleError::Unauthorized);
+
+        let global = &mut ctx.accounts.global_state;
+        global.certificate_counter = global.certificate_counter.saturating_add(1);
+        let serial = global.certificate_counter;
+
+        let cert = &mut ctx.accounts.launch_certificate;
+        cert.creator = ctx.accounts.creator.key();
+        cert.token_mint = ctx.accounts.mint.key();
+        cert.certificate_nft_mint = ctx.accounts.certificate_nft_mint.key();
+        cert.lock_percent = meta.lock_percent;
+        cert.lock_days = (( meta.unlock_time - meta.created_at) / SECONDS_PER_DAY)
+            .max(0).min(u16::MAX as i64) as u16;
+        cert.initial_trust_score = meta.trust_score;
+        cert.is_premium = meta.is_premium;
+        cert.airdrop_percent = meta.airdrop_percent;
+        cert.burn_option = meta.burn_option;
+        cert.issued_at = now;
+        cert.serial_number = serial;
+        cert.bump = ctx.bumps.launch_certificate;
+
+        // Mint 1 Token-2022 NonTransferable NFT to creator.
+        // The certificate_nft_mint must be a pre-initialized Token-2022 mint
+        // with the NonTransferable extension enabled (set up client-side before this call).
+        let bump = ctx.bumps.launch_certificate;
+        let token_mint_key = ctx.accounts.mint.key();
+        let seeds: &[&[u8]] = &[b"launch_cert", token_mint_key.as_ref(), &[bump]];
+        let signer = &[seeds];
+
+        interface_mint_to(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_2022_program.to_account_info(),
+                InterfaceMintTo {
+                    mint: ctx.accounts.certificate_nft_mint.to_account_info(),
+                    to: ctx.accounts.creator_nft_account.to_account_info(),
+                    authority: ctx.accounts.launch_certificate.to_account_info(),
+                },
+                signer,
+            ),
+            1,
+        )?;
+
+        emit!(LaunchCertificateIssued {
+            serial_number: serial,
+            token_mint: cert.token_mint,
+            creator: cert.creator,
+            certificate_nft_mint: cert.certificate_nft_mint,
+            initial_trust_score: cert.initial_trust_score,
+            timestamp: now,
+        });
+
+        Ok(())
+    }
+
+    // One-time global state initialization (called by deployer)
+    pub fn init_global_state(ctx: Context<InitGlobalState>) -> Result<()> {
+        let global = &mut ctx.accounts.global_state;
+        global.certificate_counter = 0;
+        global.authority = ctx.accounts.authority.key();
+        global.bump = ctx.bumps.global_state;
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -1173,6 +1442,185 @@ pub struct SetMetricsAuthority<'info> {
     pub mint: Account<'info, Mint>,
 }
 
+// ─── Phase 4.5 ─────────────────────────────────────────────────────────────
+
+#[derive(Accounts)]
+pub struct InitCreatorReputation<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + CreatorReputation::INIT_SPACE,
+        seeds = [b"creator_reputation", creator.key().as_ref()],
+        bump
+    )]
+    pub creator_reputation: Account<'info, CreatorReputation>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct RecordReputationEvent<'info> {
+    pub metrics_authority: Signer<'info>,
+
+    #[account(
+        seeds = [b"token_metadata", mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadata>,
+
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        mut,
+        seeds = [b"creator_reputation", token_metadata.creator.as_ref()],
+        bump = creator_reputation.bump
+    )]
+    pub creator_reputation: Account<'info, CreatorReputation>,
+}
+
+// ─── Phase 4 ───────────────────────────────────────────────────────────────
+
+#[derive(Accounts)]
+pub struct LockLpTokens<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        seeds = [b"token_metadata", token_mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadata>,
+
+    pub token_mint: Account<'info, Mint>,
+
+    // The LP token mint (from Raydium/Orca pool)
+    pub lp_mint: Account<'info, Mint>,
+
+    // Creator's LP token account (they provide these after adding liquidity on DEX)
+    #[account(
+        mut,
+        constraint = creator_lp_account.owner == creator.key() @ HumbleError::InvalidTokenAccountOwner,
+        constraint = creator_lp_account.mint == lp_mint.key() @ HumbleError::InvalidMintForTokenAccount
+    )]
+    pub creator_lp_account: Account<'info, TokenAccount>,
+
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + LpLock::INIT_SPACE,
+        seeds = [b"lp_lock", token_mint.key().as_ref()],
+        bump
+    )]
+    pub lp_lock: Account<'info, LpLock>,
+
+    #[account(
+        init,
+        payer = creator,
+        token::mint = lp_mint,
+        token::authority = lp_lock,
+        seeds = [b"lp_vault", token_mint.key().as_ref()],
+        bump
+    )]
+    pub lp_vault: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimLpFees<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"lp_lock", lp_lock.token_mint.as_ref()],
+        bump = lp_lock.bump
+    )]
+    pub lp_lock: Account<'info, LpLock>,
+
+    // SOL pool account that accumulates Raydium LP fees (funded by oracle harvest CPI)
+    /// CHECK: lamport-only account, checked by key constraint
+    #[account(mut, seeds = [b"lp_fee_pool", lp_lock.token_mint.as_ref()], bump)]
+    pub lp_fee_pool: UncheckedAccount<'info>,
+
+    /// CHECK: verified as FEE_WALLET constant
+    #[account(mut, constraint = fee_wallet.key() == FEE_WALLET @ HumbleError::InvalidFeeWallet)]
+    pub fee_wallet: UncheckedAccount<'info>,
+
+    /// CHECK: DAO/rewards wallet, any pubkey accepted
+    #[account(mut)]
+    pub rewards_sol_wallet: UncheckedAccount<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+// ─── Phase 4.6 ─────────────────────────────────────────────────────────────
+
+#[derive(Accounts)]
+pub struct InitGlobalState<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + GlobalState::INIT_SPACE,
+        seeds = [b"global_state"],
+        bump
+    )]
+    pub global_state: Account<'info, GlobalState>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct MintLaunchCertificate<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        seeds = [b"token_metadata", mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadata>,
+
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        mut,
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Account<'info, GlobalState>,
+
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + LaunchCertificate::INIT_SPACE,
+        seeds = [b"launch_cert", mint.key().as_ref()],
+        bump
+    )]
+    pub launch_certificate: Account<'info, LaunchCertificate>,
+
+    // Pre-initialized Token-2022 NonTransferable mint (1 supply, 0 decimals).
+    // Client must create this mint with NonTransferable extension before calling.
+    // Mint authority = launch_certificate PDA.
+    #[account(mut)]
+    pub certificate_nft_mint: InterfaceMint<'info>,
+
+    // Creator's ATA for the certificate NFT (Token-2022)
+    #[account(mut)]
+    pub creator_nft_account: InterfaceTokenAccount<'info>,
+
+    pub token_2022_program: Program<'info, Token2022>,
+    pub system_program: Program<'info, System>,
+}
+
 #[account]
 #[derive(InitSpace)]
 pub struct TokenMetadata {
@@ -1251,6 +1699,68 @@ pub struct VoteRecord {
     pub bump: u8,
 }
 
+// ─── Phase 4.5 ─────────────────────────────────────────────────────────────
+
+#[account]
+#[derive(InitSpace)]
+pub struct CreatorReputation {
+    pub creator: Pubkey,
+    pub total_launches: u32,
+    pub trust_score_sum: u32,
+    pub successful_unlocks: u32,
+    pub complaints_total: u32,
+    pub score_bonus: u8,    // +5 applied to the next token's initial TrustScore
+    pub bump: u8,
+}
+
+// ─── Phase 4 ───────────────────────────────────────────────────────────────
+
+#[account]
+#[derive(InitSpace)]
+pub struct LpLock {
+    pub token_mint: Pubkey,
+    pub lp_mint: Pubkey,
+    pub creator: Pubkey,
+    pub is_premium: bool,
+    pub lp_amount: u64,
+    pub lock_days: u16,
+    pub unlock_time: i64,
+    pub locked_at: i64,
+    pub last_claim_time: i64,
+    pub total_fees_claimed_lamports: u64,
+    pub bump: u8,
+    pub lp_vault_bump: u8,
+}
+
+// ─── Phase 4.6 ─────────────────────────────────────────────────────────────
+
+#[account]
+#[derive(InitSpace)]
+pub struct GlobalState {
+    pub certificate_counter: u32,
+    pub authority: Pubkey,
+    pub bump: u8,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct LaunchCertificate {
+    pub creator: Pubkey,
+    pub token_mint: Pubkey,
+    pub certificate_nft_mint: Pubkey,   // Token-2022 NonTransferable mint
+    pub lock_percent: u8,
+    pub lock_days: u16,
+    pub initial_trust_score: u8,
+    pub is_premium: bool,
+    pub airdrop_percent: u8,
+    pub burn_option: u8,
+    pub issued_at: i64,
+    pub serial_number: u32,
+    pub bump: u8,
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+
 #[event]
 pub struct TokenCreated {
     pub mint: Pubkey,
@@ -1328,6 +1838,36 @@ pub struct CreatorVerified {
     pub timestamp: i64,
 }
 
+#[event]
+pub struct LpLocked {
+    pub token_mint: Pubkey,
+    pub lp_mint: Pubkey,
+    pub creator: Pubkey,
+    pub lp_amount: u64,
+    pub lock_days: u16,
+    pub unlock_time: i64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct LpFeesClaimed {
+    pub token_mint: Pubkey,
+    pub creator_share: u64,
+    pub treasury_share: u64,
+    pub rewards_share: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct LaunchCertificateIssued {
+    pub serial_number: u32,
+    pub token_mint: Pubkey,
+    pub creator: Pubkey,
+    pub certificate_nft_mint: Pubkey,
+    pub initial_trust_score: u8,
+    pub timestamp: i64,
+}
+
 #[error_code]
 pub enum HumbleError {
     #[msg("Token name is too short")]
@@ -1400,6 +1940,12 @@ pub enum HumbleError {
     InvalidTradeTime,
     #[msg("Buyer and seller cannot be the same address")]
     SelfTrade,
+    #[msg("LP lock already exists for this token")]
+    LpAlreadyLocked,
+    #[msg("Global state already initialized")]
+    AlreadyInitialized,
+    #[msg("Certificate already issued for this token")]
+    CertificateAlreadyIssued,
 }
 
 fn percent_of(amount: u64, percent: u64) -> Result<u64> {

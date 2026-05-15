@@ -1,8 +1,8 @@
 import { useState, useMemo, useRef } from "react";
 import { useWallet, useAnchorWallet, useConnection } from "@solana/wallet-adapter-react";
 import { AnchorProvider } from "@coral-xyz/anchor";
-import { Rocket, ExternalLink, Loader, Upload, X } from "lucide-react";
-import { getProgram, launchToken } from "../lib/program";
+import { Rocket, ExternalLink, Loader, Upload, X, Award, Lock, UserCheck } from "lucide-react";
+import { getProgram, launchToken, initCreatorReputation, findCreatorReputationPda, findLaunchCertPda } from "../lib/program";
 import { fileToHexLogo, MAX_LOGO_BYTES, saveToken } from "../lib/image";
 import { HexLogo } from "../components/HexLogo";
 
@@ -18,6 +18,9 @@ export const Launch = () => {
   const [result, setResult] = useState<LaunchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [logoErr, setLogoErr] = useState<string | null>(null);
+  const [repBusy, setRepBusy] = useState(false);
+  const [repDone, setRepDone] = useState(false);
+  const [repError, setRepError] = useState<string | null>(null);
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
 
   const [name, setName] = useState("");
@@ -88,6 +91,19 @@ export const Launch = () => {
       console.error(e);
       setError(e.message || String(e));
     } finally { setBusy(false); }
+  };
+
+  const handleInitReputation = async () => {
+    if (!anchorWallet || !wallet.connected) return;
+    setRepBusy(true); setRepError(null);
+    try {
+      const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
+      const program = getProgram(provider);
+      await initCreatorReputation(program, anchorWallet.publicKey);
+      setRepDone(true);
+    } catch (e: any) {
+      setRepError(e.message || String(e));
+    } finally { setRepBusy(false); }
   };
 
   const scoreColor = trustScore >= 81 ? "var(--green-neon)" : trustScore >= 66 ? "var(--solana-blue)" : trustScore >= 51 ? "var(--yellow)" : "var(--orange)";
@@ -212,6 +228,67 @@ export const Launch = () => {
               <div style={{ color: "var(--muted2)", fontSize: ".75rem", wordBreak: "break-all" }}>Mint: {result.mint}</div>
               <div style={{ color: "var(--muted2)", fontSize: ".75rem", wordBreak: "break-all" }}>Tx: {result.signature}</div>
               <a href={"https://solscan.io/token/" + result.mint + "?cluster=devnet"} target="_blank" rel="noreferrer" style={{ color: "var(--green-neon)", display: "inline-flex", alignItems: "center", gap: 4, marginTop: ".5rem", textDecoration: "none" }}>View on Solscan <ExternalLink size={12} /></a>
+            </div>
+          )}
+
+          {result && (
+            <div style={{ marginBottom: "1.5rem" }}>
+              <div style={{ fontFamily: "var(--font-head)", fontWeight: 700, fontSize: ".9rem", color: "var(--text)", marginBottom: ".75rem", borderTop: "1px solid rgba(255,255,255,.07)", paddingTop: "1rem" }}>
+                Next steps
+              </div>
+
+              {/* Phase 4.5 — Init Reputation */}
+              <div style={{ background: "rgba(0,255,148,.05)", border: "1px solid rgba(0,255,148,.15)", borderRadius: 8, padding: ".75rem", marginBottom: ".6rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: ".35rem" }}>
+                  <UserCheck size={14} color="var(--green-neon)" />
+                  <span style={{ fontSize: ".82rem", fontWeight: 600 }}>Phase 4.5 — Initialize Creator Reputation</span>
+                </div>
+                <div style={{ fontSize: ".75rem", color: "var(--muted2)", marginBottom: ".5rem" }}>
+                  One-time setup. Tracks your launches, unlocks, and complaints. Clean record earns +5 on your next token's initial TrustScore.
+                </div>
+                {repDone ? (
+                  <div style={{ fontSize: ".75rem", color: "var(--green-neon)" }}>✅ Reputation account initialized</div>
+                ) : (
+                  <>
+                    <button
+                      onClick={handleInitReputation}
+                      disabled={repBusy}
+                      style={{ background: "rgba(0,255,148,.1)", border: "1px solid rgba(0,255,148,.3)", color: "var(--green-neon)", borderRadius: 6, padding: ".35rem .75rem", fontSize: ".78rem", cursor: "pointer" }}
+                    >
+                      {repBusy ? <><Loader size={12} className="spin" style={{ display: "inline", marginRight: 4 }} />Initializing...</> : "Init Reputation Account"}
+                    </button>
+                    {repError && <div style={{ fontSize: ".72rem", color: "var(--red)", marginTop: ".3rem" }}>{repError}</div>}
+                  </>
+                )}
+              </div>
+
+              {/* Phase 4.6 — Launch Certificate */}
+              <div style={{ background: "rgba(20,102,255,.05)", border: "1px solid rgba(20,102,255,.15)", borderRadius: 8, padding: ".75rem", marginBottom: ".6rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: ".35rem" }}>
+                  <Award size={14} color="var(--solana-blue)" />
+                  <span style={{ fontSize: ".82rem", fontWeight: 600 }}>Phase 4.6 — Mint Launch Certificate (Soulbound)</span>
+                </div>
+                <div style={{ fontSize: ".75rem", color: "var(--muted2)", marginBottom: ".5rem" }}>
+                  Creates an on-chain record of your launch parameters (lock%, days, score, timestamp). Token-2022 NonTransferable NFT — shows in Phantom as "Humble.Trust Launch Certificate".
+                </div>
+                <div style={{ fontSize: ".72rem", color: "var(--muted)", fontStyle: "italic" }}>
+                  Available after <code>init_global_state</code> is called by deployer on devnet.
+                </div>
+              </div>
+
+              {/* Phase 4 — LP Lock */}
+              <div style={{ background: "rgba(153,69,255,.05)", border: "1px solid rgba(153,69,255,.15)", borderRadius: 8, padding: ".75rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: ".35rem" }}>
+                  <Lock size={14} color="var(--solana-purple)" />
+                  <span style={{ fontSize: ".82rem", fontWeight: 600 }}>Phase 4 — Lock LP Tokens</span>
+                </div>
+                <div style={{ fontSize: ".75rem", color: "var(--muted2)", marginBottom: ".5rem" }}>
+                  After adding liquidity on Raydium/Orca, lock your LP tokens here. The protocol enforces the lock and distributes fees: {tier === 1 ? "60%" : "50%"} creator / 30% treasury / 20% rewards.
+                </div>
+                <div style={{ fontSize: ".72rem", color: "var(--muted)", fontStyle: "italic" }}>
+                  Add your LP token mint address and amount after creating a Raydium pool.
+                </div>
+              </div>
             </div>
           )}
 
