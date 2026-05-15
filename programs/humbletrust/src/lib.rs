@@ -120,24 +120,27 @@ pub mod humbletrust {
             meta.total_supply = total_supply;
             meta.locked_amount = locked_amount;
             meta.creator_allocation = creator_allocation;
+            meta.creator_allocation_percent = creator_allocation_percent;
             meta.creator_max_balance = percent_of(total_supply, 10)?;
             meta.circulation_amount = circulation_amount;
             meta.unlock_time = now + (lock_days as i64 * SECONDS_PER_DAY);
             meta.created_at = now;
             meta.lock_percent = lock_percent;
+            meta.lock_days = lock_days;
             meta.burn_option = burn_option;
             meta.airdrop_percent = airdrop_percent;
             meta.is_locked = true;
             meta.trading_volume = 0;
             meta.verified_volume = 0;
             meta.holder_count = 0;
-            meta.trust_score = calculate_initial_trust_score(
+            let initial_score = calculate_initial_trust_score(
                 lock_percent,
                 lock_days,
                 burn_option,
                 airdrop_percent,
             );
-            meta.min_score_this_month = meta.trust_score;
+            meta.trust_score = initial_score;
+            meta.min_score_this_month = initial_score;
             meta.total_burned = 0;
             meta.is_verified = false;
             meta.last_airdrop_time = 0;
@@ -154,7 +157,7 @@ pub mod humbletrust {
             meta.is_flagged = false;
             meta.is_frozen = false;
             meta.no_activity_flag = false;
-            meta.rewards_multiplier_bps = 10_000;
+            meta.rewards_multiplier_bps = rewards_multiplier_bps(initial_score);
             meta.trading_unlock_time = now + (anti_bot_seconds as i64);
             meta.is_premium = tier == 1;
             meta.anti_bot_seconds = anti_bot_seconds;
@@ -328,7 +331,6 @@ pub mod humbletrust {
             created_at,
             creator_allocation,
             bump,
-            current_trust_score,
             t1_done,
             t2_done,
             t3_done,
@@ -343,7 +345,6 @@ pub mod humbletrust {
                 meta.created_at,
                 meta.creator_allocation,
                 meta.bump,
-                meta.trust_score,
                 meta.vesting_t1_done,
                 meta.vesting_t2_done,
                 meta.vesting_t3_done,
@@ -572,6 +573,9 @@ pub mod humbletrust {
             ctx.accounts.creator_vault.amount >= amount,
             HumbleError::InsufficientVaultBalance
         );
+        // creator_max_balance (10% of supply) is enforced at creation time via
+        // creator_allocation_percent <= 10 require!. No additional check needed here
+        // because add_to_circulation only moves tokens OUT of the vault.
 
         let bump_seed = [bump];
         let signer_seeds: &[&[u8]] = &[b"token_metadata", mint_key.as_ref(), &bump_seed];
@@ -890,42 +894,41 @@ pub mod humbletrust {
     pub fn record_reputation_event(
         ctx: Context<RecordReputationEvent>,
         event_type: u8,
-        initial_trust_score: u8,
     ) -> Result<()> {
-        let meta = &ctx.accounts.token_metadata;
+        let (authority_key, creator_key, token_trust_score) = {
+            let meta = &ctx.accounts.token_metadata;
+            (meta.metrics_authority, meta.creator, meta.trust_score)
+        };
+
         require_keys_eq!(
             ctx.accounts.metrics_authority.key(),
-            meta.metrics_authority,
+            authority_key,
             HumbleError::Unauthorized
         );
         require!(matches!(event_type, 1..=4), HumbleError::InvalidAction);
 
         let rep = &mut ctx.accounts.creator_reputation;
-        require_keys_eq!(rep.creator, meta.creator, HumbleError::Unauthorized);
+        require_keys_eq!(rep.creator, creator_key, HumbleError::Unauthorized);
 
         match event_type {
             1 => {
-                // Successful unlock (no complaints, vesting honored)
                 rep.successful_unlocks = rep.successful_unlocks.saturating_add(1);
-                // Earn +5 bonus for next launch if last 3 launches all clean
                 if rep.successful_unlocks >= 3 && rep.complaints_total == 0 {
                     rep.score_bonus = 5;
                 }
             }
             2 => {
-                // New launch recorded — track score for avg calculation
                 rep.total_launches = rep.total_launches.saturating_add(1);
-                rep.trust_score_sum = rep.trust_score_sum.saturating_add(initial_trust_score as u32);
+                // Trust score is read directly from on-chain token_metadata — no untrusted param.
+                rep.trust_score_sum = rep.trust_score_sum.saturating_add(token_trust_score as u32);
             }
             3 => {
-                // Complaint received — accumulate
                 rep.complaints_total = rep.complaints_total.saturating_add(1);
                 if rep.complaints_total >= 5 {
                     rep.score_bonus = 0;
                 }
             }
             4 => {
-                // Token frozen — full reset
                 rep.score_bonus = 0;
                 rep.successful_unlocks = 0;
             }
@@ -1074,8 +1077,7 @@ pub mod humbletrust {
         cert.token_mint = ctx.accounts.mint.key();
         cert.certificate_nft_mint = ctx.accounts.certificate_nft_mint.key();
         cert.lock_percent = meta.lock_percent;
-        cert.lock_days = (( meta.unlock_time - meta.created_at) / SECONDS_PER_DAY)
-            .max(0).min(u16::MAX as i64) as u16;
+        cert.lock_days = meta.lock_days;
         cert.initial_trust_score = meta.trust_score;
         cert.is_premium = meta.is_premium;
         cert.airdrop_percent = meta.airdrop_percent;
@@ -1634,11 +1636,13 @@ pub struct TokenMetadata {
     pub total_supply: u64,
     pub locked_amount: u64,
     pub creator_allocation: u64,
+    pub creator_allocation_percent: u8,   // stored explicitly for display / vesting math
     pub creator_max_balance: u64,
     pub circulation_amount: u64,
     pub unlock_time: i64,
     pub created_at: i64,
     pub lock_percent: u8,
+    pub lock_days: u16,                   // stored explicitly; avoids deriving from unlock_time
     pub burn_option: u8,
     pub airdrop_percent: u8,
     pub is_locked: bool,
