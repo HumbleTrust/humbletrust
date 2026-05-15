@@ -56,11 +56,16 @@ export const launchToken = async (
   const mintKp = Keypair.generate();
   const pdas = findPdas(mintKp.publicKey);
 
+  const supplyInt = Math.floor(parseFloat(params.totalSupply));
+  if (!isFinite(supplyInt) || supplyInt <= 0 || supplyInt > 1_000_000_000_000) {
+    throw new Error("Invalid supply: must be a whole number between 1 and 1,000,000,000,000");
+  }
+
   const tx = await program.methods
     .createTokenWithLock(
       params.name,
       params.symbol,
-      new BN(params.totalSupply),
+      new BN(supplyInt),
       params.lockPercent,
       params.lockDays,
       params.burnOption,

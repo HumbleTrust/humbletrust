@@ -31,6 +31,12 @@ export const Launch = () => {
   const [tier, setTier] = useState<0 | 1>(0);
   const [antiBot, setAntiBot] = useState(60);
 
+  const supplyNum = useMemo(() => {
+    const n = Math.floor(parseFloat(supply));
+    return isFinite(n) && n > 0 ? n : 0;
+  }, [supply]);
+  const validSupply = supplyNum >= 1 && supplyNum <= 1_000_000_000_000;
+
   const trustScore = useMemo(() => {
     let s = 0;
     s += lockDays >= 360 ? 25 : lockDays >= 270 ? 20 : lockDays >= 180 ? 16 : lockDays >= 90 ? 12 : lockDays >= 60 ? 8 : 4;
@@ -126,7 +132,21 @@ export const Launch = () => {
           </div>
 
           <label className="form-label">Total Supply</label>
-          <input className="form-input" type="number" value={supply} onChange={(e) => setSupply(e.target.value)} />
+          <input
+            className="form-input"
+            type="number"
+            min={1}
+            max={1_000_000_000_000}
+            step={1}
+            value={supply}
+            onChange={(e) => setSupply(e.target.value)}
+            style={!validSupply ? { borderColor: "var(--red)" } : undefined}
+          />
+          {!validSupply && (
+            <div style={{ color: "var(--red)", fontSize: ".75rem", marginTop: ".25rem" }}>
+              Supply must be a whole number between 1 and 1,000,000,000,000.
+            </div>
+          )}
 
           <div className="slider-group">
             <div className="slider-header"><label className="form-label" style={{ margin: 0 }}>Lock % (30–80)</label><span className="slider-val">{lockPercent}%</span></div>
@@ -170,6 +190,10 @@ export const Launch = () => {
             <div className="slider-ticks"><span>0</span><span>300</span><span>600</span></div>
           </div>
 
+          <div style={{ background: "rgba(20,102,255,.07)", border: "1px solid rgba(20,102,255,.2)", color: "var(--solana-blue)", padding: ".7rem", borderRadius: 8, fontSize: ".78rem", marginBottom: "1rem", lineHeight: 1.6 }}>
+            <strong>Devnet launch.</strong> You will be set as your own metrics oracle. To protect TrustScore integrity on mainnet, assign a separate oracle wallet via <code>set_metrics_authority</code> before going live.
+          </div>
+
           {!validCirc && (
             <div style={{ background: "rgba(255,59,59,.08)", border: "1px solid rgba(255,59,59,.2)", color: "var(--red)", padding: ".7rem", borderRadius: 8, fontSize: ".82rem", marginBottom: "1rem" }}>
               Circulation = {circulation}% (must be ≥ 55%). Reduce lock % or creator allocation.
@@ -191,7 +215,7 @@ export const Launch = () => {
             </div>
           )}
 
-          <button className="form-sub" onClick={handleLaunch} disabled={busy || !wallet.connected || !validCirc || !name || !symbol}>
+          <button className="form-sub" onClick={handleLaunch} disabled={busy || !wallet.connected || !validCirc || !validSupply || !name || !symbol}>
             {busy ? <><Loader size={16} className="spin" style={{ display: "inline", marginRight: 8 }} />Launching...</> : <><Rocket size={16} style={{ display: "inline", marginRight: 8 }} />{wallet.connected ? "Launch token" : "Connect wallet to launch"}</>}
           </button>
         </div>
@@ -234,10 +258,11 @@ export const Launch = () => {
 
           <div className="preview-label" style={{ marginTop: "1.5rem" }}>Vesting schedule</div>
           <div style={{ fontSize: ".82rem", color: "var(--muted2)", lineHeight: 1.8 }}>
-            Day 30 → 2% unlock<br />
-            Day 60 → +3% unlock<br />
-            Day 90 → +5% unlock<br />
-            Total creator: <span style={{ color: "var(--text)" }}>{creatorAlloc}%</span> over 90 days
+            Day 30 → 2% of your allocation ({creatorAlloc > 0 ? (0.02 * creatorAlloc).toFixed(2) : "0"}% of supply)<br />
+            Day 60 → 3% of your allocation ({creatorAlloc > 0 ? (0.03 * creatorAlloc).toFixed(2) : "0"}% of supply)<br />
+            Day 90 → 5% of your allocation ({creatorAlloc > 0 ? (0.05 * creatorAlloc).toFixed(2) : "0"}% of supply)<br />
+            Remaining allocation released via Add-to-Circulation.<br />
+            Total creator: <span style={{ color: "var(--text)" }}>{creatorAlloc}%</span> of supply
           </div>
         </div>
       </div>

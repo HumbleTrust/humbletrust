@@ -480,7 +480,6 @@ pub mod humbletrust {
                 .total_burned
                 .checked_add(tranche_amount)
                 .ok_or(error!(HumbleError::MathOverflow))?;
-            meta.trust_score = current_trust_score.saturating_add(10).min(100);
         }
 
         if action == 3 {
@@ -488,7 +487,6 @@ pub mod humbletrust {
                 .circulation_amount
                 .checked_add(tranche_amount)
                 .ok_or(error!(HumbleError::MathOverflow))?;
-            meta.trust_score = current_trust_score.saturating_add(10).min(100);
         }
 
         match tranche {
@@ -514,6 +512,10 @@ pub mod humbletrust {
         let final_t2_action = if tranche == 2 { action } else { t2_action };
         let final_t3_action = if tranche == 3 { action } else { t3_action };
 
+        // Recalculate from scratch so score stays consistent with all other instructions.
+        // Direct +10 additions were removed — they conflicted with recalculate_trust_score
+        // which rebuilds the score on every vote/trade call and would silently discard them.
+        meta.trust_score = recalculate_trust_score(meta, now);
         if final_t1_done
             && final_t2_done
             && final_t3_done
@@ -522,7 +524,6 @@ pub mod humbletrust {
             && final_t3_action != 1
         {
             meta.rewards_multiplier_bps = 30_000;
-            meta.trust_score = meta.trust_score.saturating_add(5).min(100);
         } else {
             meta.rewards_multiplier_bps = rewards_multiplier_bps(meta.trust_score);
         }
@@ -654,28 +655,39 @@ pub mod humbletrust {
         Ok(())
     }
 
+    // Only metrics_authority can record trades — prevents anyone from calling this
+    // to inflate verified_volume and boost TrustScore.
     pub fn record_trade(
         ctx: Context<RecordTrade>,
+        buyer: Pubkey,
+        seller: Pubkey,
         amount: u64,
         buy_time: i64,
+        suspected_wash: bool,
     ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let meta = &mut ctx.accounts.token_metadata;
         let trade = &mut ctx.accounts.trade_record;
 
+        require_keys_eq!(
+            ctx.accounts.metrics_authority.key(),
+            meta.metrics_authority,
+            HumbleError::Unauthorized
+        );
         require!(now >= meta.trading_unlock_time, HumbleError::TradingNotStarted);
         require!(amount > 0, HumbleError::InvalidTradeAmount);
         require!(buy_time > 0, HumbleError::InvalidTradeTime);
         require!(now >= buy_time, HumbleError::InvalidTradeTime);
+        require!(buyer != seller, HumbleError::SelfTrade);
 
-        trade.buyer = ctx.accounts.buyer.key();
-        trade.seller = ctx.accounts.seller.key();
+        trade.buyer = buyer;
+        trade.seller = seller;
         trade.mint = meta.mint;
         trade.amount = amount;
         trade.buy_time = buy_time;
         trade.sell_time = now;
         trade.is_valid_volume = now - buy_time >= SECONDS_PER_DAY;
-        trade.suspected_wash = false;
+        trade.suspected_wash = suspected_wash;
         trade.bump = ctx.bumps.trade_record;
 
         meta.trading_volume = meta
@@ -1060,13 +1072,12 @@ pub struct SubmitVote<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(amount: u64, buy_time: i64)]
+#[instruction(buyer: Pubkey, seller: Pubkey, amount: u64, buy_time: i64, suspected_wash: bool)]
 pub struct RecordTrade<'info> {
+    // Only the designated metrics_authority may record trades.
+    // Prevents arbitrary callers from inflating trading_volume / verified_volume.
     #[account(mut)]
-    pub buyer: Signer<'info>,
-
-    /// CHECK: продавец может быть любым адресом
-    pub seller: UncheckedAccount<'info>,
+    pub metrics_authority: Signer<'info>,
 
     #[account(
         mut,
@@ -1075,14 +1086,13 @@ pub struct RecordTrade<'info> {
     )]
     pub token_metadata: Account<'info, TokenMetadata>,
 
-    #[account(mut)]
     pub mint: Account<'info, Mint>,
 
     #[account(
         init,
-        payer = buyer,
+        payer = metrics_authority,
         space = 8 + TradeRecord::INIT_SPACE,
-        seeds = [b"trade", mint.key().as_ref(), buyer.key().as_ref(), &buy_time.to_le_bytes()],
+        seeds = [b"trade", mint.key().as_ref(), buyer.as_ref(), &buy_time.to_le_bytes()],
         bump
     )]
     pub trade_record: Account<'info, TradeRecord>,
@@ -1388,6 +1398,8 @@ pub enum HumbleError {
     InvalidTradeAmount,
     #[msg("Invalid trade time")]
     InvalidTradeTime,
+    #[msg("Buyer and seller cannot be the same address")]
+    SelfTrade,
 }
 
 fn percent_of(amount: u64, percent: u64) -> Result<u64> {

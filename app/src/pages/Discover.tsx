@@ -27,6 +27,9 @@ export const Discover = () => {
       <div className="sec-eyebrow">Discover</div>
       <h2 className="sec-h2">All <span className="hl-green">protected</span> tokens</h2>
       <p className="sec-sub">Tokens launched on Humble.Trust devnet, stored locally per browser.</p>
+      <div style={{ background: "rgba(20,102,255,.07)", border: "1px solid rgba(20,102,255,.18)", color: "var(--muted2)", padding: ".6rem .9rem", borderRadius: 8, fontSize: ".78rem", marginBottom: "1.5rem" }}>
+        Trust Scores shown here are snapshots from launch time. Live scores may differ as votes, trades, and time-lock changes accumulate on-chain.
+      </div>
       <div className="tok-grid-real">
         {tokens.map((t) => {
           const scoreColor = t.trustScore >= 81 ? "var(--green-neon)" : t.trustScore >= 66 ? "var(--solana-blue)" : t.trustScore >= 51 ? "var(--yellow)" : "var(--orange)";
