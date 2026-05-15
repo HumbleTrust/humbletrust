@@ -18,10 +18,12 @@ const SECONDS_PER_DAY: i64 = 86_400;
 const SECONDS_PER_MONTH: i64 = 2_592_000;
 
 // Phase 4: LP fee distribution bps
-const LP_FEE_CREATOR_STANDARD_BPS: u64 = 5_000;  // 50%
-const LP_FEE_CREATOR_PREMIUM_BPS: u64  = 6_000;  // 60%
-const LP_FEE_TREASURY_BPS: u64         = 3_000;  // 30%
-const LP_FEE_REWARDS_BPS: u64          = 2_000;  // 20%
+// Standard: 40% creator / 35% treasury / 25% rewards
+// Premium:  60% creator / 30% treasury / 10% rewards
+const LP_FEE_CREATOR_STANDARD_BPS: u64  = 4_000;
+const LP_FEE_CREATOR_PREMIUM_BPS: u64   = 6_000;
+const LP_FEE_TREASURY_STANDARD_BPS: u64 = 3_500;
+const LP_FEE_TREASURY_PREMIUM_BPS: u64  = 3_000;
 const LP_CLAIM_COOLDOWN: i64           = SECONDS_PER_MONTH;
 
 #[program]
@@ -1023,17 +1025,17 @@ pub mod humbletrust {
         let pool_lamports = ctx.accounts.lp_fee_pool.lamports();
         require!(pool_lamports > 0, HumbleError::InsufficientVaultBalance);
 
-        let creator_bps = if lp_lock.is_premium {
-            LP_FEE_CREATOR_PREMIUM_BPS
+        let (creator_bps, treasury_bps) = if lp_lock.is_premium {
+            (LP_FEE_CREATOR_PREMIUM_BPS, LP_FEE_TREASURY_PREMIUM_BPS)
         } else {
-            LP_FEE_CREATOR_STANDARD_BPS
+            (LP_FEE_CREATOR_STANDARD_BPS, LP_FEE_TREASURY_STANDARD_BPS)
         };
 
         let creator_share = pool_lamports
             .checked_mul(creator_bps).and_then(|v| v.checked_div(10_000))
             .ok_or(error!(HumbleError::MathOverflow))?;
         let treasury_share = pool_lamports
-            .checked_mul(LP_FEE_TREASURY_BPS).and_then(|v| v.checked_div(10_000))
+            .checked_mul(treasury_bps).and_then(|v| v.checked_div(10_000))
             .ok_or(error!(HumbleError::MathOverflow))?;
         let rewards_share = pool_lamports
             .checked_sub(creator_share).and_then(|v| v.checked_sub(treasury_share))

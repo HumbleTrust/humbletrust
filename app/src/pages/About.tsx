@@ -81,8 +81,8 @@ export const About = () => (
       <div className="how-grid">
         {[
           { n: "$5", icon: <Shield size={20} />, t: "Standard Launch", d: "Full on-chain protection. Lock, vesting, burn, anti-bot, voting. TrustScore from day one." },
-          { n: "$25", icon: <Award size={20} />, t: "Premium Launch", d: "Featured listing, 60% LP fee share (vs 50%), score boost eligible, priority airdrop queue." },
-          { n: "50/30/20", icon: <DollarSign size={20} />, t: "LP Fee Split", d: "Raydium fees: 50% creator (60% Premium) · 30% protocol treasury · 20% community rewards." },
+          { n: "$25", icon: <Award size={20} />, t: "Premium Launch", d: "Featured listing, 60% LP fee share (vs 40% Standard), score boost eligible, priority airdrop queue." },
+          { n: "40/60", icon: <DollarSign size={20} />, t: "LP Fee Split", d: "Standard: 40% creator · 35% treasury · 25% rewards. Premium: 60% creator · 30% treasury · 10% rewards." },
         ].map((c) => (
           <div key={c.n} className="how-card">
             <span className="how-n">{c.n}</span>
@@ -153,7 +153,7 @@ export const About = () => (
               ["Creator vesting schedule", "❌", "❌", "Optional", "✅ 30/60/90"],
               ["Anti-bot trading delay", "❌", "❌", "❌", "✅ 0–600s"],
               ["Community vote + auto-freeze", "❌", "❌", "❌", "✅"],
-              ["Creator earns LP fees", "❌", "Trading fee", "❌", "✅ 50–60%"],
+              ["Creator earns LP fees", "❌", "Trading fee", "❌", "✅ 40–60%"],
               ["Reputation across launches", "❌", "❌", "❌", "✅ Phase 4.5"],
               ["Soulbound launch certificate", "❌", "❌", "❌", "✅ Phase 4.6"],
             ].map((row) => (
