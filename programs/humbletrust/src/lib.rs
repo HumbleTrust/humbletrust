@@ -1075,41 +1075,48 @@ pub mod humbletrust {
         global.certificate_counter = global.certificate_counter.saturating_add(1);
         let serial = global.certificate_counter;
 
-        let cert = &mut ctx.accounts.launch_certificate;
-        cert.creator = ctx.accounts.creator.key();
-        cert.token_mint = ctx.accounts.mint.key();
-        cert.certificate_nft_mint = ctx.accounts.certificate_nft_mint.key();
-        cert.lock_percent = meta.lock_percent;
-        cert.lock_days = meta.lock_days;
-        cert.initial_trust_score = meta.trust_score;
-        cert.is_premium = meta.is_premium;
-        cert.airdrop_percent = meta.airdrop_percent;
-        cert.burn_option = meta.burn_option;
-        cert.issued_at = now;
-        cert.serial_number = serial;
-        cert.bump = ctx.bumps.launch_certificate;
-
-        // Mint 1 Token-2022 NonTransferable NFT to creator.
-        // The certificate_nft_mint must be a pre-initialized Token-2022 mint
-        // with the NonTransferable extension enabled (set up client-side before this call).
+        // Collect account infos for CPI before the mutable borrow of launch_certificate
         let bump = ctx.bumps.launch_certificate;
         let token_mint_key = ctx.accounts.mint.key();
+        let cert_account_info = ctx.accounts.launch_certificate.to_account_info();
+        let nft_mint_info = ctx.accounts.certificate_nft_mint.to_account_info();
+        let nft_dest_info = ctx.accounts.creator_nft_account.to_account_info();
+        let t22_program_info = ctx.accounts.token_2022_program.to_account_info();
+
+        {
+            let cert = &mut ctx.accounts.launch_certificate;
+            cert.creator = ctx.accounts.creator.key();
+            cert.token_mint = token_mint_key;
+            cert.certificate_nft_mint = ctx.accounts.certificate_nft_mint.key();
+            cert.lock_percent = meta.lock_percent;
+            cert.lock_days = meta.lock_days;
+            cert.initial_trust_score = meta.trust_score;
+            cert.is_premium = meta.is_premium;
+            cert.airdrop_percent = meta.airdrop_percent;
+            cert.burn_option = meta.burn_option;
+            cert.issued_at = now;
+            cert.serial_number = serial;
+            cert.bump = bump;
+        } // mutable borrow of launch_certificate ends here
+
+        // Mint 1 Token-2022 NonTransferable NFT to creator.
         let seeds: &[&[u8]] = &[b"launch_cert", token_mint_key.as_ref(), &[bump]];
         let signer = &[seeds];
 
         interface_mint_to(
             CpiContext::new_with_signer(
-                ctx.accounts.token_2022_program.to_account_info(),
+                t22_program_info,
                 InterfaceMintTo {
-                    mint: ctx.accounts.certificate_nft_mint.to_account_info(),
-                    to: ctx.accounts.creator_nft_account.to_account_info(),
-                    authority: ctx.accounts.launch_certificate.to_account_info(),
+                    mint: nft_mint_info,
+                    to: nft_dest_info,
+                    authority: cert_account_info,
                 },
                 signer,
             ),
             1,
         )?;
 
+        let cert = &ctx.accounts.launch_certificate;
         emit!(LaunchCertificateIssued {
             serial_number: serial,
             token_mint: cert.token_mint,
