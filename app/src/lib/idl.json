@@ -137,6 +137,93 @@
       ]
     },
     {
+      "name": "claim_lp_fees",
+      "discriminator": [
+        72,
+        86,
+        212,
+        142,
+        60,
+        38,
+        74,
+        75
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "lp_lock",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  108,
+                  111,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "lp_lock.token_mint",
+                "account": "LpLock"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lp_fee_pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  102,
+                  101,
+                  101,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "lp_lock.token_mint",
+                "account": "LpLock"
+              }
+            ]
+          }
+        },
+        {
+          "name": "fee_wallet",
+          "writable": true
+        },
+        {
+          "name": "rewards_sol_wallet",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "create_token_with_lock",
       "discriminator": [
         111,
@@ -496,6 +583,492 @@
       "args": []
     },
     {
+      "name": "init_creator_reputation",
+      "discriminator": [
+        29,
+        207,
+        202,
+        41,
+        137,
+        169,
+        89,
+        82
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "creator_reputation",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  114,
+                  101,
+                  112,
+                  117,
+                  116,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "init_global_state",
+      "discriminator": [
+        225,
+        88,
+        176,
+        139,
+        158,
+        113,
+        203,
+        37
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "lock_lp_tokens",
+      "discriminator": [
+        96,
+        127,
+        0,
+        59,
+        197,
+        17,
+        205,
+        206
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_metadata",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_mint"
+        },
+        {
+          "name": "lp_mint"
+        },
+        {
+          "name": "creator_lp_account",
+          "writable": true
+        },
+        {
+          "name": "lp_lock",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  108,
+                  111,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lp_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lp_fee_pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  102,
+                  101,
+                  101,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "lp_amount",
+          "type": "u64"
+        },
+        {
+          "name": "lock_days",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "mint_launch_certificate",
+      "discriminator": [
+        20,
+        193,
+        140,
+        120,
+        169,
+        208,
+        212,
+        31
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "token_metadata",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "global_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launch_certificate",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104,
+                  95,
+                  99,
+                  101,
+                  114,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "certificate_nft_mint",
+          "writable": true
+        },
+        {
+          "name": "creator_nft_account",
+          "writable": true
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "record_reputation_event",
+      "discriminator": [
+        46,
+        216,
+        214,
+        101,
+        82,
+        12,
+        133,
+        15
+      ],
+      "accounts": [
+        {
+          "name": "metrics_authority",
+          "signer": true
+        },
+        {
+          "name": "token_metadata",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "creator_reputation",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  114,
+                  101,
+                  112,
+                  117,
+                  116,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_metadata.creator",
+                "account": "TokenMetadata"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "event_type",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "record_trade",
       "discriminator": [
         83,
@@ -509,12 +1082,9 @@
       ],
       "accounts": [
         {
-          "name": "buyer",
+          "name": "metrics_authority",
           "writable": true,
           "signer": true
-        },
-        {
-          "name": "seller"
         },
         {
           "name": "token_metadata",
@@ -548,8 +1118,7 @@
           }
         },
         {
-          "name": "mint",
-          "writable": true
+          "name": "mint"
         },
         {
           "name": "trade_record",
@@ -571,7 +1140,7 @@
                 "path": "mint"
               },
               {
-                "kind": "account",
+                "kind": "arg",
                 "path": "buyer"
               },
               {
@@ -588,12 +1157,24 @@
       ],
       "args": [
         {
+          "name": "buyer",
+          "type": "pubkey"
+        },
+        {
+          "name": "seller",
+          "type": "pubkey"
+        },
+        {
           "name": "amount",
           "type": "u64"
         },
         {
           "name": "buy_time",
           "type": "i64"
+        },
+        {
+          "name": "suspected_wash",
+          "type": "bool"
         }
       ]
     },
@@ -652,6 +1233,56 @@
       "args": [
         {
           "name": "new_metrics_authority",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_upgrade_authority",
+      "discriminator": [
+        114,
+        238,
+        86,
+        218,
+        10,
+        127,
+        45,
+        73
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_upgrade_authority",
           "type": "pubkey"
         }
       ]
@@ -752,6 +1383,51 @@
           "type": "u8"
         }
       ]
+    },
+    {
+      "name": "toggle_launches_pause",
+      "discriminator": [
+        48,
+        140,
+        74,
+        200,
+        247,
+        55,
+        148,
+        102
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
     },
     {
       "name": "unlock_locked_tokens",
@@ -875,6 +1551,60 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "update_fee_parameters",
+      "discriminator": [
+        128,
+        128,
+        208,
+        91,
+        246,
+        53,
+        31,
+        176
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "standard_fee_lamports",
+          "type": "u64"
+        },
+        {
+          "name": "premium_fee_lamports",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "update_metrics",
@@ -1175,6 +1905,71 @@
   ],
   "accounts": [
     {
+      "name": "CreatorReputation",
+      "discriminator": [
+        76,
+        107,
+        128,
+        9,
+        3,
+        235,
+        176,
+        152
+      ]
+    },
+    {
+      "name": "GlobalState",
+      "discriminator": [
+        163,
+        46,
+        74,
+        168,
+        216,
+        123,
+        133,
+        98
+      ]
+    },
+    {
+      "name": "LaunchCertificate",
+      "discriminator": [
+        217,
+        151,
+        124,
+        40,
+        233,
+        37,
+        30,
+        80
+      ]
+    },
+    {
+      "name": "LpFeePool",
+      "discriminator": [
+        128,
+        24,
+        150,
+        211,
+        175,
+        239,
+        59,
+        11
+      ]
+    },
+    {
+      "name": "LpLock",
+      "discriminator": [
+        140,
+        6,
+        162,
+        198,
+        245,
+        31,
+        100,
+        76
+      ]
+    },
+    {
       "name": "TokenMetadata",
       "discriminator": [
         237,
@@ -1255,6 +2050,45 @@
       ]
     },
     {
+      "name": "FeeParametersUpdated",
+      "discriminator": [
+        106,
+        204,
+        86,
+        253,
+        173,
+        15,
+        107,
+        174
+      ]
+    },
+    {
+      "name": "LaunchCertificateIssued",
+      "discriminator": [
+        243,
+        54,
+        188,
+        144,
+        147,
+        177,
+        203,
+        23
+      ]
+    },
+    {
+      "name": "LaunchesPauseToggled",
+      "discriminator": [
+        197,
+        156,
+        151,
+        150,
+        72,
+        38,
+        108,
+        245
+      ]
+    },
+    {
       "name": "LockedTokensUnlocked",
       "discriminator": [
         101,
@@ -1265,6 +2099,32 @@
         173,
         108,
         224
+      ]
+    },
+    {
+      "name": "LpFeesClaimed",
+      "discriminator": [
+        106,
+        76,
+        240,
+        18,
+        233,
+        91,
+        163,
+        215
+      ]
+    },
+    {
+      "name": "LpLocked",
+      "discriminator": [
+        231,
+        255,
+        40,
+        229,
+        17,
+        147,
+        106,
+        125
       ]
     },
     {
@@ -1503,6 +2363,36 @@
       "code": 6033,
       "name": "InvalidTradeTime",
       "msg": "Invalid trade time"
+    },
+    {
+      "code": 6034,
+      "name": "SelfTrade",
+      "msg": "Buyer and seller cannot be the same address"
+    },
+    {
+      "code": 6035,
+      "name": "LpAlreadyLocked",
+      "msg": "LP lock already exists for this token"
+    },
+    {
+      "code": 6036,
+      "name": "AlreadyInitialized",
+      "msg": "Global state already initialized"
+    },
+    {
+      "code": 6037,
+      "name": "CertificateAlreadyIssued",
+      "msg": "Certificate already issued for this token"
+    },
+    {
+      "code": 6038,
+      "name": "LaunchesPaused",
+      "msg": "New token launches are temporarily paused"
+    },
+    {
+      "code": 6039,
+      "name": "InvalidFeeParameters",
+      "msg": "Premium fee must be greater than standard fee"
     }
   ],
   "types": [
@@ -1551,6 +2441,42 @@
       }
     },
     {
+      "name": "CreatorReputation",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_launches",
+            "type": "u32"
+          },
+          {
+            "name": "trust_score_sum",
+            "type": "u32"
+          },
+          {
+            "name": "successful_unlocks",
+            "type": "u32"
+          },
+          {
+            "name": "complaints_total",
+            "type": "u32"
+          },
+          {
+            "name": "score_bonus",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "CreatorVerified",
       "type": {
         "kind": "struct",
@@ -1575,6 +2501,166 @@
       }
     },
     {
+      "name": "FeeParametersUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "standard_fee_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "premium_fee_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GlobalState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "certificate_counter",
+            "type": "u32"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "standard_fee_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "premium_fee_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "upgrade_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "is_launches_paused",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LaunchCertificate",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "certificate_nft_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "lock_percent",
+            "type": "u8"
+          },
+          {
+            "name": "lock_days",
+            "type": "u16"
+          },
+          {
+            "name": "initial_trust_score",
+            "type": "u8"
+          },
+          {
+            "name": "is_premium",
+            "type": "bool"
+          },
+          {
+            "name": "airdrop_percent",
+            "type": "u8"
+          },
+          {
+            "name": "burn_option",
+            "type": "u8"
+          },
+          {
+            "name": "issued_at",
+            "type": "i64"
+          },
+          {
+            "name": "serial_number",
+            "type": "u32"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LaunchCertificateIssued",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "serial_number",
+            "type": "u32"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "certificate_nft_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "initial_trust_score",
+            "type": "u8"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LaunchesPauseToggled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "is_paused",
+            "type": "bool"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "LockedTokensUnlocked",
       "type": {
         "kind": "struct",
@@ -1590,6 +2676,146 @@
           {
             "name": "released_amount",
             "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LpFeePool",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LpFeesClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator_share",
+            "type": "u64"
+          },
+          {
+            "name": "treasury_share",
+            "type": "u64"
+          },
+          {
+            "name": "rewards_share",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LpLock",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "lp_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "is_premium",
+            "type": "bool"
+          },
+          {
+            "name": "lp_amount",
+            "type": "u64"
+          },
+          {
+            "name": "lock_days",
+            "type": "u16"
+          },
+          {
+            "name": "unlock_time",
+            "type": "i64"
+          },
+          {
+            "name": "locked_at",
+            "type": "i64"
+          },
+          {
+            "name": "last_claim_time",
+            "type": "i64"
+          },
+          {
+            "name": "total_fees_claimed_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "lp_vault_bump",
+            "type": "u8"
+          },
+          {
+            "name": "lp_fee_pool_bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LpLocked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "lp_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "lp_amount",
+            "type": "u64"
+          },
+          {
+            "name": "lock_days",
+            "type": "u16"
+          },
+          {
+            "name": "unlock_time",
+            "type": "i64"
           },
           {
             "name": "timestamp",
@@ -1700,6 +2926,10 @@
             "type": "u64"
           },
           {
+            "name": "creator_allocation_percent",
+            "type": "u8"
+          },
+          {
             "name": "creator_max_balance",
             "type": "u64"
           },
@@ -1718,6 +2948,10 @@
           {
             "name": "lock_percent",
             "type": "u8"
+          },
+          {
+            "name": "lock_days",
+            "type": "u16"
           },
           {
             "name": "burn_option",
