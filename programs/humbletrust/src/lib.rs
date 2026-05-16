@@ -4,10 +4,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Burn, Mint, MintTo, Token, TokenAccount, Transfer};
 use anchor_spl::token_2022::Token2022;
-use anchor_spl::token_interface::{
-    Mint as InterfaceMint, TokenAccount as InterfaceTokenAccount,
-    MintTo as InterfaceMintTo, mint_to as interface_mint_to,
-};
+use anchor_spl::token_interface::{MintTo as InterfaceMintTo, mint_to as interface_mint_to};
 
 declare_id!("Gcz7NMtCqKdvzh53DF1ecoEYe7Hma9kWwdtCmmeBaxRi");
 
@@ -1022,7 +1019,7 @@ pub mod humbletrust {
         );
 
         // Fee pool = lamports held by lp_fee_pool account (funded by Raydium harvest CPI or manual)
-        let pool_lamports = ctx.accounts.lp_fee_pool.lamports();
+        let pool_lamports = ctx.accounts.lp_fee_pool.to_account_info().lamports();
         require!(pool_lamports > 0, HumbleError::InsufficientVaultBalance);
 
         let (creator_bps, treasury_bps) = if lp_lock.is_premium {
@@ -1670,13 +1667,14 @@ pub struct MintLaunchCertificate<'info> {
     #[account(mut)]
     pub creator: Signer<'info>,
 
+    // mint must be declared before token_metadata so its key can be used in seeds
+    pub mint: Account<'info, Mint>,
+
     #[account(
         seeds = [b"token_metadata", mint.key().as_ref()],
         bump = token_metadata.bump
     )]
     pub token_metadata: Account<'info, TokenMetadata>,
-
-    pub mint: Account<'info, Mint>,
 
     #[account(
         mut,
@@ -1694,15 +1692,15 @@ pub struct MintLaunchCertificate<'info> {
     )]
     pub launch_certificate: Account<'info, LaunchCertificate>,
 
-    // Pre-initialized Token-2022 NonTransferable mint (1 supply, 0 decimals).
-    // Client must create this mint with NonTransferable extension before calling.
-    // Mint authority = launch_certificate PDA.
+    // Pre-initialized Token-2022 NonTransferable mint; authority = launch_certificate PDA
+    /// CHECK: pre-initialized Token-2022 mint with NonTransferable extension, validated by CPI
     #[account(mut)]
-    pub certificate_nft_mint: InterfaceMint<'info>,
+    pub certificate_nft_mint: UncheckedAccount<'info>,
 
     // Creator's ATA for the certificate NFT (Token-2022)
+    /// CHECK: creator's token-2022 ATA, validated by CPI
     #[account(mut)]
-    pub creator_nft_account: InterfaceTokenAccount<'info>,
+    pub creator_nft_account: UncheckedAccount<'info>,
 
     pub token_2022_program: Program<'info, Token2022>,
     pub system_program: Program<'info, System>,
