@@ -2,7 +2,7 @@ import { Program, AnchorProvider, BN, Idl } from "@coral-xyz/anchor";
 import { PublicKey, Keypair, SystemProgram, SYSVAR_RENT_PUBKEY, Connection } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import idlJson from "./idl.json";
-import { PROGRAM_ID, FEE_WALLET } from "./constants";
+import { PROGRAM_ID, FEE_WALLET, HUMBLETRUST_METRICS_AUTHORITY } from "./constants";
 
 export const PROGRAM_ID_PK = new PublicKey(PROGRAM_ID);
 export const FEE_WALLET_PK = new PublicKey(FEE_WALLET);
@@ -71,7 +71,7 @@ export const launchToken = async (
       params.burnOption,
       params.creatorAllocation,
       params.airdropPercent,
-      creator, // metrics_authority = creator self
+      new PublicKey(HUMBLETRUST_METRICS_AUTHORITY), // S1 fix: backend-controlled, not creator
       params.tier,
       params.antiBotSeconds
     )

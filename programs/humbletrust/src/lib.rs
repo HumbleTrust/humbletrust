@@ -2,13 +2,17 @@
 #![allow(deprecated)]
 
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Burn, Mint, MintTo, Token, TokenAccount, Transfer};
+use anchor_spl::token::{self, Burn, Mint, MintTo, SetAuthority, Token, TokenAccount, Transfer};
 use anchor_spl::token_2022::Token2022;
 use anchor_spl::token_interface::{MintTo as InterfaceMintTo, mint_to as interface_mint_to};
 
 declare_id!("Gcz7NMtCqKdvzh53DF1ecoEYe7Hma9kWwdtCmmeBaxRi");
 
 const FEE_WALLET: Pubkey = pubkey!("FYRtG8JMun6vqucUaXGcSZrWib6gNVEW4dd2LEP92mGM");
+// S3 fix: admin pubkey for rotating metrics_authority. Replace placeholder.
+// 11111111111111111111111111111111 (System Program) effectively disables the
+// instruction until you set a real pubkey.
+const HUMBLETRUST_ADMIN: Pubkey = pubkey!("7iMHH7F7SqAtuRo1sC72KKgWf2vZbfsRYHrpdmS3PSW8");
 const LAUNCH_FEE_STANDARD: u64 = 56_818_181;
 const LAUNCH_FEE_PREMIUM: u64 = 281_818_181;
 const SECONDS_PER_DAY: i64 = 86_400;
@@ -557,9 +561,10 @@ pub mod humbletrust {
         let mint_key = ctx.accounts.mint.key();
         let token_metadata_ai = ctx.accounts.token_metadata.to_account_info();
 
-        let (creator_key, bump) = {
+        // S2 fix: capture vesting-related state
+        let (creator_key, bump, is_frozen, created_at, creator_allocation) = {
             let meta = &ctx.accounts.token_metadata;
-            (meta.creator, meta.bump)
+            (meta.creator, meta.bump, meta.is_frozen, meta.created_at, meta.creator_allocation)
         };
 
         require_keys_eq!(
@@ -567,11 +572,33 @@ pub mod humbletrust {
             creator_key,
             HumbleError::Unauthorized
         );
+        require!(!is_frozen, HumbleError::TokenFrozen);
         require!(amount > 0, HumbleError::InvalidSupply);
         require!(
             ctx.accounts.creator_vault.amount >= amount,
             HumbleError::InsufficientVaultBalance
         );
+
+        // S2 fix: respect vesting schedule (2% day 30, +3% day 60, +5% day 90)
+        let now = Clock::get()?.unix_timestamp;
+        let days_elapsed = ((now - created_at) / SECONDS_PER_DAY).max(0) as u64;
+        let unlocked_pct: u64 = if days_elapsed >= 90 {
+            10
+        } else if days_elapsed >= 60 {
+            5
+        } else if days_elapsed >= 30 {
+            2
+        } else {
+            0
+        };
+        let total_unlocked = percent_of(creator_allocation, unlocked_pct)?;
+        let already_consumed = creator_allocation
+            .checked_sub(ctx.accounts.creator_vault.amount)
+            .ok_or(error!(HumbleError::MathOverflow))?;
+        let new_consumed = already_consumed
+            .checked_add(amount)
+            .ok_or(error!(HumbleError::MathOverflow))?;
+        require!(new_consumed <= total_unlocked, HumbleError::VestingExceeded);
         // creator_max_balance (10% of supply) is enforced at creation time via
         // creator_allocation_percent <= 10 require!. No additional check needed here
         // because add_to_circulation only moves tokens OUT of the vault.
@@ -689,6 +716,8 @@ pub mod humbletrust {
             meta.metrics_authority,
             HumbleError::Unauthorized
         );
+        // S5 fix
+        require!(!meta.is_frozen, HumbleError::TokenFrozen);
         require!(now >= meta.trading_unlock_time, HumbleError::TradingNotStarted);
         require!(amount > 0, HumbleError::InvalidTradeAmount);
         require!(buy_time > 0, HumbleError::InvalidTradeTime);
@@ -710,12 +739,9 @@ pub mod humbletrust {
             .checked_add(amount)
             .ok_or(error!(HumbleError::MathOverflow))?;
 
-        if trade.is_valid_volume && !trade.suspected_wash {
-            meta.verified_volume = meta
-                .verified_volume
-                .checked_add(amount)
-                .ok_or(error!(HumbleError::MathOverflow))?;
-        }
+        // S4 fix: do NOT increment verified_volume from buyer-self-reported trades.
+        let _ = trade.is_valid_volume;
+        let _ = trade.suspected_wash;
 
         meta.trust_score = recalculate_trust_score(meta, now);
         meta.rewards_multiplier_bps = rewards_multiplier_bps(meta.trust_score);
@@ -734,6 +760,8 @@ pub mod humbletrust {
         let now = Clock::get()?.unix_timestamp;
         let meta = &mut ctx.accounts.token_metadata;
 
+        // S5 fix (update_metrics)
+        require!(!meta.is_frozen, HumbleError::TokenFrozen);
         require_keys_eq!(
             ctx.accounts.metrics_authority.key(),
             meta.metrics_authority,
@@ -776,6 +804,8 @@ pub mod humbletrust {
             )
         };
 
+        // S5 fix (airdrop_epoch)
+        require!(!ctx.accounts.token_metadata.is_frozen, HumbleError::TokenFrozen);
         require_keys_eq!(
             ctx.accounts.metrics_authority.key(),
             metrics_authority,
@@ -836,6 +866,8 @@ pub mod humbletrust {
         let now = Clock::get()?.unix_timestamp;
         let meta = &mut ctx.accounts.token_metadata;
 
+        // S5 fix (verify_creator)
+        require!(!meta.is_frozen, HumbleError::TokenFrozen);
         require_keys_eq!(
             ctx.accounts.metrics_authority.key(),
             meta.metrics_authority,
@@ -862,12 +894,13 @@ pub mod humbletrust {
         ctx: Context<SetMetricsAuthority>,
         new_metrics_authority: Pubkey,
     ) -> Result<()> {
-        let meta = &mut ctx.accounts.token_metadata;
+        // S3 fix: only HUMBLETRUST_ADMIN can rotate metrics_authority.
         require_keys_eq!(
-            ctx.accounts.creator.key(),
-            meta.creator,
-            HumbleError::Unauthorized
+            ctx.accounts.admin.key(),
+            HUMBLETRUST_ADMIN,
+            HumbleError::AdminRequired
         );
+        let meta = &mut ctx.accounts.token_metadata;
         meta.metrics_authority = new_metrics_authority;
         Ok(())
     }
@@ -1191,6 +1224,40 @@ pub mod humbletrust {
         });
         Ok(())
     }
+
+    pub fn revoke_mint_authority(ctx: Context<RevokeMintAuthority>) -> Result<()> {
+        // S6 fix: permanently revoke mint authority on the token mint.
+        let mint_key = ctx.accounts.mint.key();
+        let meta = &ctx.accounts.token_metadata;
+        require_keys_eq!(
+            ctx.accounts.creator.key(),
+            meta.creator,
+            HumbleError::Unauthorized
+        );
+
+        let bump_seed = [meta.bump];
+        let signer_seeds: &[&[u8]] = &[b"token_metadata", mint_key.as_ref(), &bump_seed];
+
+        token::set_authority(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                SetAuthority {
+                    account_or_mint: ctx.accounts.mint.to_account_info(),
+                    current_authority: ctx.accounts.token_metadata.to_account_info(),
+                },
+                &[signer_seeds],
+            ),
+            anchor_spl::token::spl_token::instruction::AuthorityType::MintTokens,
+            None,
+        )?;
+
+        emit!(MintAuthorityRevoked {
+            mint: mint_key,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -1496,7 +1563,7 @@ pub struct VerifyCreator<'info> {
 
 #[derive(Accounts)]
 pub struct SetMetricsAuthority<'info> {
-    pub creator: Signer<'info>,
+    pub admin: Signer<'info>,  // S3 fix
 
     #[account(
         mut,
@@ -1990,6 +2057,29 @@ pub struct LaunchCertificateIssued {
     pub timestamp: i64,
 }
 
+#[derive(Accounts)]
+pub struct RevokeMintAuthority<'info> {
+    pub creator: Signer<'info>,
+
+    #[account(
+        seeds = [b"token_metadata", mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadata>,
+
+    #[account(mut)]
+    pub mint: Account<'info, Mint>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[event]
+pub struct MintAuthorityRevoked {
+    pub mint: Pubkey,
+    pub timestamp: i64,
+}
+
+
 #[error_code]
 pub enum HumbleError {
     #[msg("Token name is too short")]
@@ -2072,6 +2162,10 @@ pub enum HumbleError {
     LaunchesPaused,
     #[msg("Premium fee must be greater than standard fee")]
     InvalidFeeParameters,
+    #[msg("Operation exceeds vesting unlocked amount")]
+    VestingExceeded,
+    #[msg("Operation requires HumbleTrust admin authority")]
+    AdminRequired,
 }
 
 fn percent_of(amount: u64, percent: u64) -> Result<u64> {
