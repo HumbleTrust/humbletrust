@@ -22,6 +22,8 @@
         { "name": "airdrop_vault", "writable": true },
         { "name": "curve_treasury_sol", "writable": true },
         { "name": "lp_lock_vault", "writable": true },
+        { "name": "metaplex_metadata", "writable": true },
+        { "name": "token_metadata_program" },
         { "name": "token_program" },
         { "name": "system_program" },
         { "name": "rent" }

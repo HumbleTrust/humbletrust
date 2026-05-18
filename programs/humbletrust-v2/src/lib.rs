@@ -1,6 +1,10 @@
 #![allow(unexpected_cfgs)]
 
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::{
+    instruction::{AccountMeta, Instruction},
+    program::invoke_signed,
+};
 use anchor_lang::system_program;
 use anchor_spl::token::{self, Burn, Mint, MintTo, SetAuthority, Token, TokenAccount, Transfer};
 
@@ -38,6 +42,51 @@ const LP_FEE_CREATOR_PREMIUM_BPS: u64 = 6_000;
 const LP_FEE_TREASURY_STANDARD_BPS: u64 = 3_500;
 const LP_FEE_TREASURY_PREMIUM_BPS: u64 = 3_000;
 const LP_CLAIM_COOLDOWN: i64 = SECONDS_PER_MONTH;
+const METAPLEX_TOKEN_METADATA_ID: Pubkey = pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+
+#[derive(AnchorSerialize)]
+struct MetaplexCreator {
+    address: Pubkey,
+    verified: bool,
+    share: u8,
+}
+
+#[derive(AnchorSerialize)]
+struct MetaplexCollection {
+    verified: bool,
+    key: Pubkey,
+}
+
+#[derive(AnchorSerialize)]
+struct MetaplexUses {
+    use_method: u8,
+    remaining: u64,
+    total: u64,
+}
+
+#[derive(AnchorSerialize)]
+#[allow(dead_code)]
+enum MetaplexCollectionDetails {
+    V1 { size: u64 },
+}
+
+#[derive(AnchorSerialize)]
+struct MetaplexDataV2 {
+    name: String,
+    symbol: String,
+    uri: String,
+    seller_fee_basis_points: u16,
+    creators: Option<Vec<MetaplexCreator>>,
+    collection: Option<MetaplexCollection>,
+    uses: Option<MetaplexUses>,
+}
+
+#[derive(AnchorSerialize)]
+struct CreateMetaplexMetadataArgs {
+    data: MetaplexDataV2,
+    is_mutable: bool,
+    collection_details: Option<MetaplexCollectionDetails>,
+}
 
 #[program]
 pub mod humbletrust_v2 {
@@ -79,9 +128,27 @@ pub mod humbletrust_v2 {
             FEE_WALLET,
             HumbleV2Error::InvalidFeeWallet
         );
+        require_keys_eq!(
+            ctx.accounts.token_metadata_program.key(),
+            METAPLEX_TOKEN_METADATA_ID,
+            HumbleV2Error::InvalidMetaplexProgram
+        );
 
         let now = Clock::get()?.unix_timestamp;
         let mint_key = ctx.accounts.mint.key();
+        let (expected_metaplex_metadata, _) = Pubkey::find_program_address(
+            &[
+                b"metadata",
+                METAPLEX_TOKEN_METADATA_ID.as_ref(),
+                mint_key.as_ref(),
+            ],
+            &METAPLEX_TOKEN_METADATA_ID,
+        );
+        require_keys_eq!(
+            ctx.accounts.metaplex_metadata.key(),
+            expected_metaplex_metadata,
+            HumbleV2Error::InvalidMetaplexMetadata
+        );
         let token_metadata_ai = ctx.accounts.token_metadata.to_account_info();
         let score = calculate_trust_score_v2(
             lock_percent,
@@ -272,6 +339,56 @@ pub mod humbletrust_v2 {
                 },
             ),
             initial_sol_lamports,
+        )?;
+
+        let metaplex_metadata_ai = ctx.accounts.metaplex_metadata.to_account_info();
+        let mint_ai = ctx.accounts.mint.to_account_info();
+        let creator_ai = ctx.accounts.creator.to_account_info();
+        let system_program_ai = ctx.accounts.system_program.to_account_info();
+        let rent_ai = ctx.accounts.rent.to_account_info();
+        let token_metadata_program_ai = ctx.accounts.token_metadata_program.to_account_info();
+        let mut metaplex_data = vec![33u8];
+        CreateMetaplexMetadataArgs {
+            data: MetaplexDataV2 {
+                name: name.clone(),
+                symbol: symbol.clone(),
+                uri: String::new(),
+                seller_fee_basis_points: 0,
+                creators: None,
+                collection: None,
+                uses: None,
+            },
+            is_mutable: false,
+            collection_details: None,
+        }
+        .serialize(&mut metaplex_data)?;
+
+        let metaplex_ix = Instruction {
+            program_id: METAPLEX_TOKEN_METADATA_ID,
+            accounts: vec![
+                AccountMeta::new(ctx.accounts.metaplex_metadata.key(), false),
+                AccountMeta::new_readonly(mint_key, false),
+                AccountMeta::new_readonly(ctx.accounts.token_metadata.key(), true),
+                AccountMeta::new(ctx.accounts.creator.key(), true),
+                AccountMeta::new_readonly(ctx.accounts.token_metadata.key(), true),
+                AccountMeta::new_readonly(ctx.accounts.system_program.key(), false),
+                AccountMeta::new_readonly(ctx.accounts.rent.key(), false),
+            ],
+            data: metaplex_data,
+        };
+        invoke_signed(
+            &metaplex_ix,
+            &[
+                token_metadata_program_ai,
+                metaplex_metadata_ai,
+                mint_ai,
+                token_metadata_ai.clone(),
+                creator_ai,
+                token_metadata_ai.clone(),
+                system_program_ai,
+                rent_ai,
+            ],
+            signer,
         )?;
 
         token::set_authority(
@@ -1561,6 +1678,13 @@ pub struct CreateTokenWithLockV2<'info> {
     )]
     pub lp_lock_vault: Box<Account<'info, LpLockVault>>,
 
+    /// CHECK: verified as the Metaplex metadata PDA for this mint
+    #[account(mut)]
+    pub metaplex_metadata: UncheckedAccount<'info>,
+
+    /// CHECK: verified against the canonical Metaplex Token Metadata program id
+    pub token_metadata_program: UncheckedAccount<'info>,
+
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
@@ -2542,6 +2666,10 @@ pub enum HumbleV2Error {
     InvalidFeeWallet,
     #[msg("Invalid creator fee wallet")]
     InvalidCreatorFeeWallet,
+    #[msg("Invalid Metaplex metadata account")]
+    InvalidMetaplexMetadata,
+    #[msg("Invalid Metaplex Token Metadata program")]
+    InvalidMetaplexProgram,
     #[msg("Invalid token account owner")]
     InvalidTokenAccountOwner,
     #[msg("Invalid mint for token account")]

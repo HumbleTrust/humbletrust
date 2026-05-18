@@ -66,33 +66,68 @@ const estimatePriceAfter = (solIn: number, solReserve: number, tokenReserve: num
   return nextSolReserve / nextTokenReserve;
 };
 
-const buildChart = (solIn: number, solReserve: number, tokenReserve: number) => {
+const estimateSolOut = (tokensIn: number, solReserve: number, tokenReserve: number) => {
+  if (tokensIn <= 0 || solReserve <= 0 || tokenReserve <= 0) return 0;
+  const k = solReserve * tokenReserve;
+  const nextSolReserve = k / (tokenReserve + tokensIn);
+  const grossSolOut = Math.max(0, solReserve - nextSolReserve);
+  return grossSolOut * (1 - CURVE_FEE_RATE);
+};
+
+const toRawTokenAmount = (amount: string, decimals = 9) => {
+  const trimmed = amount.trim();
+  if (!/^\d+(\.\d+)?$/.test(trimmed)) return "0";
+  const [whole, fraction = ""] = trimmed.split(".");
+  const paddedFraction = fraction.padEnd(decimals, "0").slice(0, decimals);
+  return `${whole}${paddedFraction}`.replace(/^0+(?=\d)/, "") || "0";
+};
+
+const buildCandles = (solIn: number, solReserve: number, tokenReserve: number) => {
   const maxSol = Math.max(2, solReserve * 2.5, solIn * 4);
-  const samples = Array.from({ length: 48 }, (_, index) => {
-    const spend = (maxSol * index) / 47;
+  const candleCount = 30;
+  const candles = Array.from({ length: candleCount }, (_, index) => {
+    const openSpend = (maxSol * index) / candleCount;
+    const closeSpend = (maxSol * (index + 1)) / candleCount;
+    const open = estimatePriceAfter(openSpend, solReserve, tokenReserve);
+    const close = estimatePriceAfter(closeSpend, solReserve, tokenReserve);
+    const spread = Math.max(Math.abs(close - open), close * 0.018);
     return {
-      spend,
-      price: estimatePriceAfter(spend, solReserve, tokenReserve),
+      open,
+      close,
+      high: Math.max(open, close) + spread * 0.45,
+      low: Math.max(0, Math.min(open, close) - spread * 0.35),
     };
   });
-  const prices = samples.map((sample) => sample.price);
+  const prices = candles.flatMap((candle) => [candle.high, candle.low]);
   const minPrice = Math.min(...prices);
   const maxPrice = Math.max(...prices);
   const range = Math.max(maxPrice - minPrice, Number.EPSILON);
-  const xScale = (spend: number) => CHART_PAD + (spend / maxSol) * (CHART_WIDTH - CHART_PAD * 2);
   const yScale = (price: number) =>
     CHART_HEIGHT - CHART_PAD - ((price - minPrice) / range) * (CHART_HEIGHT - CHART_PAD * 2);
-  const path = samples
-    .map((sample, index) => `${index === 0 ? "M" : "L"} ${xScale(sample.spend).toFixed(2)} ${yScale(sample.price).toFixed(2)}`)
-    .join(" ");
-  const currentSpend = clamp(solIn, 0, maxSol);
-  const currentPrice = estimatePriceAfter(currentSpend, solReserve, tokenReserve);
+  const slot = (CHART_WIDTH - CHART_PAD * 2) / candleCount;
+  const candleWidth = Math.max(6, slot * 0.58);
+  const currentIndex = clamp(Math.floor((clamp(solIn, 0, maxSol) / maxSol) * candleCount), 0, candleCount - 1);
 
   return {
-    path,
+    candles: candles.map((candle, index) => {
+      const x = CHART_PAD + slot * index + slot / 2;
+      const bodyTop = yScale(Math.max(candle.open, candle.close));
+      const bodyBottom = yScale(Math.min(candle.open, candle.close));
+      return {
+        ...candle,
+        x,
+        yOpen: yScale(candle.open),
+        yClose: yScale(candle.close),
+        yHigh: yScale(candle.high),
+        yLow: yScale(candle.low),
+        bodyY: bodyTop,
+        bodyHeight: Math.max(3, bodyBottom - bodyTop),
+        candleWidth,
+        up: candle.close >= candle.open,
+        active: index === currentIndex,
+      };
+    }),
     maxSol,
-    currentX: xScale(currentSpend),
-    currentY: yScale(currentPrice),
     minPrice,
     maxPrice,
   };
@@ -103,9 +138,9 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
   const anchorWallet = useAnchorWallet();
   const { connection } = useConnection();
   const [mintInput, setMintInput] = useState("");
-  const [creatorInput, setCreatorInput] = useState("");
+  const [side, setSide] = useState<"buy" | "sell">("buy");
   const [solAmount, setSolAmount] = useState("0.1");
-  const [tokensAmount, setTokensAmount] = useState("1000000000");
+  const [tokensAmount, setTokensAmount] = useState("1000000");
   const [reserveSol, setReserveSol] = useState(String(PREVIEW_SOL_RESERVE));
   const [reserveTokens, setReserveTokens] = useState(String(PREVIEW_TOKEN_RESERVE));
   const [reserveSource, setReserveSource] = useState<"preview" | "chain">("preview");
@@ -133,18 +168,19 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
   const previewSolReserve = parsePositive(reserveSol, PREVIEW_SOL_RESERVE);
   const previewTokenReserve = parsePositive(reserveTokens, PREVIEW_TOKEN_RESERVE);
   const estimatedTokens = estimateTokensOut(solIn, previewSolReserve, previewTokenReserve);
+  const tokensIn = parsePositive(tokensAmount, 0);
+  const estimatedSol = estimateSolOut(tokensIn, previewSolReserve, previewTokenReserve);
   const currentPrice = previewSolReserve / previewTokenReserve;
   const nextPrice = estimatePriceAfter(solIn, previewSolReserve, previewTokenReserve);
   const priceImpact = currentPrice > 0 ? ((nextPrice - currentPrice) / currentPrice) * 100 : 0;
   const chart = useMemo(
-    () => buildChart(solIn, previewSolReserve, previewTokenReserve),
+    () => buildCandles(solIn, previewSolReserve, previewTokenReserve),
     [solIn, previewSolReserve, previewTokenReserve]
   );
 
   const validMint = mintInput.trim().length > 30;
-  const validCreator = creatorInput.trim().length > 30;
   const canUseCurve = v2Available === true;
-  const canTrade = canUseCurve && wallet.connected && busy === null && validMint && validCreator;
+  const canTrade = canUseCurve && wallet.connected && busy === null && validMint;
   const solscanUrl = validMint
     ? `https://solscan.io/token/${mintInput.trim()}?cluster=devnet`
     : null;
@@ -188,11 +224,10 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
       setV2Available(deployed);
       if (!deployed) throw new Error("V2 curve program is not deployed on devnet yet.");
       const mint = new PublicKey(mintInput.trim());
-      const creator = new PublicKey(creatorInput.trim());
       const ata = getAssociatedTokenAddressSync(mint, anchorWallet.publicKey);
       const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
       const program = getProgramV2(provider);
-      const { signature } = await buyOnCurveV2(program, anchorWallet.publicKey, mint, ata, creator, Number(solAmount), 0);
+      const { signature } = await buyOnCurveV2(program, anchorWallet.publicKey, mint, ata, Number(solAmount), 0);
       setTxSig(signature);
       await refreshReserves();
     } catch (e: any) {
@@ -210,11 +245,10 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
       setV2Available(deployed);
       if (!deployed) throw new Error("V2 curve program is not deployed on devnet yet.");
       const mint = new PublicKey(mintInput.trim());
-      const creator = new PublicKey(creatorInput.trim());
       const ata = getAssociatedTokenAddressSync(mint, anchorWallet.publicKey);
       const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
       const program = getProgramV2(provider);
-      const { signature } = await sellOnCurveV2(program, anchorWallet.publicKey, mint, ata, creator, tokensAmount, 0);
+      const { signature } = await sellOnCurveV2(program, anchorWallet.publicKey, mint, ata, toRawTokenAmount(tokensAmount), 0);
       setTxSig(signature);
       await refreshReserves();
     } catch (e: any) {
@@ -272,28 +306,26 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
             placeholder="Mint public key"
             value={mintInput}
             onChange={(e) => setMintInput(e.target.value)}
+            onBlur={refreshReserves}
           />
 
-          <label className="form-label">Creator wallet</label>
-          <input
-            className="form-input"
-            placeholder="Creator public key"
-            value={creatorInput}
-            onChange={(e) => setCreatorInput(e.target.value)}
-          />
+          <div className="trade-tabs">
+            <button className={side === "buy" ? "active" : ""} onClick={() => setSide("buy")} type="button">Buy</button>
+            <button className={side === "sell" ? "active" : ""} onClick={() => setSide("sell")} type="button">Sell</button>
+          </div>
 
           <div className="swap-box">
             <div className="swap-box-head">
               <span>From</span>
-              <span>SOL</span>
+              <span>{side === "buy" ? "SOL" : "Token"}</span>
             </div>
             <input
               className="swap-amount-input"
               type="number"
-              min={0.01}
-              step={0.01}
-              value={solAmount}
-              onChange={(e) => setSolAmount(e.target.value)}
+              min={side === "buy" ? 0.01 : 1}
+              step={side === "buy" ? 0.01 : 1000}
+              value={side === "buy" ? solAmount : tokensAmount}
+              onChange={(e) => side === "buy" ? setSolAmount(e.target.value) : setTokensAmount(e.target.value)}
             />
           </div>
 
@@ -304,9 +336,11 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
           <div className="swap-box">
             <div className="swap-box-head">
               <span>To est.</span>
-              <span>Token</span>
+              <span>{side === "buy" ? "Token" : "SOL"}</span>
             </div>
-            <div className="swap-output">{formatCompact(estimatedTokens, 4)}</div>
+            <div className="swap-output">
+              {side === "buy" ? formatCompact(estimatedTokens, 4) : formatCompact(estimatedSol, 6)}
+            </div>
           </div>
 
           <div className="swap-meta-row">
@@ -314,12 +348,16 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
             <strong>{(CURVE_FEE_RATE * 100).toFixed(0)}%</strong>
           </div>
           <div className="swap-meta-row">
-            <span>Price impact</span>
-            <strong>{formatCompact(priceImpact, 2)}%</strong>
+            <span>{side === "buy" ? "Price impact" : "Raw sell amount"}</span>
+            <strong>{side === "buy" ? `${formatCompact(priceImpact, 2)}%` : toRawTokenAmount(tokensAmount)}</strong>
           </div>
 
-          <button onClick={runBuy} disabled={!canTrade || solIn <= 0} className="swap-action">
-            {busy === "buy" ? "Buying..." : "Buy on Curve"}
+          <button
+            onClick={side === "buy" ? runBuy : runSell}
+            disabled={!canTrade || (side === "buy" ? solIn <= 0 : tokensIn <= 0)}
+            className={side === "buy" ? "swap-action" : "swap-action sell-mode"}
+          >
+            {busy === "buy" ? "Buying..." : busy === "sell" ? "Selling..." : side === "buy" ? "Buy on Curve" : "Sell on Curve"}
           </button>
 
           {solscanUrl && (
@@ -345,20 +383,38 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
           </div>
 
           <div className="curve-chart-wrap">
-            <svg className="curve-chart" viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} role="img" aria-label="Bonding curve price preview">
-              <defs>
-                <linearGradient id="curveLineGradient" x1="0" x2="1" y1="0" y2="0">
-                  <stop offset="0%" stopColor="var(--green-neon)" />
-                  <stop offset="100%" stopColor="var(--solana-blue)" />
-                </linearGradient>
-              </defs>
+            <svg className="curve-chart" viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} role="img" aria-label="Bonding curve candle preview">
+              {[0, 1, 2, 3].map((line) => {
+                const y = CHART_PAD + ((CHART_HEIGHT - CHART_PAD * 2) * line) / 3;
+                return <line key={`h-${line}`} x1={CHART_PAD} y1={y} x2={CHART_WIDTH - CHART_PAD} y2={y} className="candle-grid" />;
+              })}
+              {[0, 1, 2, 3, 4].map((line) => {
+                const x = CHART_PAD + ((CHART_WIDTH - CHART_PAD * 2) * line) / 4;
+                return <line key={`v-${line}`} x1={x} y1={CHART_PAD} x2={x} y2={CHART_HEIGHT - CHART_PAD} className="candle-grid" />;
+              })}
               <path
                 d={`M ${CHART_PAD} ${CHART_HEIGHT - CHART_PAD} H ${CHART_WIDTH - CHART_PAD} M ${CHART_PAD} ${CHART_PAD} V ${CHART_HEIGHT - CHART_PAD}`}
                 className="curve-axis"
               />
-              <path d={chart.path} className="curve-line" />
-              <line x1={chart.currentX} y1={CHART_PAD} x2={chart.currentX} y2={CHART_HEIGHT - CHART_PAD} className="curve-marker-line" />
-              <circle cx={chart.currentX} cy={chart.currentY} r="5" className="curve-marker-dot" />
+              {chart.candles.map((candle, index) => (
+                <g key={index} className={candle.active ? "candle active" : "candle"}>
+                  <line
+                    x1={candle.x}
+                    y1={candle.yHigh}
+                    x2={candle.x}
+                    y2={candle.yLow}
+                    className={candle.up ? "candle-wick up" : "candle-wick down"}
+                  />
+                  <rect
+                    x={candle.x - candle.candleWidth / 2}
+                    y={candle.bodyY}
+                    width={candle.candleWidth}
+                    height={candle.bodyHeight}
+                    rx="1.5"
+                    className={candle.up ? "candle-body up" : "candle-body down"}
+                  />
+                </g>
+              ))}
             </svg>
             <div className="curve-axis-label top">{formatPrice(chart.maxPrice)} SOL/token</div>
             <div className="curve-axis-label bottom">{formatPrice(chart.minPrice)} SOL/token</div>
@@ -371,8 +427,8 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
               <strong>{formatPrice(currentPrice)}</strong>
             </div>
             <div>
-              <span>After buy</span>
-              <strong>{formatPrice(nextPrice)}</strong>
+              <span>{side === "buy" ? "After buy" : "Sell est."}</span>
+              <strong>{side === "buy" ? formatPrice(nextPrice) : `${formatCompact(estimatedSol, 6)} SOL`}</strong>
             </div>
             <div>
               <span>SOL reserve</span>
@@ -415,21 +471,6 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
             </div>
           </div>
           {reserveError && <div className="trade-error">{reserveError}</div>}
-        </div>
-      </div>
-
-      <div className="sell-panel">
-        <div>
-          <div className="panel-title">
-            <TrendingUp size={16} color="var(--solana-blue)" /> Sell on Curve
-          </div>
-          <p className="sell-copy">Raw token amount goes back to the devnet curve pool; SOL comes from the treasury PDA.</p>
-        </div>
-        <div className="sell-controls">
-          <input className="form-input compact-input" value={tokensAmount} onChange={(e) => setTokensAmount(e.target.value)} />
-          <button onClick={runSell} disabled={!canTrade} className="sell-action">
-            {busy === "sell" ? "Selling..." : "Sell"}
-          </button>
         </div>
       </div>
 
