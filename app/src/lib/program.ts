@@ -8,6 +8,9 @@ import { PROGRAM_ID, PROGRAM_ID_V2, FEE_WALLET, HUMBLETRUST_METRICS_AUTHORITY } 
 export const PROGRAM_ID_PK = new PublicKey(PROGRAM_ID);
 export const PROGRAM_ID_V2_PK = new PublicKey(PROGRAM_ID_V2);
 export const FEE_WALLET_PK = new PublicKey(FEE_WALLET);
+export const METAPLEX_TOKEN_METADATA_PROGRAM_ID = new PublicKey(
+  "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+);
 
 export const getProgram = (provider: AnchorProvider) => {
   return new Program(idlJson as Idl, provider);
@@ -79,6 +82,14 @@ export const findV2Pdas = (mint: PublicKey) => {
     [Buffer.from("lp_lock_vault_v2"), mint.toBuffer()],
     PROGRAM_ID_V2_PK
   );
+  const [metaplexMetadata] = PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("metadata"),
+      METAPLEX_TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+      mint.toBuffer(),
+    ],
+    METAPLEX_TOKEN_METADATA_PROGRAM_ID
+  );
   return {
     tokenMetadata,
     lockedVault,
@@ -88,7 +99,17 @@ export const findV2Pdas = (mint: PublicKey) => {
     airdropVault,
     curveTreasurySol,
     lpLockVault,
+    metaplexMetadata,
   };
+};
+
+const getCreatorFeeWalletV2 = async (program: Program, mint: PublicKey) => {
+  const pdas = findV2Pdas(mint);
+  const accountInfo = await (program.provider as AnchorProvider).connection.getAccountInfo(pdas.tokenMetadata);
+  if (!accountInfo || accountInfo.data.length < 40) {
+    throw new Error("Token metadata PDA was not found for this mint");
+  }
+  return new PublicKey(accountInfo.data.slice(8, 40));
 };
 
 export interface LaunchParams {
@@ -202,6 +223,8 @@ export const launchTokenV2 = async (
       airdropVault: pdas.airdropVault,
       curveTreasurySol: pdas.curveTreasurySol,
       lpLockVault: pdas.lpLockVault,
+      metaplexMetadata: pdas.metaplexMetadata,
+      tokenMetadataProgram: METAPLEX_TOKEN_METADATA_PROGRAM_ID,
       tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
       rent: SYSVAR_RENT_PUBKEY,
@@ -217,11 +240,11 @@ export const buyOnCurveV2 = async (
   buyer: PublicKey,
   mint: PublicKey,
   buyerTokenAccount: PublicKey,
-  creatorFeeWallet: PublicKey,
   solIn: number,
   minTokensOut = 0
 ) => {
   const pdas = findV2Pdas(mint);
+  const creatorFeeWallet = await getCreatorFeeWalletV2(program, mint);
   const existingAta = await (program.provider as AnchorProvider).connection.getAccountInfo(buyerTokenAccount);
   const preInstructions = existingAta
     ? []
@@ -250,11 +273,11 @@ export const sellOnCurveV2 = async (
   seller: PublicKey,
   mint: PublicKey,
   sellerTokenAccount: PublicKey,
-  creatorFeeWallet: PublicKey,
   tokensIn: string,
   minSolOutLamports = 0
 ) => {
   const pdas = findV2Pdas(mint);
+  const creatorFeeWallet = await getCreatorFeeWalletV2(program, mint);
   const tx = await program.methods
     .sellV2(new BN(tokensIn), new BN(minSolOutLamports))
     .accounts({
