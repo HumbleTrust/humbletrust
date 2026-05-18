@@ -10,6 +10,7 @@ describe("humbletrust_v2", () => {
   anchor.setProvider(provider);
   const program = anchor.workspace.HumbletrustV2 as Program<HumbletrustV2>;
   const initialSol = new BN(500_000_000);
+  const FEE_WALLET = new PublicKey("FYRtG8JMun6vqucUaXGcSZrWib6gNVEW4dd2LEP92mGM");
 
   const findPda = (seeds: Buffer[]) =>
     PublicKey.findProgramAddressSync(seeds, program.programId);
@@ -26,6 +27,7 @@ describe("humbletrust_v2", () => {
 
     return {
       creator: provider.wallet.publicKey,
+      feeWallet: FEE_WALLET,
       tokenMetadata,
       mint: mintKp.publicKey,
       lockedVault,
@@ -56,6 +58,8 @@ describe("humbletrust_v2", () => {
         15,
         0,
         initialSol,
+        provider.wallet.publicKey,
+        0,
         0
       )
       .accounts(launchAccounts(mintKp))
@@ -87,7 +91,7 @@ describe("humbletrust_v2", () => {
 
     try {
       await program.methods
-        .createTokenWithLockV2("BadV2", "BAD2", 90, 25, 50, 0, 25, 20, 5, initialSol, 0)
+        .createTokenWithLockV2("BadV2", "BAD2", 90, 25, 50, 0, 25, 20, 5, initialSol, provider.wallet.publicKey, 0, 0)
         .accounts(launchAccounts(mintKp))
         .signers([mintKp])
         .rpc();
@@ -102,7 +106,7 @@ describe("humbletrust_v2", () => {
 
     try {
       await program.methods
-        .createTokenWithLockV2("SumV2", "SUM2", 90, 25, 40, 0, 40, 15, 0, initialSol, 0)
+        .createTokenWithLockV2("SumV2", "SUM2", 90, 25, 40, 0, 40, 15, 0, initialSol, provider.wallet.publicKey, 0, 0)
         .accounts(launchAccounts(mintKp))
         .signers([mintKp])
         .rpc();

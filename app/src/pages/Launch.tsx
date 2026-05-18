@@ -2,7 +2,7 @@ import { useState, useMemo, useRef } from "react";
 import { useWallet, useAnchorWallet, useConnection } from "@solana/wallet-adapter-react";
 import { AnchorProvider } from "@coral-xyz/anchor";
 import { Rocket, ExternalLink, Loader, Upload, X, Award, Lock, UserCheck } from "lucide-react";
-import { getProgram, launchToken, initCreatorReputation, findCreatorReputationPda, findLaunchCertPda } from "../lib/program";
+import { getProgramV2, launchTokenV2, initCreatorReputationV2 } from "../lib/program";
 import { fileToHexLogo, MAX_LOGO_BYTES, saveToken } from "../lib/image";
 import { HexLogo } from "../components/HexLogo";
 
@@ -25,32 +25,40 @@ export const Launch = () => {
 
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
-  const [supply, setSupply] = useState("1000000000");
-  const [lockPercent, setLockPercent] = useState(50);
+  const [lockPercent, setLockPercent] = useState(40);
   const [lockDays, setLockDays] = useState(90);
   const [burn, setBurn] = useState<25 | 50>(50);
-  const [creatorAlloc, setCreatorAlloc] = useState(5);
-  const [airdrop, setAirdrop] = useState<0 | 2 | 5 | 8>(5);
+  const [creatorAlloc, setCreatorAlloc] = useState(3);
+  const [curveLiquidity, setCurveLiquidity] = useState(35);
+  const [airdrop, setAirdrop] = useState(2);
+  const [initialSol, setInitialSol] = useState("0.5");
   const [tier, setTier] = useState<0 | 1>(0);
   const [antiBot, setAntiBot] = useState(60);
 
-  const supplyNum = useMemo(() => {
-    const n = Math.floor(parseFloat(supply));
-    return isFinite(n) && n > 0 ? n : 0;
-  }, [supply]);
-  const validSupply = supplyNum >= 1 && supplyNum <= 1_000_000_000_000;
+  const circulation = useMemo(
+    () => 100 - lockPercent - creatorAlloc - curveLiquidity - airdrop,
+    [lockPercent, creatorAlloc, curveLiquidity, airdrop]
+  );
+  const initialSolNum = useMemo(() => Number(initialSol), [initialSol]);
+  const validInitialSol = Number.isFinite(initialSolNum) && initialSolNum >= 0.5;
 
-  const trustScore = useMemo(() => {
-    let s = 0;
-    s += lockDays >= 360 ? 25 : lockDays >= 270 ? 20 : lockDays >= 180 ? 16 : lockDays >= 90 ? 12 : lockDays >= 60 ? 8 : 4;
-    s += lockPercent >= 60 ? 18 : lockPercent >= 50 ? 15 : lockPercent >= 40 ? 11 : 6;
-    s += burn === 50 ? 12 : 6;
-    s += airdrop === 8 ? 10 : airdrop === 5 ? 6 : airdrop === 2 ? 3 : 0;
-    return Math.min(100, s);
-  }, [lockDays, lockPercent, burn, airdrop]);
+  const trustBreakdown = useMemo(() => {
+    const lock = lockPercent < 30 ? 0 : lockPercent <= 39 ? 10 : lockPercent <= 60 ? 20 : 15;
+    const creator = Math.max(0, 20 - 4 * creatorAlloc);
+    const curve = Math.max(0, Math.min(25, 1.5 * (curveLiquidity - 20)));
+    const circ = Math.max(0, Math.min(20, 1.2 * (circulation - 10)));
+    const air = Math.max(0, 15 - 3 * airdrop);
+    const burnScore = burn === 50 ? 10 : 5;
+    const raw = lock + creator + curve + circ + air + burnScore;
+    return {
+      lock, creator, curve, circ, air, burn: burnScore, raw,
+      score: Math.min(100, Math.round((raw / 110) * 100)),
+    };
+  }, [lockPercent, creatorAlloc, curveLiquidity, circulation, airdrop, burn]);
 
-  const circulation = useMemo(() => 100 - lockPercent - creatorAlloc, [lockPercent, creatorAlloc]);
-  const validCirc = circulation >= 55;
+  const trustScore = trustBreakdown.score;
+  const validDistribution = circulation >= 15 && circulation <= 40;
+  const validCombinedLiquidity = curveLiquidity + circulation >= 50;
 
   const handleLogoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setLogoErr(null);
@@ -72,11 +80,15 @@ export const Launch = () => {
     setBusy(true); setError(null); setResult(null);
     try {
       const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
-      const program = getProgram(provider);
-      const { signature, mint } = await launchToken(program, anchorWallet.publicKey, {
-        name, symbol, totalSupply: supply,
+      const program = getProgramV2(provider);
+      const { signature, mint } = await launchTokenV2(program, anchorWallet.publicKey, {
+        name, symbol,
         lockPercent, lockDays, burnOption: burn,
-        creatorAllocation: creatorAlloc, airdropPercent: airdrop,
+        creatorAllocation: creatorAlloc,
+        curveLiquidityPercent: curveLiquidity,
+        circulationPercent: circulation,
+        airdropPercent: airdrop,
+        initialSol: initialSolNum,
         tier, antiBotSeconds: antiBot,
       });
       const mintStr = mint.toString();
@@ -98,16 +110,16 @@ export const Launch = () => {
     setRepBusy(true); setRepError(null);
     try {
       const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
-      const program = getProgram(provider);
-      await initCreatorReputation(program, anchorWallet.publicKey);
+      const program = getProgramV2(provider);
+      await initCreatorReputationV2(program, anchorWallet.publicKey);
       setRepDone(true);
     } catch (e: any) {
       setRepError(e.message || String(e));
     } finally { setRepBusy(false); }
   };
 
-  const scoreColor = trustScore >= 81 ? "var(--green-neon)" : trustScore >= 66 ? "var(--solana-blue)" : trustScore >= 51 ? "var(--yellow)" : "var(--orange)";
-  const scoreLabel = trustScore >= 81 ? "PROTECTED" : trustScore >= 66 ? "TRUSTED" : trustScore >= 51 ? "BASIC" : "WEAK";
+  const scoreColor = trustScore >= 85 ? "var(--green-neon)" : trustScore >= 70 ? "var(--solana-blue)" : trustScore >= 40 ? "var(--yellow)" : "var(--orange)";
+  const scoreLabel = trustScore >= 85 ? "ELITE" : trustScore >= 70 ? "STRONG" : trustScore >= 40 ? "OK" : "WEAK";
   const circumference = 2 * Math.PI * 56;
   const offset = circumference - (trustScore / 100) * circumference;
 
@@ -148,19 +160,22 @@ export const Launch = () => {
           </div>
 
           <label className="form-label">Total Supply</label>
+          <input className="form-input" value="1,000,000,000 fixed" readOnly />
+
+          <label className="form-label">Initial Liquidity (SOL)</label>
           <input
             className="form-input"
             type="number"
-            min={1}
-            max={1_000_000_000_000}
-            step={1}
-            value={supply}
-            onChange={(e) => setSupply(e.target.value)}
-            style={!validSupply ? { borderColor: "var(--red)" } : undefined}
+            min={0.5}
+            step={0.1}
+            value={initialSol}
+            onChange={(e) => setInitialSol(e.target.value)}
+            style={!validInitialSol ? { borderColor: "var(--red)" } : undefined}
+            title="Used for bonding curve liquidity. Not sent to creator. Not used for Raydium."
           />
-          {!validSupply && (
+          {!validInitialSol && (
             <div style={{ color: "var(--red)", fontSize: ".75rem", marginTop: ".25rem" }}>
-              Supply must be a whole number between 1 and 1,000,000,000,000.
+              Initial liquidity must be at least 0.5 SOL.
             </div>
           )}
 
@@ -183,15 +198,19 @@ export const Launch = () => {
           </div>
 
           <div className="slider-group">
-            <div className="slider-header"><label className="form-label" style={{ margin: 0 }}>Creator allocation (0–10%)</label><span className="slider-val">{creatorAlloc}%</span></div>
-            <input type="range" min={0} max={10} value={creatorAlloc} onChange={(e) => setCreatorAlloc(+e.target.value)} />
+            <div className="slider-header"><label className="form-label" style={{ margin: 0 }}>Creator allocation (0-5%)</label><span className="slider-val">{creatorAlloc}%</span></div>
+            <input type="range" min={0} max={5} value={creatorAlloc} onChange={(e) => setCreatorAlloc(+e.target.value)} />
           </div>
 
-          <label className="form-label">Airdrop config</label>
-          <div className="air-row">
-            {[0, 2, 5, 8].map((a) => (
-              <div key={a} className={"air-btn " + (airdrop === a ? "sel" : "")} onClick={() => setAirdrop(a as 0|2|5|8)}>{a === 0 ? "Disabled" : a + "%"}</div>
-            ))}
+          <div className="slider-group">
+            <div className="slider-header"><label className="form-label" style={{ margin: 0 }}>Curve Liquidity % (25-50)</label><span className="slider-val">{curveLiquidity}%</span></div>
+            <input type="range" min={25} max={50} value={curveLiquidity} onChange={(e) => setCurveLiquidity(+e.target.value)} title="Percentage of supply allocated to bonding curve liquidity." />
+            <div className="slider-ticks"><span>25%</span><span>35%</span><span>50%</span></div>
+          </div>
+
+          <div className="slider-group">
+            <div className="slider-header"><label className="form-label" style={{ margin: 0 }}>Airdrop allocation (0-5%)</label><span className="slider-val">{airdrop}%</span></div>
+            <input type="range" min={0} max={5} value={airdrop} onChange={(e) => setAirdrop(+e.target.value)} />
           </div>
 
           <label className="form-label">Tier</label>
@@ -207,12 +226,24 @@ export const Launch = () => {
           </div>
 
           <div style={{ background: "rgba(20,102,255,.07)", border: "1px solid rgba(20,102,255,.2)", color: "var(--solana-blue)", padding: ".7rem", borderRadius: 8, fontSize: ".78rem", marginBottom: "1rem", lineHeight: 1.6 }}>
-            <strong>Devnet launch.</strong> You will be set as your own metrics oracle. To protect TrustScore integrity on mainnet, assign a separate oracle wallet via <code>set_metrics_authority</code> before going live.
+            <strong>V2 devnet launch.</strong> Initial SOL funds the bonding curve treasury PDA. Creator never receives LP, and migration locks LP in a PDA.
           </div>
 
-          {!validCirc && (
+          {!validDistribution && (
             <div style={{ background: "rgba(255,59,59,.08)", border: "1px solid rgba(255,59,59,.2)", color: "var(--red)", padding: ".7rem", borderRadius: 8, fontSize: ".82rem", marginBottom: "1rem" }}>
-              Circulation = {circulation}% (must be ≥ 55%). Reduce lock % or creator allocation.
+              Circulation = {circulation}% (must be between 15% and 40%). Adjust lock, creator, curve, or airdrop.
+            </div>
+          )}
+
+          {validDistribution && !validCombinedLiquidity && (
+            <div style={{ background: "rgba(255,59,59,.08)", border: "1px solid rgba(255,59,59,.2)", color: "var(--red)", padding: ".7rem", borderRadius: 8, fontSize: ".82rem", marginBottom: "1rem" }}>
+              Curve Liquidity % + Circulation % must be at least 50%.
+            </div>
+          )}
+
+          {validDistribution && validCombinedLiquidity && curveLiquidity + circulation < 55 && (
+            <div style={{ background: "rgba(255,205,64,.08)", border: "1px solid rgba(255,205,64,.2)", color: "var(--yellow)", padding: ".7rem", borderRadius: 8, fontSize: ".82rem", marginBottom: "1rem" }}>
+              For higher TrustScore, recommended liquidity is at least 55%.
             </div>
           )}
 
@@ -292,7 +323,7 @@ export const Launch = () => {
             </div>
           )}
 
-          <button className="form-sub" onClick={handleLaunch} disabled={busy || !wallet.connected || !validCirc || !validSupply || !name || !symbol}>
+          <button className="form-sub" onClick={handleLaunch} disabled={busy || !wallet.connected || !validDistribution || !validCombinedLiquidity || !validInitialSol || !name || !symbol}>
             {busy ? <><Loader size={16} className="spin" style={{ display: "inline", marginRight: 8 }} />Launching...</> : <><Rocket size={16} style={{ display: "inline", marginRight: 8 }} />{wallet.connected ? "Launch token" : "Connect wallet to launch"}</>}
           </button>
         </div>
@@ -328,17 +359,34 @@ export const Launch = () => {
               <div className="dist-bar"><div className="dist-fill" style={{ width: creatorAlloc + "%", background: "var(--solana-purple)" }} /></div>
             </div>
             <div className="dist-row">
-              <div className="dist-hd"><span className="dist-key">Circulation</span><span className="dist-pct" style={{ color: validCirc ? "var(--solana-blue)" : "var(--red)" }}>{circulation}%</span></div>
-              <div className="dist-bar"><div className="dist-fill" style={{ width: circulation + "%", background: validCirc ? "var(--solana-blue)" : "var(--red)" }} /></div>
+              <div className="dist-hd"><span className="dist-key">Curve Liquidity</span><span className="dist-pct" style={{ color: "var(--yellow)" }}>{curveLiquidity}%</span></div>
+              <div className="dist-bar"><div className="dist-fill" style={{ width: curveLiquidity + "%", background: "var(--yellow)" }} /></div>
             </div>
+            <div className="dist-row">
+              <div className="dist-hd"><span className="dist-key">Circulation</span><span className="dist-pct" style={{ color: validDistribution ? "var(--solana-blue)" : "var(--red)" }}>{circulation}%</span></div>
+              <div className="dist-bar"><div className="dist-fill" style={{ width: Math.max(0, circulation) + "%", background: validDistribution ? "var(--solana-blue)" : "var(--red)" }} /></div>
+            </div>
+            <div className="dist-row">
+              <div className="dist-hd"><span className="dist-key">Airdrop</span><span className="dist-pct" style={{ color: "var(--muted2)" }}>{airdrop}%</span></div>
+              <div className="dist-bar"><div className="dist-fill" style={{ width: airdrop + "%", background: "var(--muted2)" }} /></div>
+            </div>
+          </div>
+
+          <div className="preview-label" style={{ marginTop: "1.5rem" }}>TrustScore Breakdown</div>
+          <div style={{ fontSize: ".82rem", color: "var(--muted2)", lineHeight: 1.8, marginBottom: "1.25rem" }}>
+            Lock: +{trustBreakdown.lock.toFixed(0)}<br />
+            Creator: +{trustBreakdown.creator.toFixed(0)}<br />
+            Curve Liquidity: +{trustBreakdown.curve.toFixed(1)}<br />
+            Circulation: +{trustBreakdown.circ.toFixed(1)}<br />
+            Airdrop: +{trustBreakdown.air.toFixed(0)}<br />
+            Burn: +{trustBreakdown.burn.toFixed(0)}
           </div>
 
           <div className="preview-label" style={{ marginTop: "1.5rem" }}>Vesting schedule</div>
           <div style={{ fontSize: ".82rem", color: "var(--muted2)", lineHeight: 1.8 }}>
-            Day 30 → 2% of your allocation ({creatorAlloc > 0 ? (0.02 * creatorAlloc).toFixed(2) : "0"}% of supply)<br />
-            Day 60 → 3% of your allocation ({creatorAlloc > 0 ? (0.03 * creatorAlloc).toFixed(2) : "0"}% of supply)<br />
-            Day 90 → 5% of your allocation ({creatorAlloc > 0 ? (0.05 * creatorAlloc).toFixed(2) : "0"}% of supply)<br />
-            Remaining allocation released via Add-to-Circulation.<br />
+            Day 30: 33% of creator vault ({(creatorAlloc * 0.33).toFixed(2)}% of supply)<br />
+            Day 60: 33% of creator vault ({(creatorAlloc * 0.33).toFixed(2)}% of supply)<br />
+            Day 90: 34% of creator vault ({(creatorAlloc * 0.34).toFixed(2)}% of supply)<br />
             Total creator: <span style={{ color: "var(--text)" }}>{creatorAlloc}%</span> of supply
           </div>
         </div>

@@ -1,0 +1,106 @@
+{
+  "address": "FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr",
+  "metadata": {
+    "name": "humbletrust_v2",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "HumbleTrust v2 bonding curve launchpad"
+  },
+  "instructions": [
+    {
+      "name": "create_token_with_lock_v2",
+      "discriminator": [97, 113, 191, 211, 81, 229, 187, 102],
+      "accounts": [
+        { "name": "creator", "writable": true, "signer": true },
+        { "name": "fee_wallet", "writable": true },
+        { "name": "token_metadata", "writable": true },
+        { "name": "mint", "writable": true, "signer": true },
+        { "name": "locked_vault", "writable": true },
+        { "name": "creator_vault", "writable": true },
+        { "name": "curve_pool_vault", "writable": true },
+        { "name": "circulation_vault", "writable": true },
+        { "name": "airdrop_vault", "writable": true },
+        { "name": "curve_treasury_sol", "writable": true },
+        { "name": "lp_lock_vault", "writable": true },
+        { "name": "token_program" },
+        { "name": "system_program" },
+        { "name": "rent" }
+      ],
+      "args": [
+        { "name": "name", "type": "string" },
+        { "name": "symbol", "type": "string" },
+        { "name": "lock_days", "type": "u16" },
+        { "name": "burn_option", "type": "u8" },
+        { "name": "lock_percent", "type": "u8" },
+        { "name": "creator_percent", "type": "u8" },
+        { "name": "curve_liquidity_percent", "type": "u8" },
+        { "name": "circulation_percent", "type": "u8" },
+        { "name": "airdrop_percent", "type": "u8" },
+        { "name": "initial_sol_lamports", "type": "u64" },
+        { "name": "metrics_authority", "type": "pubkey" },
+        { "name": "tier", "type": "u8" },
+        { "name": "anti_bot_seconds", "type": "u16" }
+      ]
+    },
+    {
+      "name": "buy_v2",
+      "discriminator": [184, 23, 238, 97, 103, 197, 211, 61],
+      "accounts": [
+        { "name": "buyer", "writable": true, "signer": true },
+        { "name": "token_metadata", "writable": true },
+        { "name": "mint" },
+        { "name": "curve_pool_vault", "writable": true },
+        { "name": "curve_treasury_sol", "writable": true },
+        { "name": "buyer_token_account", "writable": true },
+        { "name": "fee_wallet", "writable": true },
+        { "name": "creator_fee_wallet", "writable": true },
+        { "name": "token_program" },
+        { "name": "system_program" }
+      ],
+      "args": [
+        { "name": "sol_in_lamports", "type": "u64" },
+        { "name": "min_tokens_out", "type": "u64" }
+      ]
+    },
+    {
+      "name": "sell_v2",
+      "discriminator": [93, 246, 130, 60, 231, 233, 64, 178],
+      "accounts": [
+        { "name": "seller", "writable": true, "signer": true },
+        { "name": "token_metadata", "writable": true },
+        { "name": "mint" },
+        { "name": "curve_pool_vault", "writable": true },
+        { "name": "curve_treasury_sol", "writable": true },
+        { "name": "seller_token_account", "writable": true },
+        { "name": "fee_wallet", "writable": true },
+        { "name": "creator_fee_wallet", "writable": true },
+        { "name": "token_program" }
+      ],
+      "args": [
+        { "name": "tokens_in", "type": "u64" },
+        { "name": "min_sol_out_lamports", "type": "u64" }
+      ]
+    },
+    {
+      "name": "price_v2",
+      "discriminator": [166, 210, 174, 77, 255, 105, 21, 25],
+      "accounts": [
+        { "name": "mint" },
+        { "name": "curve_pool_vault" },
+        { "name": "curve_treasury_sol" },
+        { "name": "token_metadata" }
+      ],
+      "args": []
+    },
+    {
+      "name": "init_creator_reputation_v2",
+      "discriminator": [219, 36, 180, 55, 9, 45, 79, 3],
+      "accounts": [
+        { "name": "creator", "writable": true, "signer": true },
+        { "name": "creator_reputation", "writable": true },
+        { "name": "system_program" }
+      ],
+      "args": []
+    }
+  ]
+}

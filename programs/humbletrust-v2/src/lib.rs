@@ -2,7 +2,7 @@
 
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
-use anchor_spl::token::{self, Burn, Mint, MintTo, SetAuthority, Token, TokenAccount};
+use anchor_spl::token::{self, Burn, Mint, MintTo, SetAuthority, Token, TokenAccount, Transfer};
 
 declare_id!("FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr");
 
@@ -27,6 +27,17 @@ const MIGRATION_THRESHOLD_SOL_LAMPORTS: u64 = 50_000_000_000;
 const MIGRATION_REWARD_LAMPORTS: u64 = 100_000_000;
 const PLATFORM_FEE_BPS: u16 = 50;
 const CREATOR_FEE_BPS: u16 = 50;
+const FEE_DENOMINATOR_BPS: u64 = 10_000;
+const SECONDS_PER_MONTH: i64 = 2_592_000;
+const FEE_WALLET: Pubkey = pubkey!("FYRtG8JMun6vqucUaXGcSZrWib6gNVEW4dd2LEP92mGM");
+const HUMBLETRUST_ADMIN: Pubkey = pubkey!("7iMHH7F7SqAtuRo1sC72KKgWf2vZbfsRYHrpdmS3PSW8");
+const LAUNCH_FEE_STANDARD: u64 = 56_818_181;
+const LAUNCH_FEE_PREMIUM: u64 = 281_818_181;
+const LP_FEE_CREATOR_STANDARD_BPS: u64 = 4_000;
+const LP_FEE_CREATOR_PREMIUM_BPS: u64 = 6_000;
+const LP_FEE_TREASURY_STANDARD_BPS: u64 = 3_500;
+const LP_FEE_TREASURY_PREMIUM_BPS: u64 = 3_000;
+const LP_CLAIM_COOLDOWN: i64 = SECONDS_PER_MONTH;
 
 #[program]
 pub mod humbletrust_v2 {
@@ -45,6 +56,8 @@ pub mod humbletrust_v2 {
         circulation_percent: u8,
         airdrop_percent: u8,
         initial_sol_lamports: u64,
+        metrics_authority: Pubkey,
+        tier: u8,
         anti_bot_seconds: u16,
     ) -> Result<()> {
         validate_launch_inputs(
@@ -58,8 +71,14 @@ pub mod humbletrust_v2 {
             circulation_percent,
             airdrop_percent,
             initial_sol_lamports,
+            tier,
             anti_bot_seconds,
         )?;
+        require_keys_eq!(
+            ctx.accounts.fee_wallet.key(),
+            FEE_WALLET,
+            HumbleV2Error::InvalidFeeWallet
+        );
 
         let now = Clock::get()?.unix_timestamp;
         let mint_key = ctx.accounts.mint.key();
@@ -87,6 +106,7 @@ pub mod humbletrust_v2 {
             let meta = &mut ctx.accounts.token_metadata;
             meta.creator = ctx.accounts.creator.key();
             meta.mint = mint_key;
+            meta.metrics_authority = metrics_authority;
             meta.name = name.clone();
             meta.symbol = symbol.clone();
             meta.total_supply = TOTAL_SUPPLY;
@@ -124,8 +144,37 @@ pub mod humbletrust_v2 {
             meta.score_burn_tenths = score.burn_tenths;
             meta.raw_score_tenths = score.raw_tenths;
             meta.trust_level = trust_level(score.trust_score);
+            meta.min_score_this_month = score.trust_score;
+            meta.trading_volume = 0;
+            meta.verified_volume = 0;
+            meta.holder_count = 0;
+            meta.is_verified = false;
+            meta.last_airdrop_time = 0;
+            meta.total_airdrops_executed = 0;
+            meta.vesting_t1_done = false;
+            meta.vesting_t2_done = false;
+            meta.vesting_t3_done = false;
+            meta.vesting_t1_action = 0;
+            meta.vesting_t2_action = 0;
+            meta.vesting_t3_action = 0;
+            meta.creator_vesting_consumed = 0;
+            meta.positive_votes = 0;
+            meta.negative_votes = 0;
+            meta.complaints_count = 0;
+            meta.is_flagged = false;
+            meta.is_frozen = false;
+            meta.no_activity_flag = false;
+            meta.rewards_multiplier_bps = rewards_multiplier_bps(score.trust_score);
+            meta.is_locked = true;
+            meta.is_premium = tier == 1;
             meta.is_migrated = false;
             meta.creator_curve_buys = 0;
+            meta.curve_sol_reserve_lamports = initial_sol_lamports;
+            meta.curve_token_reserve_amount = curve_liquidity_amount;
+            meta.last_curve_price_lamports_per_token = 0;
+            meta.raydium_pool = Pubkey::default();
+            meta.migration_trigger = Pubkey::default();
+            meta.migrated_at = 0;
             meta.anti_bot_seconds = anti_bot_seconds;
             meta.trading_unlock_time = now + anti_bot_seconds as i64;
             meta.bump = ctx.bumps.token_metadata;
@@ -198,6 +247,22 @@ pub mod humbletrust_v2 {
             )?;
         }
 
+        let launch_fee_lamports = if tier == 0 {
+            LAUNCH_FEE_STANDARD
+        } else {
+            LAUNCH_FEE_PREMIUM
+        };
+        system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                system_program::Transfer {
+                    from: ctx.accounts.creator.to_account_info(),
+                    to: ctx.accounts.fee_wallet.to_account_info(),
+                },
+            ),
+            launch_fee_lamports,
+        )?;
+
         system_program::transfer(
             CpiContext::new(
                 ctx.accounts.system_program.to_account_info(),
@@ -254,12 +319,1162 @@ pub mod humbletrust_v2 {
 
         Ok(())
     }
+
+    pub fn unlock_locked_tokens_v2(ctx: Context<UnlockLockedTokensV2>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let mint_key = ctx.accounts.mint.key();
+        let token_metadata_ai = ctx.accounts.token_metadata.to_account_info();
+
+        let (creator_key, is_locked, unlock_time, release_amount, bump) = {
+            let meta = &ctx.accounts.token_metadata;
+            (
+                meta.creator,
+                meta.is_locked,
+                meta.unlock_time,
+                meta.locked_amount_after_burn,
+                meta.bump,
+            )
+        };
+
+        require_keys_eq!(
+            ctx.accounts.creator.key(),
+            creator_key,
+            HumbleV2Error::Unauthorized
+        );
+        require!(is_locked, HumbleV2Error::AlreadyUnlocked);
+        require!(now >= unlock_time, HumbleV2Error::TokensStillLocked);
+
+        if release_amount > 0 {
+            let bump_seed = [bump];
+            let signer_seeds: &[&[u8]] = &[b"token_metadata_v2", mint_key.as_ref(), &bump_seed];
+            let signer = &[signer_seeds];
+
+            token::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    Transfer {
+                        from: ctx.accounts.locked_vault.to_account_info(),
+                        to: ctx.accounts.circulation_vault.to_account_info(),
+                        authority: token_metadata_ai.clone(),
+                    },
+                    signer,
+                ),
+                release_amount,
+            )?;
+        }
+
+        let meta = &mut ctx.accounts.token_metadata;
+        meta.circulation_amount = meta
+            .circulation_amount
+            .checked_add(release_amount)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        meta.locked_amount_after_burn = 0;
+        meta.is_locked = false;
+        refresh_dynamic_score(meta, now);
+
+        emit!(LockedTokensUnlockedV2 {
+            mint: meta.mint,
+            burned_amount: meta.planned_burn_amount,
+            released_amount: release_amount,
+            timestamp: now,
+        });
+
+        Ok(())
+    }
+
+    pub fn use_vesting_tranche_v2(
+        ctx: Context<UseVestingTrancheV2>,
+        tranche: u8,
+        action: u8,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let mint_key = ctx.accounts.mint.key();
+        let token_metadata_ai = ctx.accounts.token_metadata.to_account_info();
+
+        let (creator_key, is_frozen, created_at, creator_allocation, bump, done) = {
+            let meta = &ctx.accounts.token_metadata;
+            let done = match tranche {
+                1 => meta.vesting_t1_done,
+                2 => meta.vesting_t2_done,
+                3 => meta.vesting_t3_done,
+                _ => return err!(HumbleV2Error::InvalidTranche),
+            };
+            (
+                meta.creator,
+                meta.is_frozen,
+                meta.created_at,
+                meta.creator_allocation_amount,
+                meta.bump,
+                done,
+            )
+        };
+
+        require_keys_eq!(
+            ctx.accounts.creator.key(),
+            creator_key,
+            HumbleV2Error::Unauthorized
+        );
+        require!(!is_frozen, HumbleV2Error::TokenFrozen);
+        require!(matches!(action, 1 | 2 | 3), HumbleV2Error::InvalidAction);
+        require!(!done, HumbleV2Error::VestingTrancheDone);
+
+        let days_elapsed = ((now - created_at) / SECONDS_PER_DAY).max(0) as u16;
+        let (required_day, numerator, denominator) = match tranche {
+            1 => (30u16, 33u64, 100u64),
+            2 => (60u16, 33u64, 100u64),
+            3 => (90u16, 34u64, 100u64),
+            _ => return err!(HumbleV2Error::InvalidTranche),
+        };
+        require!(days_elapsed >= required_day, HumbleV2Error::VestingNotReady);
+
+        let tranche_amount = creator_allocation
+            .checked_mul(numerator)
+            .and_then(|v| v.checked_div(denominator))
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        require!(
+            ctx.accounts.creator_vault.amount >= tranche_amount,
+            HumbleV2Error::InsufficientVaultBalance
+        );
+
+        let bump_seed = [bump];
+        let signer_seeds: &[&[u8]] = &[b"token_metadata_v2", mint_key.as_ref(), &bump_seed];
+        let signer = &[signer_seeds];
+
+        match action {
+            1 => {
+                require_keys_eq!(
+                    ctx.accounts.creator_receive_account.owner,
+                    creator_key,
+                    HumbleV2Error::InvalidCreatorReceiveAccount
+                );
+                require_keys_eq!(
+                    ctx.accounts.creator_receive_account.mint,
+                    mint_key,
+                    HumbleV2Error::InvalidMintForTokenAccount
+                );
+                token::transfer(
+                    CpiContext::new_with_signer(
+                        ctx.accounts.token_program.to_account_info(),
+                        Transfer {
+                            from: ctx.accounts.creator_vault.to_account_info(),
+                            to: ctx.accounts.creator_receive_account.to_account_info(),
+                            authority: token_metadata_ai.clone(),
+                        },
+                        signer,
+                    ),
+                    tranche_amount,
+                )?;
+            }
+            2 => {
+                token::burn(
+                    CpiContext::new_with_signer(
+                        ctx.accounts.token_program.to_account_info(),
+                        Burn {
+                            mint: ctx.accounts.mint.to_account_info(),
+                            from: ctx.accounts.creator_vault.to_account_info(),
+                            authority: token_metadata_ai.clone(),
+                        },
+                        signer,
+                    ),
+                    tranche_amount,
+                )?;
+            }
+            3 => {
+                token::transfer(
+                    CpiContext::new_with_signer(
+                        ctx.accounts.token_program.to_account_info(),
+                        Transfer {
+                            from: ctx.accounts.creator_vault.to_account_info(),
+                            to: ctx.accounts.circulation_vault.to_account_info(),
+                            authority: token_metadata_ai.clone(),
+                        },
+                        signer,
+                    ),
+                    tranche_amount,
+                )?;
+            }
+            _ => return err!(HumbleV2Error::InvalidAction),
+        }
+
+        let meta = &mut ctx.accounts.token_metadata;
+        match tranche {
+            1 => {
+                meta.vesting_t1_done = true;
+                meta.vesting_t1_action = action;
+            }
+            2 => {
+                meta.vesting_t2_done = true;
+                meta.vesting_t2_action = action;
+            }
+            3 => {
+                meta.vesting_t3_done = true;
+                meta.vesting_t3_action = action;
+            }
+            _ => return err!(HumbleV2Error::InvalidTranche),
+        }
+        meta.creator_vesting_consumed = meta
+            .creator_vesting_consumed
+            .checked_add(tranche_amount)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        if action == 2 {
+            meta.total_burned = meta
+                .total_burned
+                .checked_add(tranche_amount)
+                .ok_or(error!(HumbleV2Error::MathOverflow))?;
+            meta.mint_supply_after_burn = meta
+                .mint_supply_after_burn
+                .checked_sub(tranche_amount)
+                .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        } else if action == 3 {
+            meta.circulation_amount = meta
+                .circulation_amount
+                .checked_add(tranche_amount)
+                .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        }
+        refresh_dynamic_score(meta, now);
+
+        emit!(VestingTrancheUsedV2 {
+            mint: meta.mint,
+            tranche,
+            action,
+            amount: tranche_amount,
+            timestamp: now,
+        });
+
+        Ok(())
+    }
+
+    pub fn add_to_circulation_v2(ctx: Context<AddToCirculationV2>, amount: u64) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let mint_key = ctx.accounts.mint.key();
+        let token_metadata_ai = ctx.accounts.token_metadata.to_account_info();
+
+        let (creator_key, bump, is_frozen, created_at, creator_allocation, consumed) = {
+            let meta = &ctx.accounts.token_metadata;
+            (
+                meta.creator,
+                meta.bump,
+                meta.is_frozen,
+                meta.created_at,
+                meta.creator_allocation_amount,
+                meta.creator_vesting_consumed,
+            )
+        };
+
+        require_keys_eq!(
+            ctx.accounts.creator.key(),
+            creator_key,
+            HumbleV2Error::Unauthorized
+        );
+        require!(!is_frozen, HumbleV2Error::TokenFrozen);
+        require!(amount > 0, HumbleV2Error::InvalidAmount);
+        require!(
+            ctx.accounts.creator_vault.amount >= amount,
+            HumbleV2Error::InsufficientVaultBalance
+        );
+
+        let days_elapsed = ((now - created_at) / SECONDS_PER_DAY).max(0) as u64;
+        let unlocked_pct = if days_elapsed >= 90 {
+            100
+        } else if days_elapsed >= 60 {
+            66
+        } else if days_elapsed >= 30 {
+            33
+        } else {
+            0
+        };
+        let total_unlocked = percent_of(creator_allocation, unlocked_pct)?;
+        let new_consumed = consumed
+            .checked_add(amount)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        require!(
+            new_consumed <= total_unlocked,
+            HumbleV2Error::VestingExceeded
+        );
+
+        let bump_seed = [bump];
+        let signer_seeds: &[&[u8]] = &[b"token_metadata_v2", mint_key.as_ref(), &bump_seed];
+        let signer = &[signer_seeds];
+
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.creator_vault.to_account_info(),
+                    to: ctx.accounts.circulation_vault.to_account_info(),
+                    authority: token_metadata_ai.clone(),
+                },
+                signer,
+            ),
+            amount,
+        )?;
+
+        let meta = &mut ctx.accounts.token_metadata;
+        meta.creator_vesting_consumed = new_consumed;
+        meta.circulation_amount = meta
+            .circulation_amount
+            .checked_add(amount)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+
+        emit!(CirculationAddedV2 {
+            mint: meta.mint,
+            amount,
+            timestamp: now,
+        });
+
+        Ok(())
+    }
+
+    pub fn buy_v2(ctx: Context<BuyV2>, sol_in_lamports: u64, min_tokens_out: u64) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let mint_key = ctx.accounts.mint.key();
+        let token_metadata_ai = ctx.accounts.token_metadata.to_account_info();
+
+        require!(sol_in_lamports > 0, HumbleV2Error::InvalidAmount);
+        require!(
+            !ctx.accounts.token_metadata.is_migrated,
+            HumbleV2Error::AlreadyMigrated
+        );
+        require!(
+            !ctx.accounts.token_metadata.is_frozen,
+            HumbleV2Error::TokenFrozen
+        );
+        require!(
+            now >= ctx.accounts.token_metadata.trading_unlock_time,
+            HumbleV2Error::TradingNotStarted
+        );
+        require_keys_eq!(
+            ctx.accounts.fee_wallet.key(),
+            FEE_WALLET,
+            HumbleV2Error::InvalidFeeWallet
+        );
+
+        let platform_fee = bps_amount(sol_in_lamports, PLATFORM_FEE_BPS as u64)?;
+        let creator_fee = bps_amount(sol_in_lamports, CREATOR_FEE_BPS as u64)?;
+        let net_sol = sol_in_lamports
+            .checked_sub(platform_fee)
+            .and_then(|v| v.checked_sub(creator_fee))
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        let token_reserve = ctx.accounts.curve_pool_vault.amount;
+        let sol_reserve = ctx.accounts.curve_treasury_sol.current_sol_lamports;
+        let tokens_out = constant_product_tokens_out(token_reserve, sol_reserve, net_sol)?;
+
+        require!(
+            tokens_out >= min_tokens_out,
+            HumbleV2Error::SlippageExceeded
+        );
+        require!(tokens_out > 0, HumbleV2Error::InvalidAmount);
+        require!(
+            ctx.accounts.curve_pool_vault.amount >= tokens_out,
+            HumbleV2Error::InsufficientVaultBalance
+        );
+
+        system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                system_program::Transfer {
+                    from: ctx.accounts.buyer.to_account_info(),
+                    to: ctx.accounts.fee_wallet.to_account_info(),
+                },
+            ),
+            platform_fee,
+        )?;
+        system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                system_program::Transfer {
+                    from: ctx.accounts.buyer.to_account_info(),
+                    to: ctx.accounts.creator_fee_wallet.to_account_info(),
+                },
+            ),
+            creator_fee,
+        )?;
+        system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                system_program::Transfer {
+                    from: ctx.accounts.buyer.to_account_info(),
+                    to: ctx.accounts.curve_treasury_sol.to_account_info(),
+                },
+            ),
+            net_sol,
+        )?;
+
+        let bump_seed = [ctx.accounts.token_metadata.bump];
+        let signer_seeds: &[&[u8]] = &[b"token_metadata_v2", mint_key.as_ref(), &bump_seed];
+        let signer = &[signer_seeds];
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.curve_pool_vault.to_account_info(),
+                    to: ctx.accounts.buyer_token_account.to_account_info(),
+                    authority: token_metadata_ai.clone(),
+                },
+                signer,
+            ),
+            tokens_out,
+        )?;
+
+        let meta = &mut ctx.accounts.token_metadata;
+        let treasury = &mut ctx.accounts.curve_treasury_sol;
+        treasury.current_sol_lamports = treasury
+            .current_sol_lamports
+            .checked_add(net_sol)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        meta.curve_sol_reserve_lamports = treasury.current_sol_lamports;
+        meta.curve_token_reserve_amount = token_reserve
+            .checked_sub(tokens_out)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        meta.last_curve_price_lamports_per_token = price_lamports_per_token(
+            meta.curve_sol_reserve_lamports,
+            meta.curve_token_reserve_amount,
+        )?;
+        meta.trading_volume = meta
+            .trading_volume
+            .checked_add(tokens_out)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        if ctx.accounts.buyer.key() == meta.creator {
+            meta.creator_curve_buys = meta.creator_curve_buys.saturating_add(1);
+        }
+
+        emit!(CurveBuyV2 {
+            mint: mint_key,
+            buyer: ctx.accounts.buyer.key(),
+            sol_in_lamports,
+            platform_fee_lamports: platform_fee,
+            creator_fee_lamports: creator_fee,
+            tokens_out,
+            price_lamports_per_token: meta.last_curve_price_lamports_per_token,
+            timestamp: now,
+        });
+
+        Ok(())
+    }
+
+    pub fn sell_v2(ctx: Context<SellV2>, tokens_in: u64, min_sol_out_lamports: u64) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        require!(tokens_in > 0, HumbleV2Error::InvalidAmount);
+        require!(
+            !ctx.accounts.token_metadata.is_migrated,
+            HumbleV2Error::AlreadyMigrated
+        );
+        require!(
+            !ctx.accounts.token_metadata.is_frozen,
+            HumbleV2Error::TokenFrozen
+        );
+        require!(
+            now >= ctx.accounts.token_metadata.trading_unlock_time,
+            HumbleV2Error::TradingNotStarted
+        );
+        require_keys_eq!(
+            ctx.accounts.fee_wallet.key(),
+            FEE_WALLET,
+            HumbleV2Error::InvalidFeeWallet
+        );
+
+        let token_reserve = ctx.accounts.curve_pool_vault.amount;
+        let sol_reserve = ctx.accounts.curve_treasury_sol.current_sol_lamports;
+        let gross_sol_out = constant_product_sol_out(token_reserve, sol_reserve, tokens_in)?;
+        let platform_fee = bps_amount(gross_sol_out, PLATFORM_FEE_BPS as u64)?;
+        let creator_fee = bps_amount(gross_sol_out, CREATOR_FEE_BPS as u64)?;
+        let seller_receives = gross_sol_out
+            .checked_sub(platform_fee)
+            .and_then(|v| v.checked_sub(creator_fee))
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        require!(
+            seller_receives >= min_sol_out_lamports,
+            HumbleV2Error::SlippageExceeded
+        );
+        require!(
+            sol_reserve >= gross_sol_out,
+            HumbleV2Error::InsufficientCurveReserve
+        );
+
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.seller_token_account.to_account_info(),
+                    to: ctx.accounts.curve_pool_vault.to_account_info(),
+                    authority: ctx.accounts.seller.to_account_info(),
+                },
+            ),
+            tokens_in,
+        )?;
+
+        let treasury_ai = ctx.accounts.curve_treasury_sol.to_account_info();
+        **treasury_ai.try_borrow_mut_lamports()? = treasury_ai
+            .lamports()
+            .checked_sub(gross_sol_out)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        **ctx.accounts.seller.try_borrow_mut_lamports()? = ctx
+            .accounts
+            .seller
+            .lamports()
+            .checked_add(seller_receives)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        **ctx.accounts.fee_wallet.try_borrow_mut_lamports()? = ctx
+            .accounts
+            .fee_wallet
+            .lamports()
+            .checked_add(platform_fee)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        **ctx.accounts.creator_fee_wallet.try_borrow_mut_lamports()? = ctx
+            .accounts
+            .creator_fee_wallet
+            .lamports()
+            .checked_add(creator_fee)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+
+        let treasury = &mut ctx.accounts.curve_treasury_sol;
+        treasury.current_sol_lamports = treasury
+            .current_sol_lamports
+            .checked_sub(gross_sol_out)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+
+        let meta = &mut ctx.accounts.token_metadata;
+        meta.curve_sol_reserve_lamports = treasury.current_sol_lamports;
+        meta.curve_token_reserve_amount = token_reserve
+            .checked_add(tokens_in)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        meta.last_curve_price_lamports_per_token = price_lamports_per_token(
+            meta.curve_sol_reserve_lamports,
+            meta.curve_token_reserve_amount,
+        )?;
+        meta.trading_volume = meta
+            .trading_volume
+            .checked_add(tokens_in)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+
+        emit!(CurveSellV2 {
+            mint: meta.mint,
+            seller: ctx.accounts.seller.key(),
+            tokens_in,
+            gross_sol_out_lamports: gross_sol_out,
+            platform_fee_lamports: platform_fee,
+            creator_fee_lamports: creator_fee,
+            seller_receives_lamports: seller_receives,
+            price_lamports_per_token: meta.last_curve_price_lamports_per_token,
+            timestamp: now,
+        });
+
+        Ok(())
+    }
+
+    pub fn price_v2(ctx: Context<PriceV2>) -> Result<()> {
+        let price = price_lamports_per_token(
+            ctx.accounts.curve_treasury_sol.current_sol_lamports,
+            ctx.accounts.curve_pool_vault.amount,
+        )?;
+        emit!(CurvePriceV2 {
+            mint: ctx.accounts.mint.key(),
+            sol_reserve_lamports: ctx.accounts.curve_treasury_sol.current_sol_lamports,
+            token_reserve_amount: ctx.accounts.curve_pool_vault.amount,
+            price_lamports_per_token: price,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+        Ok(())
+    }
+
+    pub fn migrate_to_raydium_v2(
+        ctx: Context<MigrateToRaydiumV2>,
+        raydium_pool: Pubkey,
+        lp_amount: u64,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let meta = &mut ctx.accounts.token_metadata;
+        let treasury = &mut ctx.accounts.curve_treasury_sol;
+
+        require!(!meta.is_migrated, HumbleV2Error::AlreadyMigrated);
+        require!(
+            treasury.current_sol_lamports >= meta.migration_threshold_lamports,
+            HumbleV2Error::MigrationThresholdNotMet
+        );
+
+        if meta.migration_reward_lamports > 0 {
+            require!(
+                treasury.current_sol_lamports >= meta.migration_reward_lamports,
+                HumbleV2Error::InsufficientCurveReserve
+            );
+            let treasury_ai = treasury.to_account_info();
+            **treasury_ai.try_borrow_mut_lamports()? = treasury_ai
+                .lamports()
+                .checked_sub(meta.migration_reward_lamports)
+                .ok_or(error!(HumbleV2Error::MathOverflow))?;
+            **ctx.accounts.triggerer.try_borrow_mut_lamports()? = ctx
+                .accounts
+                .triggerer
+                .lamports()
+                .checked_add(meta.migration_reward_lamports)
+                .ok_or(error!(HumbleV2Error::MathOverflow))?;
+            treasury.current_sol_lamports = treasury
+                .current_sol_lamports
+                .checked_sub(meta.migration_reward_lamports)
+                .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        }
+
+        meta.is_migrated = true;
+        meta.raydium_pool = raydium_pool;
+        meta.migration_trigger = ctx.accounts.triggerer.key();
+        meta.migrated_at = now;
+        meta.curve_sol_reserve_lamports = treasury.current_sol_lamports;
+
+        let lp_lock = &mut ctx.accounts.lp_lock_vault;
+        lp_lock.token_mint = meta.mint;
+        lp_lock.lp_mint = raydium_pool;
+        lp_lock.lp_amount = lp_amount;
+
+        emit!(MigratedToRaydiumV2 {
+            mint: meta.mint,
+            raydium_pool,
+            triggerer: ctx.accounts.triggerer.key(),
+            reward_lamports: meta.migration_reward_lamports,
+            remaining_curve_tokens: ctx.accounts.curve_pool_vault.amount,
+            remaining_curve_sol_lamports: treasury.current_sol_lamports,
+            lp_amount,
+            timestamp: now,
+        });
+
+        Ok(())
+    }
+
+    pub fn submit_vote_v2(
+        ctx: Context<SubmitVoteV2>,
+        is_positive: bool,
+        complaint_category: u8,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let meta = &mut ctx.accounts.token_metadata;
+        let vote = &mut ctx.accounts.vote_record;
+
+        let min_threshold = (meta.mint_supply_after_burn / 100_000).max(1);
+        require!(
+            ctx.accounts.voter_token_account.amount >= min_threshold,
+            HumbleV2Error::InsufficientBalanceToVote
+        );
+
+        vote.voter = ctx.accounts.voter.key();
+        vote.mint = meta.mint;
+        vote.is_positive = is_positive;
+        vote.complaint_category = complaint_category;
+        vote.timestamp = now;
+        vote.bump = ctx.bumps.vote_record;
+
+        if is_positive {
+            meta.positive_votes = meta.positive_votes.saturating_add(1);
+        } else {
+            meta.negative_votes = meta.negative_votes.saturating_add(1);
+        }
+        if complaint_category > 0 {
+            meta.complaints_count = meta.complaints_count.saturating_add(1);
+        }
+        if meta.complaints_count >= 5 {
+            meta.is_flagged = true;
+        }
+
+        refresh_dynamic_score(meta, now);
+        if meta.complaints_count >= 20 && meta.trust_score < 30 {
+            meta.is_frozen = true;
+            emit!(TokenFrozenV2 {
+                mint: meta.mint,
+                complaints_count: meta.complaints_count,
+                trust_score: meta.trust_score,
+                timestamp: now,
+            });
+        }
+
+        emit!(VoteSubmittedV2 {
+            mint: meta.mint,
+            voter: ctx.accounts.voter.key(),
+            is_positive,
+            complaint_category,
+            timestamp: now,
+        });
+
+        Ok(())
+    }
+
+    pub fn record_trade_v2(
+        ctx: Context<RecordTradeV2>,
+        buyer: Pubkey,
+        seller: Pubkey,
+        amount: u64,
+        buy_time: i64,
+        suspected_wash: bool,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let meta = &mut ctx.accounts.token_metadata;
+        let trade = &mut ctx.accounts.trade_record;
+
+        require_keys_eq!(
+            ctx.accounts.metrics_authority.key(),
+            meta.metrics_authority,
+            HumbleV2Error::Unauthorized
+        );
+        require!(!meta.is_frozen, HumbleV2Error::TokenFrozen);
+        require!(
+            now >= meta.trading_unlock_time,
+            HumbleV2Error::TradingNotStarted
+        );
+        require!(amount > 0, HumbleV2Error::InvalidAmount);
+        require!(buy_time > 0, HumbleV2Error::InvalidTradeTime);
+        require!(now >= buy_time, HumbleV2Error::InvalidTradeTime);
+        require!(buyer != seller, HumbleV2Error::SelfTrade);
+
+        trade.buyer = buyer;
+        trade.seller = seller;
+        trade.mint = meta.mint;
+        trade.amount = amount;
+        trade.buy_time = buy_time;
+        trade.sell_time = now;
+        trade.is_valid_volume = now - buy_time >= SECONDS_PER_DAY;
+        trade.suspected_wash = suspected_wash;
+        trade.bump = ctx.bumps.trade_record;
+
+        meta.trading_volume = meta
+            .trading_volume
+            .checked_add(amount)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        refresh_dynamic_score(meta, now);
+
+        Ok(())
+    }
+
+    pub fn update_metrics_v2(
+        ctx: Context<UpdateMetricsV2>,
+        new_verified_volume: u64,
+        new_holder_count: u32,
+        is_verified: bool,
+        no_activity_flag: bool,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let meta = &mut ctx.accounts.token_metadata;
+        require!(!meta.is_frozen, HumbleV2Error::TokenFrozen);
+        require_keys_eq!(
+            ctx.accounts.metrics_authority.key(),
+            meta.metrics_authority,
+            HumbleV2Error::Unauthorized
+        );
+
+        let old_score = meta.trust_score;
+        meta.verified_volume = new_verified_volume;
+        meta.holder_count = new_holder_count;
+        meta.is_verified = is_verified;
+        meta.no_activity_flag = no_activity_flag;
+        refresh_dynamic_score(meta, now);
+
+        emit!(TrustScoreUpdatedV2 {
+            mint: meta.mint,
+            old_score,
+            new_score: meta.trust_score,
+            timestamp: now,
+        });
+
+        Ok(())
+    }
+
+    pub fn execute_airdrop_epoch_v2(ctx: Context<ExecuteAirdropEpochV2>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let mint_key = ctx.accounts.mint.key();
+        let token_metadata_ai = ctx.accounts.token_metadata.to_account_info();
+
+        let (metrics_authority, min_score_this_month, last_airdrop_time, airdrop_amount, bump) = {
+            let meta = &ctx.accounts.token_metadata;
+            (
+                meta.metrics_authority,
+                meta.min_score_this_month,
+                meta.last_airdrop_time,
+                meta.airdrop_amount,
+                meta.bump,
+            )
+        };
+
+        require!(
+            !ctx.accounts.token_metadata.is_frozen,
+            HumbleV2Error::TokenFrozen
+        );
+        require_keys_eq!(
+            ctx.accounts.metrics_authority.key(),
+            metrics_authority,
+            HumbleV2Error::Unauthorized
+        );
+        require!(airdrop_amount > 0, HumbleV2Error::AirdropDisabled);
+        require!(
+            min_score_this_month >= 56,
+            HumbleV2Error::AirdropNotEligible
+        );
+        require!(
+            last_airdrop_time == 0 || now - last_airdrop_time >= SECONDS_PER_MONTH,
+            HumbleV2Error::AirdropTooEarly
+        );
+
+        let pool_amount = airdrop_amount
+            .checked_div(12)
+            .unwrap_or(0)
+            .max(1)
+            .min(ctx.accounts.airdrop_vault.amount);
+        require!(pool_amount > 0, HumbleV2Error::InsufficientVaultBalance);
+
+        let bump_seed = [bump];
+        let signer_seeds: &[&[u8]] = &[b"token_metadata_v2", mint_key.as_ref(), &bump_seed];
+        let signer = &[signer_seeds];
+
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.airdrop_vault.to_account_info(),
+                    to: ctx.accounts.circulation_vault.to_account_info(),
+                    authority: token_metadata_ai.clone(),
+                },
+                signer,
+            ),
+            pool_amount,
+        )?;
+
+        let meta = &mut ctx.accounts.token_metadata;
+        meta.airdrop_amount = meta
+            .airdrop_amount
+            .checked_sub(pool_amount)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        meta.circulation_amount = meta
+            .circulation_amount
+            .checked_add(pool_amount)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        meta.last_airdrop_time = now;
+        meta.total_airdrops_executed = meta.total_airdrops_executed.saturating_add(1);
+        meta.min_score_this_month = meta.trust_score;
+
+        emit!(AirdropEpochExecutedV2 {
+            mint: meta.mint,
+            pool_amount,
+            epoch_number: meta.total_airdrops_executed,
+            timestamp: now,
+        });
+
+        Ok(())
+    }
+
+    pub fn verify_creator_v2(ctx: Context<VerifyCreatorV2>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let meta = &mut ctx.accounts.token_metadata;
+        require!(!meta.is_frozen, HumbleV2Error::TokenFrozen);
+        require_keys_eq!(
+            ctx.accounts.metrics_authority.key(),
+            meta.metrics_authority,
+            HumbleV2Error::Unauthorized
+        );
+
+        let old_score = meta.trust_score;
+        meta.is_verified = true;
+        refresh_dynamic_score(meta, now);
+
+        emit!(CreatorVerifiedV2 {
+            mint: meta.mint,
+            old_score,
+            new_score: meta.trust_score,
+            timestamp: now,
+        });
+
+        Ok(())
+    }
+
+    pub fn set_metrics_authority_v2(
+        ctx: Context<SetMetricsAuthorityV2>,
+        new_metrics_authority: Pubkey,
+    ) -> Result<()> {
+        require_keys_eq!(
+            ctx.accounts.admin.key(),
+            HUMBLETRUST_ADMIN,
+            HumbleV2Error::AdminRequired
+        );
+        ctx.accounts.token_metadata.metrics_authority = new_metrics_authority;
+        Ok(())
+    }
+
+    pub fn init_creator_reputation_v2(ctx: Context<InitCreatorReputationV2>) -> Result<()> {
+        let rep = &mut ctx.accounts.creator_reputation;
+        rep.creator = ctx.accounts.creator.key();
+        rep.total_launches = 0;
+        rep.trust_score_sum = 0;
+        rep.successful_unlocks = 0;
+        rep.complaints_total = 0;
+        rep.score_bonus = 0;
+        rep.bump = ctx.bumps.creator_reputation;
+        Ok(())
+    }
+
+    pub fn record_reputation_event_v2(
+        ctx: Context<RecordReputationEventV2>,
+        event_type: u8,
+    ) -> Result<()> {
+        require_keys_eq!(
+            ctx.accounts.metrics_authority.key(),
+            ctx.accounts.token_metadata.metrics_authority,
+            HumbleV2Error::Unauthorized
+        );
+        require!(matches!(event_type, 1..=4), HumbleV2Error::InvalidAction);
+
+        let rep = &mut ctx.accounts.creator_reputation;
+        require_keys_eq!(
+            rep.creator,
+            ctx.accounts.token_metadata.creator,
+            HumbleV2Error::Unauthorized
+        );
+
+        match event_type {
+            1 => {
+                rep.total_launches = rep.total_launches.saturating_add(1);
+                rep.trust_score_sum = rep
+                    .trust_score_sum
+                    .saturating_add(ctx.accounts.token_metadata.trust_score as u32);
+            }
+            2 => rep.successful_unlocks = rep.successful_unlocks.saturating_add(1),
+            3 => rep.complaints_total = rep.complaints_total.saturating_add(1),
+            4 => rep.score_bonus = 5,
+            _ => return err!(HumbleV2Error::InvalidAction),
+        }
+        Ok(())
+    }
+
+    pub fn lock_lp_tokens_v2(
+        ctx: Context<LockLpTokensV2>,
+        lp_amount: u64,
+        lock_days: u16,
+    ) -> Result<()> {
+        require!(lp_amount > 0, HumbleV2Error::InvalidAmount);
+        require!(lock_days >= 30, HumbleV2Error::InvalidLockDays);
+        require!(
+            ctx.accounts.creator_lp_account.amount >= lp_amount,
+            HumbleV2Error::InsufficientVaultBalance
+        );
+        require_keys_eq!(
+            ctx.accounts.token_metadata.creator,
+            ctx.accounts.creator.key(),
+            HumbleV2Error::Unauthorized
+        );
+
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.creator_lp_account.to_account_info(),
+                    to: ctx.accounts.lp_vault.to_account_info(),
+                    authority: ctx.accounts.creator.to_account_info(),
+                },
+            ),
+            lp_amount,
+        )?;
+
+        let now = Clock::get()?.unix_timestamp;
+        let lp_lock = &mut ctx.accounts.lp_lock;
+        lp_lock.token_mint = ctx.accounts.token_mint.key();
+        lp_lock.lp_mint = ctx.accounts.lp_mint.key();
+        lp_lock.creator = ctx.accounts.creator.key();
+        lp_lock.is_premium = ctx.accounts.token_metadata.is_premium;
+        lp_lock.lp_amount = lp_amount;
+        lp_lock.lock_days = lock_days;
+        lp_lock.unlock_time = now + (lock_days as i64 * SECONDS_PER_DAY);
+        lp_lock.locked_at = now;
+        lp_lock.last_claim_time = 0;
+        lp_lock.total_fees_claimed_lamports = 0;
+        lp_lock.bump = ctx.bumps.lp_lock;
+        lp_lock.lp_vault_bump = ctx.bumps.lp_vault;
+        lp_lock.lp_fee_pool_bump = ctx.bumps.lp_fee_pool;
+
+        let pool = &mut ctx.accounts.lp_fee_pool;
+        pool.token_mint = ctx.accounts.token_mint.key();
+        pool.bump = ctx.bumps.lp_fee_pool;
+
+        emit!(LpLockedV2 {
+            token_mint: ctx.accounts.token_mint.key(),
+            lp_mint: ctx.accounts.lp_mint.key(),
+            creator: ctx.accounts.creator.key(),
+            lp_amount,
+            lock_days,
+            unlock_time: lp_lock.unlock_time,
+            timestamp: now,
+        });
+
+        Ok(())
+    }
+
+    pub fn claim_lp_fees_v2(ctx: Context<ClaimLpFeesV2>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let lp_lock = &mut ctx.accounts.lp_lock;
+        require_keys_eq!(
+            lp_lock.creator,
+            ctx.accounts.creator.key(),
+            HumbleV2Error::Unauthorized
+        );
+        require!(
+            lp_lock.last_claim_time == 0 || now - lp_lock.last_claim_time >= LP_CLAIM_COOLDOWN,
+            HumbleV2Error::AirdropTooEarly
+        );
+
+        let pool_lamports = ctx.accounts.lp_fee_pool.to_account_info().lamports();
+        require!(pool_lamports > 0, HumbleV2Error::InsufficientVaultBalance);
+
+        let (creator_bps, treasury_bps) = if lp_lock.is_premium {
+            (LP_FEE_CREATOR_PREMIUM_BPS, LP_FEE_TREASURY_PREMIUM_BPS)
+        } else {
+            (LP_FEE_CREATOR_STANDARD_BPS, LP_FEE_TREASURY_STANDARD_BPS)
+        };
+        let creator_share = pool_lamports
+            .checked_mul(creator_bps)
+            .and_then(|v| v.checked_div(10_000))
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        let treasury_share = pool_lamports
+            .checked_mul(treasury_bps)
+            .and_then(|v| v.checked_div(10_000))
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        let rewards_share = pool_lamports
+            .checked_sub(creator_share)
+            .and_then(|v| v.checked_sub(treasury_share))
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+
+        **ctx
+            .accounts
+            .lp_fee_pool
+            .to_account_info()
+            .try_borrow_mut_lamports()? -= pool_lamports;
+        **ctx.accounts.creator.try_borrow_mut_lamports()? += creator_share;
+        **ctx.accounts.fee_wallet.try_borrow_mut_lamports()? += treasury_share;
+        **ctx.accounts.rewards_sol_wallet.try_borrow_mut_lamports()? += rewards_share;
+
+        lp_lock.last_claim_time = now;
+        lp_lock.total_fees_claimed_lamports = lp_lock
+            .total_fees_claimed_lamports
+            .checked_add(pool_lamports)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+
+        emit!(LpFeesClaimedV2 {
+            token_mint: lp_lock.token_mint,
+            creator_share,
+            treasury_share,
+            rewards_share,
+            timestamp: now,
+        });
+
+        Ok(())
+    }
+
+    pub fn init_global_state_v2(ctx: Context<InitGlobalStateV2>) -> Result<()> {
+        let global = &mut ctx.accounts.global_state;
+        global.certificate_counter = 0;
+        global.authority = ctx.accounts.authority.key();
+        global.standard_fee_lamports = LAUNCH_FEE_STANDARD;
+        global.premium_fee_lamports = LAUNCH_FEE_PREMIUM;
+        global.upgrade_authority = ctx.accounts.authority.key();
+        global.is_launches_paused = false;
+        global.bump = ctx.bumps.global_state;
+        Ok(())
+    }
+
+    pub fn update_fee_parameters_v2(
+        ctx: Context<Phase5AuthorityV2>,
+        standard_fee_lamports: u64,
+        premium_fee_lamports: u64,
+    ) -> Result<()> {
+        let global = &mut ctx.accounts.global_state;
+        require_keys_eq!(
+            ctx.accounts.authority.key(),
+            global.authority,
+            HumbleV2Error::Unauthorized
+        );
+        require!(standard_fee_lamports > 0, HumbleV2Error::InvalidAmount);
+        require!(
+            premium_fee_lamports > standard_fee_lamports,
+            HumbleV2Error::InvalidFeeParameters
+        );
+        global.standard_fee_lamports = standard_fee_lamports;
+        global.premium_fee_lamports = premium_fee_lamports;
+        emit!(FeeParametersUpdatedV2 {
+            standard_fee_lamports,
+            premium_fee_lamports,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+        Ok(())
+    }
+
+    pub fn set_upgrade_authority_v2(
+        ctx: Context<Phase5AuthorityV2>,
+        new_upgrade_authority: Pubkey,
+    ) -> Result<()> {
+        let global = &mut ctx.accounts.global_state;
+        require_keys_eq!(
+            ctx.accounts.authority.key(),
+            global.authority,
+            HumbleV2Error::Unauthorized
+        );
+        global.upgrade_authority = new_upgrade_authority;
+        Ok(())
+    }
+
+    pub fn toggle_launches_pause_v2(ctx: Context<Phase5AuthorityV2>) -> Result<()> {
+        let global = &mut ctx.accounts.global_state;
+        require_keys_eq!(
+            ctx.accounts.authority.key(),
+            global.authority,
+            HumbleV2Error::Unauthorized
+        );
+        global.is_launches_paused = !global.is_launches_paused;
+        emit!(LaunchesPauseToggledV2 {
+            is_paused: global.is_launches_paused,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+        Ok(())
+    }
+
+    pub fn mint_launch_certificate_v2(
+        ctx: Context<MintLaunchCertificateV2>,
+        certificate_nft_mint: Pubkey,
+    ) -> Result<()> {
+        require_keys_eq!(
+            ctx.accounts.token_metadata.creator,
+            ctx.accounts.creator.key(),
+            HumbleV2Error::Unauthorized
+        );
+        let global = &mut ctx.accounts.global_state;
+        global.certificate_counter = global.certificate_counter.saturating_add(1);
+        let now = Clock::get()?.unix_timestamp;
+
+        let cert = &mut ctx.accounts.launch_certificate;
+        cert.creator = ctx.accounts.creator.key();
+        cert.token_mint = ctx.accounts.mint.key();
+        cert.certificate_nft_mint = certificate_nft_mint;
+        cert.lock_percent = ctx.accounts.token_metadata.lock_percent;
+        cert.lock_days = ctx.accounts.token_metadata.lock_days;
+        cert.initial_trust_score = ctx.accounts.token_metadata.trust_score;
+        cert.is_premium = ctx.accounts.token_metadata.is_premium;
+        cert.airdrop_percent = ctx.accounts.token_metadata.airdrop_percent;
+        cert.burn_option = ctx.accounts.token_metadata.burn_option;
+        cert.issued_at = now;
+        cert.serial_number = global.certificate_counter;
+        cert.bump = ctx.bumps.launch_certificate;
+
+        emit!(LaunchCertificateIssuedV2 {
+            serial_number: cert.serial_number,
+            token_mint: cert.token_mint,
+            creator: cert.creator,
+            certificate_nft_mint,
+            initial_trust_score: cert.initial_trust_score,
+            timestamp: now,
+        });
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
 pub struct CreateTokenWithLockV2<'info> {
     #[account(mut)]
     pub creator: Signer<'info>,
+
+    /// CHECK: verified against FEE_WALLET
+    #[account(mut)]
+    pub fee_wallet: UncheckedAccount<'info>,
 
     #[account(
         init,
@@ -351,11 +1566,574 @@ pub struct CreateTokenWithLockV2<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
+#[derive(Accounts)]
+pub struct UnlockLockedTokensV2<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"token_metadata_v2", mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadataV2>,
+
+    #[account(mut)]
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        mut,
+        seeds = [b"locked_vault_v2", mint.key().as_ref()],
+        bump = token_metadata.locked_vault_bump
+    )]
+    pub locked_vault: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        seeds = [b"circulation_vault_v2", mint.key().as_ref()],
+        bump = token_metadata.circulation_vault_bump
+    )]
+    pub circulation_vault: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct UseVestingTrancheV2<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"token_metadata_v2", mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadataV2>,
+
+    #[account(mut)]
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        mut,
+        seeds = [b"creator_vault_v2", mint.key().as_ref()],
+        bump = token_metadata.creator_vault_bump
+    )]
+    pub creator_vault: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        seeds = [b"circulation_vault_v2", mint.key().as_ref()],
+        bump = token_metadata.circulation_vault_bump
+    )]
+    pub circulation_vault: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub creator_receive_account: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct AddToCirculationV2<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"token_metadata_v2", mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadataV2>,
+
+    #[account(mut)]
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        mut,
+        seeds = [b"creator_vault_v2", mint.key().as_ref()],
+        bump = token_metadata.creator_vault_bump
+    )]
+    pub creator_vault: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        seeds = [b"circulation_vault_v2", mint.key().as_ref()],
+        bump = token_metadata.circulation_vault_bump
+    )]
+    pub circulation_vault: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct BuyV2<'info> {
+    #[account(mut)]
+    pub buyer: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"token_metadata_v2", mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadataV2>,
+
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        mut,
+        seeds = [b"curve_pool_vault_v2", mint.key().as_ref()],
+        bump = token_metadata.curve_pool_vault_bump
+    )]
+    pub curve_pool_vault: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        seeds = [b"curve_treasury_sol_v2", mint.key().as_ref()],
+        bump = token_metadata.curve_treasury_sol_bump
+    )]
+    pub curve_treasury_sol: Account<'info, CurveTreasurySol>,
+
+    #[account(
+        mut,
+        constraint = buyer_token_account.owner == buyer.key() @ HumbleV2Error::InvalidTokenAccountOwner,
+        constraint = buyer_token_account.mint == mint.key() @ HumbleV2Error::InvalidMintForTokenAccount
+    )]
+    pub buyer_token_account: Account<'info, TokenAccount>,
+
+    /// CHECK: verified against FEE_WALLET
+    #[account(mut)]
+    pub fee_wallet: UncheckedAccount<'info>,
+
+    /// CHECK: creator fee wallet is verified against metadata.creator
+    #[account(mut, constraint = creator_fee_wallet.key() == token_metadata.creator @ HumbleV2Error::InvalidCreatorFeeWallet)]
+    pub creator_fee_wallet: UncheckedAccount<'info>,
+
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SellV2<'info> {
+    #[account(mut)]
+    pub seller: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"token_metadata_v2", mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadataV2>,
+
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        mut,
+        seeds = [b"curve_pool_vault_v2", mint.key().as_ref()],
+        bump = token_metadata.curve_pool_vault_bump
+    )]
+    pub curve_pool_vault: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        seeds = [b"curve_treasury_sol_v2", mint.key().as_ref()],
+        bump = token_metadata.curve_treasury_sol_bump
+    )]
+    pub curve_treasury_sol: Account<'info, CurveTreasurySol>,
+
+    #[account(
+        mut,
+        constraint = seller_token_account.owner == seller.key() @ HumbleV2Error::InvalidTokenAccountOwner,
+        constraint = seller_token_account.mint == mint.key() @ HumbleV2Error::InvalidMintForTokenAccount
+    )]
+    pub seller_token_account: Account<'info, TokenAccount>,
+
+    /// CHECK: verified against FEE_WALLET
+    #[account(mut)]
+    pub fee_wallet: UncheckedAccount<'info>,
+
+    /// CHECK: creator fee wallet is verified against metadata.creator
+    #[account(mut, constraint = creator_fee_wallet.key() == token_metadata.creator @ HumbleV2Error::InvalidCreatorFeeWallet)]
+    pub creator_fee_wallet: UncheckedAccount<'info>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct PriceV2<'info> {
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        seeds = [b"curve_pool_vault_v2", mint.key().as_ref()],
+        bump = token_metadata.curve_pool_vault_bump
+    )]
+    pub curve_pool_vault: Account<'info, TokenAccount>,
+
+    #[account(
+        seeds = [b"curve_treasury_sol_v2", mint.key().as_ref()],
+        bump = token_metadata.curve_treasury_sol_bump
+    )]
+    pub curve_treasury_sol: Account<'info, CurveTreasurySol>,
+
+    #[account(
+        seeds = [b"token_metadata_v2", mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadataV2>,
+}
+
+#[derive(Accounts)]
+pub struct MigrateToRaydiumV2<'info> {
+    #[account(mut)]
+    pub triggerer: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"token_metadata_v2", mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadataV2>,
+
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        mut,
+        seeds = [b"curve_pool_vault_v2", mint.key().as_ref()],
+        bump = token_metadata.curve_pool_vault_bump
+    )]
+    pub curve_pool_vault: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        seeds = [b"curve_treasury_sol_v2", mint.key().as_ref()],
+        bump = token_metadata.curve_treasury_sol_bump
+    )]
+    pub curve_treasury_sol: Account<'info, CurveTreasurySol>,
+
+    #[account(
+        mut,
+        seeds = [b"lp_lock_vault_v2", mint.key().as_ref()],
+        bump = token_metadata.lp_lock_vault_bump
+    )]
+    pub lp_lock_vault: Account<'info, LpLockVault>,
+}
+
+#[derive(Accounts)]
+pub struct SubmitVoteV2<'info> {
+    #[account(mut)]
+    pub voter: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"token_metadata_v2", mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadataV2>,
+
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        constraint = voter_token_account.owner == voter.key() @ HumbleV2Error::InvalidTokenAccountOwner,
+        constraint = voter_token_account.mint == mint.key() @ HumbleV2Error::InvalidMintForTokenAccount
+    )]
+    pub voter_token_account: Account<'info, TokenAccount>,
+
+    #[account(
+        init,
+        payer = voter,
+        space = 8 + VoteRecordV2::INIT_SPACE,
+        seeds = [b"vote_v2", mint.key().as_ref(), voter.key().as_ref()],
+        bump
+    )]
+    pub vote_record: Account<'info, VoteRecordV2>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(buyer: Pubkey, seller: Pubkey, amount: u64, buy_time: i64, suspected_wash: bool)]
+pub struct RecordTradeV2<'info> {
+    #[account(mut)]
+    pub metrics_authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"token_metadata_v2", mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadataV2>,
+
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        init,
+        payer = metrics_authority,
+        space = 8 + TradeRecordV2::INIT_SPACE,
+        seeds = [b"trade_v2", mint.key().as_ref(), buyer.as_ref(), &buy_time.to_le_bytes()],
+        bump
+    )]
+    pub trade_record: Account<'info, TradeRecordV2>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateMetricsV2<'info> {
+    pub metrics_authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"token_metadata_v2", mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadataV2>,
+
+    pub mint: Account<'info, Mint>,
+}
+
+#[derive(Accounts)]
+pub struct ExecuteAirdropEpochV2<'info> {
+    pub metrics_authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"token_metadata_v2", mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadataV2>,
+
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        mut,
+        seeds = [b"airdrop_vault_v2", mint.key().as_ref()],
+        bump = token_metadata.airdrop_vault_bump
+    )]
+    pub airdrop_vault: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        seeds = [b"circulation_vault_v2", mint.key().as_ref()],
+        bump = token_metadata.circulation_vault_bump
+    )]
+    pub circulation_vault: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct VerifyCreatorV2<'info> {
+    pub metrics_authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"token_metadata_v2", mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadataV2>,
+
+    pub mint: Account<'info, Mint>,
+}
+
+#[derive(Accounts)]
+pub struct SetMetricsAuthorityV2<'info> {
+    pub admin: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"token_metadata_v2", mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadataV2>,
+
+    pub mint: Account<'info, Mint>,
+}
+
+#[derive(Accounts)]
+pub struct InitCreatorReputationV2<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + CreatorReputationV2::INIT_SPACE,
+        seeds = [b"creator_reputation_v2", creator.key().as_ref()],
+        bump
+    )]
+    pub creator_reputation: Account<'info, CreatorReputationV2>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct RecordReputationEventV2<'info> {
+    pub metrics_authority: Signer<'info>,
+
+    #[account(
+        seeds = [b"token_metadata_v2", mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadataV2>,
+
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        mut,
+        seeds = [b"creator_reputation_v2", token_metadata.creator.as_ref()],
+        bump = creator_reputation.bump
+    )]
+    pub creator_reputation: Account<'info, CreatorReputationV2>,
+}
+
+#[derive(Accounts)]
+pub struct LockLpTokensV2<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        seeds = [b"token_metadata_v2", token_mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadataV2>,
+
+    pub token_mint: Account<'info, Mint>,
+    pub lp_mint: Account<'info, Mint>,
+
+    #[account(
+        mut,
+        constraint = creator_lp_account.owner == creator.key() @ HumbleV2Error::InvalidTokenAccountOwner,
+        constraint = creator_lp_account.mint == lp_mint.key() @ HumbleV2Error::InvalidMintForTokenAccount
+    )]
+    pub creator_lp_account: Account<'info, TokenAccount>,
+
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + LpLockV2::INIT_SPACE,
+        seeds = [b"lp_lock_v2", token_mint.key().as_ref()],
+        bump
+    )]
+    pub lp_lock: Account<'info, LpLockV2>,
+
+    #[account(
+        init,
+        payer = creator,
+        token::mint = lp_mint,
+        token::authority = lp_lock,
+        seeds = [b"lp_vault_v2", token_mint.key().as_ref()],
+        bump
+    )]
+    pub lp_vault: Account<'info, TokenAccount>,
+
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + LpFeePoolV2::INIT_SPACE,
+        seeds = [b"lp_fee_pool_v2", token_mint.key().as_ref()],
+        bump
+    )]
+    pub lp_fee_pool: Account<'info, LpFeePoolV2>,
+
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimLpFeesV2<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"lp_lock_v2", lp_lock.token_mint.as_ref()],
+        bump = lp_lock.bump
+    )]
+    pub lp_lock: Account<'info, LpLockV2>,
+
+    #[account(
+        mut,
+        seeds = [b"lp_fee_pool_v2", lp_lock.token_mint.as_ref()],
+        bump = lp_lock.lp_fee_pool_bump
+    )]
+    pub lp_fee_pool: Account<'info, LpFeePoolV2>,
+
+    /// CHECK: verified against FEE_WALLET
+    #[account(mut, constraint = fee_wallet.key() == FEE_WALLET @ HumbleV2Error::InvalidFeeWallet)]
+    pub fee_wallet: UncheckedAccount<'info>,
+
+    /// CHECK: DAO/rewards wallet, any pubkey accepted
+    #[account(mut)]
+    pub rewards_sol_wallet: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct InitGlobalStateV2<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + GlobalStateV2::INIT_SPACE,
+        seeds = [b"global_state_v2"],
+        bump
+    )]
+    pub global_state: Account<'info, GlobalStateV2>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct Phase5AuthorityV2<'info> {
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"global_state_v2"],
+        bump = global_state.bump
+    )]
+    pub global_state: Account<'info, GlobalStateV2>,
+}
+
+#[derive(Accounts)]
+pub struct MintLaunchCertificateV2<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        seeds = [b"token_metadata_v2", mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Account<'info, TokenMetadataV2>,
+
+    #[account(
+        mut,
+        seeds = [b"global_state_v2"],
+        bump = global_state.bump
+    )]
+    pub global_state: Account<'info, GlobalStateV2>,
+
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + LaunchCertificateV2::INIT_SPACE,
+        seeds = [b"launch_cert_v2", mint.key().as_ref()],
+        bump
+    )]
+    pub launch_certificate: Account<'info, LaunchCertificateV2>,
+
+    pub system_program: Program<'info, System>,
+}
+
 #[account]
 #[derive(InitSpace)]
 pub struct TokenMetadataV2 {
     pub creator: Pubkey,
     pub mint: Pubkey,
+    pub metrics_authority: Pubkey,
     #[max_len(16)]
     pub name: String,
     #[max_len(5)]
@@ -393,8 +2171,37 @@ pub struct TokenMetadataV2 {
     pub score_burn_tenths: u16,
     pub raw_score_tenths: u16,
     pub trust_level: u8,
+    pub min_score_this_month: u8,
+    pub trading_volume: u64,
+    pub verified_volume: u64,
+    pub holder_count: u32,
+    pub is_verified: bool,
+    pub last_airdrop_time: i64,
+    pub total_airdrops_executed: u32,
+    pub vesting_t1_done: bool,
+    pub vesting_t2_done: bool,
+    pub vesting_t3_done: bool,
+    pub vesting_t1_action: u8,
+    pub vesting_t2_action: u8,
+    pub vesting_t3_action: u8,
+    pub creator_vesting_consumed: u64,
+    pub positive_votes: u32,
+    pub negative_votes: u32,
+    pub complaints_count: u32,
+    pub is_flagged: bool,
+    pub is_frozen: bool,
+    pub no_activity_flag: bool,
+    pub rewards_multiplier_bps: u16,
+    pub is_locked: bool,
+    pub is_premium: bool,
     pub is_migrated: bool,
     pub creator_curve_buys: u64,
+    pub curve_sol_reserve_lamports: u64,
+    pub curve_token_reserve_amount: u64,
+    pub last_curve_price_lamports_per_token: u64,
+    pub raydium_pool: Pubkey,
+    pub migration_trigger: Pubkey,
+    pub migrated_at: i64,
     pub anti_bot_seconds: u16,
     pub trading_unlock_time: i64,
     pub bump: u8,
@@ -427,6 +2234,97 @@ pub struct LpLockVault {
     pub bump: u8,
 }
 
+#[account]
+#[derive(InitSpace)]
+pub struct TradeRecordV2 {
+    pub buyer: Pubkey,
+    pub seller: Pubkey,
+    pub mint: Pubkey,
+    pub amount: u64,
+    pub buy_time: i64,
+    pub sell_time: i64,
+    pub is_valid_volume: bool,
+    pub suspected_wash: bool,
+    pub bump: u8,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct VoteRecordV2 {
+    pub voter: Pubkey,
+    pub mint: Pubkey,
+    pub is_positive: bool,
+    pub complaint_category: u8,
+    pub timestamp: i64,
+    pub bump: u8,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct CreatorReputationV2 {
+    pub creator: Pubkey,
+    pub total_launches: u32,
+    pub trust_score_sum: u32,
+    pub successful_unlocks: u32,
+    pub complaints_total: u32,
+    pub score_bonus: u8,
+    pub bump: u8,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct LpLockV2 {
+    pub token_mint: Pubkey,
+    pub lp_mint: Pubkey,
+    pub creator: Pubkey,
+    pub is_premium: bool,
+    pub lp_amount: u64,
+    pub lock_days: u16,
+    pub unlock_time: i64,
+    pub locked_at: i64,
+    pub last_claim_time: i64,
+    pub total_fees_claimed_lamports: u64,
+    pub bump: u8,
+    pub lp_vault_bump: u8,
+    pub lp_fee_pool_bump: u8,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct LpFeePoolV2 {
+    pub token_mint: Pubkey,
+    pub bump: u8,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct GlobalStateV2 {
+    pub certificate_counter: u32,
+    pub authority: Pubkey,
+    pub standard_fee_lamports: u64,
+    pub premium_fee_lamports: u64,
+    pub upgrade_authority: Pubkey,
+    pub is_launches_paused: bool,
+    pub bump: u8,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct LaunchCertificateV2 {
+    pub creator: Pubkey,
+    pub token_mint: Pubkey,
+    pub certificate_nft_mint: Pubkey,
+    pub lock_percent: u8,
+    pub lock_days: u16,
+    pub initial_trust_score: u8,
+    pub is_premium: bool,
+    pub airdrop_percent: u8,
+    pub burn_option: u8,
+    pub issued_at: i64,
+    pub serial_number: u32,
+    pub bump: u8,
+}
+
 #[derive(Clone, Copy)]
 struct TrustScoreV2 {
     trust_score: u8,
@@ -453,6 +2351,160 @@ pub struct TokenCreatedV2 {
     pub initial_sol_lamports: u64,
     pub trust_score: u8,
     pub trust_level: u8,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct LockedTokensUnlockedV2 {
+    pub mint: Pubkey,
+    pub burned_amount: u64,
+    pub released_amount: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct VestingTrancheUsedV2 {
+    pub mint: Pubkey,
+    pub tranche: u8,
+    pub action: u8,
+    pub amount: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct CirculationAddedV2 {
+    pub mint: Pubkey,
+    pub amount: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct CurveBuyV2 {
+    pub mint: Pubkey,
+    pub buyer: Pubkey,
+    pub sol_in_lamports: u64,
+    pub platform_fee_lamports: u64,
+    pub creator_fee_lamports: u64,
+    pub tokens_out: u64,
+    pub price_lamports_per_token: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct CurveSellV2 {
+    pub mint: Pubkey,
+    pub seller: Pubkey,
+    pub tokens_in: u64,
+    pub gross_sol_out_lamports: u64,
+    pub platform_fee_lamports: u64,
+    pub creator_fee_lamports: u64,
+    pub seller_receives_lamports: u64,
+    pub price_lamports_per_token: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct CurvePriceV2 {
+    pub mint: Pubkey,
+    pub sol_reserve_lamports: u64,
+    pub token_reserve_amount: u64,
+    pub price_lamports_per_token: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct MigratedToRaydiumV2 {
+    pub mint: Pubkey,
+    pub raydium_pool: Pubkey,
+    pub triggerer: Pubkey,
+    pub reward_lamports: u64,
+    pub remaining_curve_tokens: u64,
+    pub remaining_curve_sol_lamports: u64,
+    pub lp_amount: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct VoteSubmittedV2 {
+    pub mint: Pubkey,
+    pub voter: Pubkey,
+    pub is_positive: bool,
+    pub complaint_category: u8,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct TokenFrozenV2 {
+    pub mint: Pubkey,
+    pub complaints_count: u32,
+    pub trust_score: u8,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct TrustScoreUpdatedV2 {
+    pub mint: Pubkey,
+    pub old_score: u8,
+    pub new_score: u8,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct AirdropEpochExecutedV2 {
+    pub mint: Pubkey,
+    pub pool_amount: u64,
+    pub epoch_number: u32,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct CreatorVerifiedV2 {
+    pub mint: Pubkey,
+    pub old_score: u8,
+    pub new_score: u8,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct LpLockedV2 {
+    pub token_mint: Pubkey,
+    pub lp_mint: Pubkey,
+    pub creator: Pubkey,
+    pub lp_amount: u64,
+    pub lock_days: u16,
+    pub unlock_time: i64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct LpFeesClaimedV2 {
+    pub token_mint: Pubkey,
+    pub creator_share: u64,
+    pub treasury_share: u64,
+    pub rewards_share: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct FeeParametersUpdatedV2 {
+    pub standard_fee_lamports: u64,
+    pub premium_fee_lamports: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct LaunchesPauseToggledV2 {
+    pub is_paused: bool,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct LaunchCertificateIssuedV2 {
+    pub serial_number: u32,
+    pub token_mint: Pubkey,
+    pub creator: Pubkey,
+    pub certificate_nft_mint: Pubkey,
+    pub initial_trust_score: u8,
     pub timestamp: i64,
 }
 
@@ -486,8 +2538,68 @@ pub enum HumbleV2Error {
     InvalidSupplyDistribution,
     #[msg("Initial SOL must be at least 0.5 SOL")]
     InitialSolTooLow,
+    #[msg("Invalid fee wallet")]
+    InvalidFeeWallet,
+    #[msg("Invalid creator fee wallet")]
+    InvalidCreatorFeeWallet,
+    #[msg("Invalid token account owner")]
+    InvalidTokenAccountOwner,
+    #[msg("Invalid mint for token account")]
+    InvalidMintForTokenAccount,
+    #[msg("Invalid creator receiving token account")]
+    InvalidCreatorReceiveAccount,
     #[msg("Anti-bot seconds max 600")]
     InvalidAntiBotSeconds,
+    #[msg("Invalid tier (must be 0 or 1)")]
+    InvalidTier,
+    #[msg("Invalid amount")]
+    InvalidAmount,
+    #[msg("Tokens are still locked")]
+    TokensStillLocked,
+    #[msg("Locked tokens already unlocked")]
+    AlreadyUnlocked,
+    #[msg("Unauthorized")]
+    Unauthorized,
+    #[msg("Token is frozen")]
+    TokenFrozen,
+    #[msg("Vesting tranche is not ready yet")]
+    VestingNotReady,
+    #[msg("This vesting tranche was already used")]
+    VestingTrancheDone,
+    #[msg("Invalid tranche number")]
+    InvalidTranche,
+    #[msg("Invalid action")]
+    InvalidAction,
+    #[msg("Operation exceeds vesting unlocked amount")]
+    VestingExceeded,
+    #[msg("Insufficient vault balance")]
+    InsufficientVaultBalance,
+    #[msg("Trading not started yet (anti-bot delay)")]
+    TradingNotStarted,
+    #[msg("Slippage exceeded")]
+    SlippageExceeded,
+    #[msg("Insufficient curve reserve")]
+    InsufficientCurveReserve,
+    #[msg("Token already migrated from bonding curve")]
+    AlreadyMigrated,
+    #[msg("Migration threshold has not been reached")]
+    MigrationThresholdNotMet,
+    #[msg("Insufficient balance to vote")]
+    InsufficientBalanceToVote,
+    #[msg("Invalid trade time")]
+    InvalidTradeTime,
+    #[msg("Buyer and seller cannot be the same address")]
+    SelfTrade,
+    #[msg("Airdrop disabled")]
+    AirdropDisabled,
+    #[msg("Airdrop not eligible this month")]
+    AirdropNotEligible,
+    #[msg("Airdrop too early")]
+    AirdropTooEarly,
+    #[msg("Operation requires HumbleTrust admin authority")]
+    AdminRequired,
+    #[msg("Invalid fee parameters")]
+    InvalidFeeParameters,
     #[msg("Math overflow")]
     MathOverflow,
 }
@@ -504,6 +2616,7 @@ fn validate_launch_inputs(
     circulation_percent: u8,
     airdrop_percent: u8,
     initial_sol_lamports: u64,
+    tier: u8,
     anti_bot_seconds: u16,
 ) -> Result<()> {
     require!(!name.is_empty(), HumbleV2Error::NameTooShort);
@@ -551,6 +2664,7 @@ fn validate_launch_inputs(
         initial_sol_lamports >= MIN_INITIAL_SOL_LAMPORTS,
         HumbleV2Error::InitialSolTooLow
     );
+    require!(tier <= 1, HumbleV2Error::InvalidTier);
     require!(
         anti_bot_seconds <= 600,
         HumbleV2Error::InvalidAntiBotSeconds
@@ -590,6 +2704,142 @@ fn percent_of(amount: u64, percent: u64) -> Result<u64> {
         .checked_mul(percent)
         .and_then(|v| v.checked_div(100))
         .ok_or(error!(HumbleV2Error::MathOverflow))
+}
+
+fn bps_amount(amount: u64, bps: u64) -> Result<u64> {
+    amount
+        .checked_mul(bps)
+        .and_then(|v| v.checked_div(FEE_DENOMINATOR_BPS))
+        .ok_or(error!(HumbleV2Error::MathOverflow))
+}
+
+fn constant_product_tokens_out(
+    token_reserve: u64,
+    sol_reserve: u64,
+    net_sol_in: u64,
+) -> Result<u64> {
+    require!(token_reserve > 0, HumbleV2Error::InsufficientCurveReserve);
+    require!(sol_reserve > 0, HumbleV2Error::InsufficientCurveReserve);
+    require!(net_sol_in > 0, HumbleV2Error::InvalidAmount);
+
+    let k = (token_reserve as u128)
+        .checked_mul(sol_reserve as u128)
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+    let new_sol_reserve = (sol_reserve as u128)
+        .checked_add(net_sol_in as u128)
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+    let new_token_reserve = k
+        .checked_div(new_sol_reserve)
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+    let out = (token_reserve as u128)
+        .checked_sub(new_token_reserve)
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+    u64::try_from(out).map_err(|_| error!(HumbleV2Error::MathOverflow))
+}
+
+fn constant_product_sol_out(token_reserve: u64, sol_reserve: u64, tokens_in: u64) -> Result<u64> {
+    require!(token_reserve > 0, HumbleV2Error::InsufficientCurveReserve);
+    require!(sol_reserve > 0, HumbleV2Error::InsufficientCurveReserve);
+    require!(tokens_in > 0, HumbleV2Error::InvalidAmount);
+
+    let k = (token_reserve as u128)
+        .checked_mul(sol_reserve as u128)
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+    let new_token_reserve = (token_reserve as u128)
+        .checked_add(tokens_in as u128)
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+    let new_sol_reserve = k
+        .checked_div(new_token_reserve)
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+    let out = (sol_reserve as u128)
+        .checked_sub(new_sol_reserve)
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+    u64::try_from(out).map_err(|_| error!(HumbleV2Error::MathOverflow))
+}
+
+fn price_lamports_per_token(sol_reserve: u64, token_reserve: u64) -> Result<u64> {
+    if token_reserve == 0 {
+        return Ok(0);
+    }
+    let price = (sol_reserve as u128)
+        .checked_mul(1_000_000_000)
+        .and_then(|v| v.checked_div(token_reserve as u128))
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+    u64::try_from(price).map_err(|_| error!(HumbleV2Error::MathOverflow))
+}
+
+fn rewards_multiplier_bps(score: u8) -> u16 {
+    match score {
+        81..=100 => 20_000,
+        66..=80 => 15_000,
+        51..=65 => 10_000,
+        _ => 10_000,
+    }
+}
+
+fn refresh_dynamic_score(meta: &mut TokenMetadataV2, now: i64) {
+    let base = calculate_trust_score_v2(
+        meta.lock_percent,
+        meta.creator_percent,
+        meta.curve_liquidity_percent,
+        meta.circulation_percent,
+        meta.airdrop_percent,
+        meta.burn_option,
+    );
+    let mut score = base.trust_score as i16;
+
+    let age_days = ((now - meta.created_at) / SECONDS_PER_DAY).max(0) as u16;
+    score += match age_days {
+        30.. => 8,
+        14..=29 => 5,
+        7..=13 => 2,
+        _ => 0,
+    };
+    score += match meta.verified_volume {
+        v if v >= 10_000_000_000 => 10,
+        v if v >= 1_000_000_000 => 6,
+        v if v >= 100_000_000 => 3,
+        _ => 0,
+    };
+    if meta.vesting_t1_done && meta.vesting_t1_action != 1 {
+        score += 5;
+    }
+    if meta.vesting_t2_done && meta.vesting_t2_action != 1 {
+        score += 5;
+    }
+    if meta.vesting_t3_done && meta.vesting_t3_action != 1 {
+        score += 5;
+    }
+    if meta.is_verified {
+        score += 8;
+    }
+
+    let total_votes = meta.positive_votes.saturating_add(meta.negative_votes);
+    if total_votes > 0 {
+        let pos_pct = meta.positive_votes.saturating_mul(100) / total_votes;
+        let neg_pct = meta.negative_votes.saturating_mul(100) / total_votes;
+        if pos_pct >= 80 {
+            score += 5;
+        }
+        if neg_pct > 70 {
+            score -= 18;
+        } else if neg_pct > 50 {
+            score -= 8;
+        }
+    }
+    if meta.complaints_count >= 20 && score < 30 {
+        score -= 25;
+    } else if meta.complaints_count >= 10 && score < 50 {
+        score -= 15;
+    }
+    if meta.no_activity_flag {
+        score -= 15;
+    }
+
+    meta.trust_score = score.clamp(0, 100) as u8;
+    meta.trust_level = trust_level(meta.trust_score);
+    meta.rewards_multiplier_bps = rewards_multiplier_bps(meta.trust_score);
+    meta.min_score_this_month = meta.min_score_this_month.min(meta.trust_score);
 }
 
 fn calculate_trust_score_v2(
