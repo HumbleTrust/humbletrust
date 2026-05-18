@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAnchorWallet, useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { AnchorProvider } from "@coral-xyz/anchor";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import {
   AlertTriangle,
   ArrowDown,
@@ -21,13 +21,61 @@ import {
   isProgramExecutable,
   sellOnCurveV2,
 } from "../lib/program";
+import { listTokens } from "../lib/image";
 
 const PREVIEW_TOKEN_RESERVE = 350_000_000;
 const PREVIEW_SOL_RESERVE = 0.5;
 const CURVE_FEE_RATE = 0.01;
-const CHART_WIDTH = 560;
-const CHART_HEIGHT = 230;
-const CHART_PAD = 24;
+const SOL_USD_PREVIEW = 92.31;
+const TOTAL_SUPPLY_UI = 1_000_000_000;
+const CHART_W = 920;
+const CHART_H = 430;
+const CHART_LEFT = 48;
+const CHART_RIGHT = 78;
+const CHART_TOP = 46;
+const CHART_BOTTOM = 34;
+const VOLUME_H = 76;
+
+type TradeSide = "buy" | "sell";
+type ChartMode = "candles" | "line" | "area";
+type MetricMode = "price" | "mcap";
+type QuoteMode = "SOL" | "USD";
+type Timeframe = "1s" | "1m" | "5m" | "15m" | "1h" | "4h" | "D";
+
+interface WalletTokenOption {
+  mint: string;
+  balance: number;
+  decimals: number;
+  symbol: string;
+  name: string;
+  logo?: string;
+}
+
+const TIMEFRAMES: Timeframe[] = ["1s", "1m", "5m", "15m", "1h", "4h", "D"];
+const CANDLE_COUNT: Record<Timeframe, number> = {
+  "1s": 76,
+  "1m": 68,
+  "5m": 60,
+  "15m": 54,
+  "1h": 48,
+  "4h": 42,
+  D: 36,
+};
+
+const DRAWING_TOOLS = [
+  { id: "cross", label: "Crosshair", mark: "+" },
+  { id: "trend", label: "Trend line", mark: "/" },
+  { id: "levels", label: "Levels", mark: "=" },
+  { id: "fib", label: "Fib", mark: "F" },
+  { id: "brush", label: "Brush", mark: "~" },
+  { id: "text", label: "Text", mark: "T" },
+  { id: "ruler", label: "Ruler", mark: "R" },
+  { id: "zoom", label: "Zoom", mark: "Z" },
+  { id: "magnet", label: "Magnet", mark: "M" },
+  { id: "lock", label: "Lock", mark: "L" },
+  { id: "eye", label: "Visibility", mark: "E" },
+  { id: "trash", label: "Clear drawings", mark: "X" },
+];
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -43,6 +91,8 @@ const formatCompact = (value: number, decimals = 2) => {
     maximumFractionDigits: decimals,
   }).format(value);
 };
+
+const shortAddress = (value: string) => `${value.slice(0, 4)}...${value.slice(-4)}`;
 
 const formatPrice = (value: number) => {
   if (!Number.isFinite(value) || value <= 0) return "0";
@@ -82,54 +132,141 @@ const toRawTokenAmount = (amount: string, decimals = 9) => {
   return `${whole}${paddedFraction}`.replace(/^0+(?=\d)/, "") || "0";
 };
 
-const buildCandles = (solIn: number, solReserve: number, tokenReserve: number) => {
+const displayChartValue = (priceSol: number, metric: MetricMode, quote: QuoteMode) => {
+  const metricValue = metric === "mcap" ? priceSol * TOTAL_SUPPLY_UI : priceSol;
+  return quote === "USD" ? metricValue * SOL_USD_PREVIEW : metricValue;
+};
+
+const formatChartValue = (value: number, metric: MetricMode, quote: QuoteMode) => {
+  const suffix = quote === "USD" ? "$" : "SOL";
+  if (metric === "mcap") return `${formatCompact(value, value >= 100 ? 1 : 3)} ${suffix}`;
+  if (quote === "USD") return value < 0.0001 ? `$${value.toExponential(2)}` : `$${value.toFixed(6)}`;
+  return value < 0.000001 ? `${value.toExponential(2)} SOL` : `${value.toFixed(8)} SOL`;
+};
+
+const buildTerminalChart = ({
+  solIn,
+  solReserve,
+  tokenReserve,
+  timeframe,
+  metric,
+  quote,
+  chartMode,
+  showVolume,
+  showMa,
+  logScale,
+  autoScale,
+}: {
+  solIn: number;
+  solReserve: number;
+  tokenReserve: number;
+  timeframe: Timeframe;
+  metric: MetricMode;
+  quote: QuoteMode;
+  chartMode: ChartMode;
+  showVolume: boolean;
+  showMa: boolean;
+  logScale: boolean;
+  autoScale: boolean;
+}) => {
+  const count = CANDLE_COUNT[timeframe];
   const maxSol = Math.max(2, solReserve * 2.5, solIn * 4);
-  const candleCount = 30;
-  const candles = Array.from({ length: candleCount }, (_, index) => {
-    const openSpend = (maxSol * index) / candleCount;
-    const closeSpend = (maxSol * (index + 1)) / candleCount;
-    const open = estimatePriceAfter(openSpend, solReserve, tokenReserve);
-    const close = estimatePriceAfter(closeSpend, solReserve, tokenReserve);
-    const spread = Math.max(Math.abs(close - open), close * 0.018);
+  const plotBottom = CHART_H - CHART_BOTTOM - (showVolume ? VOLUME_H : 0);
+  const volumeBase = CHART_H - CHART_BOTTOM;
+  const plotW = CHART_W - CHART_LEFT - CHART_RIGHT;
+  const slot = plotW / count;
+  const candleWidth = clamp(slot * 0.58, 4, 10);
+
+  let previous = displayChartValue(estimatePriceAfter(0, solReserve, tokenReserve), metric, quote);
+  const candles = Array.from({ length: count }, (_, index) => {
+    const spend = (maxSol * index) / Math.max(1, count - 1);
+    const base = displayChartValue(estimatePriceAfter(spend, solReserve, tokenReserve), metric, quote);
+    const wave = Math.sin(index * 0.61) * 0.028 + Math.cos(index * 0.23) * 0.017;
+    const close = Math.max(Number.EPSILON, base * (1 + wave));
+    const open = previous;
+    const spread = Math.max(Math.abs(close - open), close * (0.012 + ((index % 5) * 0.003)));
+    const high = Math.max(open, close) + spread * (0.55 + (index % 3) * 0.12);
+    const low = Math.max(Number.EPSILON, Math.min(open, close) - spread * (0.45 + (index % 4) * 0.08));
+    const volume = Math.max(1, Math.abs(close - open) * 10_000 + (index % 11) * 8 + (index % 7) * 13);
+    previous = close;
+    return { open, close, high, low, volume };
+  });
+
+  const rawMin = Math.min(...candles.map((c) => c.low));
+  const rawMax = Math.max(...candles.map((c) => c.high));
+  const pad = Math.max((rawMax - rawMin) * 0.08, rawMax * 0.015);
+  const min = autoScale ? Math.max(Number.EPSILON, rawMin - pad) : Math.max(Number.EPSILON, rawMin * 0.85);
+  const max = autoScale ? rawMax + pad : rawMax * 1.15;
+  const scaleIn = (value: number) => logScale ? Math.log10(Math.max(Number.EPSILON, value)) : value;
+  const scaledMin = scaleIn(min);
+  const scaledMax = scaleIn(max);
+  const yScale = (value: number) =>
+    plotBottom - ((scaleIn(value) - scaledMin) / Math.max(Number.EPSILON, scaledMax - scaledMin)) * (plotBottom - CHART_TOP);
+  const maxVolume = Math.max(...candles.map((c) => c.volume));
+  const activeIndex = clamp(Math.floor((clamp(solIn, 0, maxSol) / maxSol) * count), 0, count - 1);
+
+  const mapped = candles.map((candle, index) => {
+    const x = CHART_LEFT + index * slot + slot / 2;
+    const bodyY = yScale(Math.max(candle.open, candle.close));
+    const bodyBottom = yScale(Math.min(candle.open, candle.close));
     return {
-      open,
-      close,
-      high: Math.max(open, close) + spread * 0.45,
-      low: Math.max(0, Math.min(open, close) - spread * 0.35),
+      ...candle,
+      x,
+      yOpen: yScale(candle.open),
+      yClose: yScale(candle.close),
+      yHigh: yScale(candle.high),
+      yLow: yScale(candle.low),
+      bodyY,
+      bodyHeight: Math.max(3, bodyBottom - bodyY),
+      candleWidth,
+      up: candle.close >= candle.open,
+      active: index === activeIndex,
+      volumeY: volumeBase - (candle.volume / maxVolume) * (VOLUME_H - 12),
+      volumeHeight: Math.max(2, (candle.volume / maxVolume) * (VOLUME_H - 12)),
     };
   });
-  const prices = candles.flatMap((candle) => [candle.high, candle.low]);
-  const minPrice = Math.min(...prices);
-  const maxPrice = Math.max(...prices);
-  const range = Math.max(maxPrice - minPrice, Number.EPSILON);
-  const yScale = (price: number) =>
-    CHART_HEIGHT - CHART_PAD - ((price - minPrice) / range) * (CHART_HEIGHT - CHART_PAD * 2);
-  const slot = (CHART_WIDTH - CHART_PAD * 2) / candleCount;
-  const candleWidth = Math.max(6, slot * 0.58);
-  const currentIndex = clamp(Math.floor((clamp(solIn, 0, maxSol) / maxSol) * candleCount), 0, candleCount - 1);
 
+  const linePath = mapped
+    .map((candle, index) => `${index === 0 ? "M" : "L"} ${candle.x.toFixed(2)} ${candle.yClose.toFixed(2)}`)
+    .join(" ");
+  const areaPath = `${linePath} L ${mapped[mapped.length - 1].x.toFixed(2)} ${plotBottom} L ${mapped[0].x.toFixed(2)} ${plotBottom} Z`;
+  const maPath = mapped
+    .map((_, index) => {
+      const start = Math.max(0, index - 5);
+      const slice = mapped.slice(start, index + 1);
+      const avg = slice.reduce((sum, candle) => sum + candle.close, 0) / slice.length;
+      return `${index === 0 ? "M" : "L"} ${mapped[index].x.toFixed(2)} ${yScale(avg).toFixed(2)}`;
+    })
+    .join(" ");
+  const priceLabels = Array.from({ length: 7 }, (_, index) => {
+    const value = min + ((max - min) * (6 - index)) / 6;
+    return {
+      value,
+      y: CHART_TOP + ((plotBottom - CHART_TOP) * index) / 6,
+      label: formatChartValue(value, metric, quote),
+    };
+  });
+  const timeLabels = ["00:21", "00:21:16", "19 May '26", "00:22", "00:22:32", "00:23", "00:24", "00:24:33"].map((label, index, all) => ({
+    label,
+    x: CHART_LEFT + (plotW * index) / (all.length - 1),
+  }));
+  const active = mapped[activeIndex];
   return {
-    candles: candles.map((candle, index) => {
-      const x = CHART_PAD + slot * index + slot / 2;
-      const bodyTop = yScale(Math.max(candle.open, candle.close));
-      const bodyBottom = yScale(Math.min(candle.open, candle.close));
-      return {
-        ...candle,
-        x,
-        yOpen: yScale(candle.open),
-        yClose: yScale(candle.close),
-        yHigh: yScale(candle.high),
-        yLow: yScale(candle.low),
-        bodyY: bodyTop,
-        bodyHeight: Math.max(3, bodyBottom - bodyTop),
-        candleWidth,
-        up: candle.close >= candle.open,
-        active: index === currentIndex,
-      };
-    }),
+    candles: mapped,
+    linePath,
+    areaPath,
+    maPath,
+    priceLabels,
+    timeLabels,
+    plotBottom,
+    volumeBase,
+    active,
     maxSol,
-    minPrice,
-    maxPrice,
+    min,
+    max,
+    chartMode,
+    showMa,
+    showVolume,
   };
 };
 
@@ -138,7 +275,7 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
   const anchorWallet = useAnchorWallet();
   const { connection } = useConnection();
   const [mintInput, setMintInput] = useState("");
-  const [side, setSide] = useState<"buy" | "sell">("buy");
+  const [side, setSide] = useState<TradeSide>("buy");
   const [solAmount, setSolAmount] = useState("0.1");
   const [tokensAmount, setTokensAmount] = useState("1000000");
   const [reserveSol, setReserveSol] = useState(String(PREVIEW_SOL_RESERVE));
@@ -146,10 +283,28 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
   const [reserveSource, setReserveSource] = useState<"preview" | "chain">("preview");
   const [reservesBusy, setReservesBusy] = useState(false);
   const [reserveError, setReserveError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"buy" | "sell" | null>(null);
+  const [busy, setBusy] = useState<TradeSide | null>(null);
   const [txSig, setTxSig] = useState<string | null>(null);
   const [tradeError, setTradeError] = useState<string | null>(null);
   const [v2Available, setV2Available] = useState<boolean | null>(null);
+  const [walletTokens, setWalletTokens] = useState<WalletTokenOption[]>([]);
+  const [tokenPickerOpen, setTokenPickerOpen] = useState(false);
+  const [tokenPickerBusy, setTokenPickerBusy] = useState(false);
+  const [tokenPickerError, setTokenPickerError] = useState<string | null>(null);
+  const [timeframe, setTimeframe] = useState<Timeframe>("1s");
+  const [chartMode, setChartMode] = useState<ChartMode>("candles");
+  const [metricMode, setMetricMode] = useState<MetricMode>("mcap");
+  const [quoteMode, setQuoteMode] = useState<QuoteMode>("SOL");
+  const [showIndicators, setShowIndicators] = useState(false);
+  const [showVolume, setShowVolume] = useState(true);
+  const [showMa, setShowMa] = useState(true);
+  const [showCrosshair, setShowCrosshair] = useState(true);
+  const [logScale, setLogScale] = useState(false);
+  const [autoScale, setAutoScale] = useState(true);
+  const [fullChart, setFullChart] = useState(false);
+  const [activeTool, setActiveTool] = useState("cross");
+  const [toolHistory, setToolHistory] = useState(["cross"]);
+  const [toolHistoryIndex, setToolHistoryIndex] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -174,8 +329,20 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
   const nextPrice = estimatePriceAfter(solIn, previewSolReserve, previewTokenReserve);
   const priceImpact = currentPrice > 0 ? ((nextPrice - currentPrice) / currentPrice) * 100 : 0;
   const chart = useMemo(
-    () => buildCandles(solIn, previewSolReserve, previewTokenReserve),
-    [solIn, previewSolReserve, previewTokenReserve]
+    () => buildTerminalChart({
+      solIn,
+      solReserve: previewSolReserve,
+      tokenReserve: previewTokenReserve,
+      timeframe,
+      metric: metricMode,
+      quote: quoteMode,
+      chartMode,
+      showVolume,
+      showMa,
+      logScale,
+      autoScale,
+    }),
+    [solIn, previewSolReserve, previewTokenReserve, timeframe, metricMode, quoteMode, chartMode, showVolume, showMa, logScale, autoScale]
   );
 
   const validMint = mintInput.trim().length > 30;
@@ -184,9 +351,58 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
   const solscanUrl = validMint
     ? `https://solscan.io/token/${mintInput.trim()}?cluster=devnet`
     : null;
+  const savedTokenMap = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof listTokens>[number]>();
+    listTokens().forEach((token) => map.set(token.mint, token));
+    return map;
+  }, [walletTokens.length, tokenPickerOpen]);
+  const selectedSymbol = savedTokenMap.get(mintInput.trim())?.symbol || "TOKEN";
 
-  const refreshReserves = async () => {
-    if (!validMint) return;
+  const loadWalletTokens = async () => {
+    if (!wallet.publicKey) {
+      setWalletTokens([]);
+      return;
+    }
+    setTokenPickerBusy(true);
+    setTokenPickerError(null);
+    try {
+      const parsed = await connection.getParsedTokenAccountsByOwner(wallet.publicKey, {
+        programId: TOKEN_PROGRAM_ID,
+      });
+      const byMint = new Map<string, WalletTokenOption>();
+      parsed.value.forEach(({ account }) => {
+        const info = (account.data as any).parsed?.info;
+        const amountInfo = info?.tokenAmount;
+        const mint = info?.mint as string | undefined;
+        if (!mint || !amountInfo) return;
+        const balance = Number(amountInfo.uiAmountString ?? amountInfo.uiAmount ?? 0);
+        if (!Number.isFinite(balance) || balance <= 0) return;
+        const saved = savedTokenMap.get(mint);
+        const existing = byMint.get(mint);
+        if (existing) {
+          existing.balance += balance;
+        } else {
+          byMint.set(mint, {
+            mint,
+            balance,
+            decimals: amountInfo.decimals ?? 9,
+            symbol: saved?.symbol || shortAddress(mint),
+            name: saved?.name || "Wallet token",
+            logo: saved?.logo,
+          });
+        }
+      });
+      setWalletTokens([...byMint.values()].sort((a, b) => b.balance - a.balance).slice(0, 25));
+    } catch (e: any) {
+      setTokenPickerError(e.message || String(e));
+    } finally {
+      setTokenPickerBusy(false);
+    }
+  };
+
+  const refreshReserves = async (mintOverride?: string) => {
+    const mintValue = (mintOverride ?? mintInput).trim();
+    if (mintValue.length <= 30) return;
     if (!canUseCurve) {
       setReserveError("V2 curve program is not deployed on devnet yet.");
       return;
@@ -194,7 +410,7 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
     setReservesBusy(true);
     setReserveError(null);
     try {
-      const mint = new PublicKey(mintInput.trim());
+      const mint = new PublicKey(mintValue);
       const pdas = findV2Pdas(mint);
       const [solLamports, tokenBalance] = await Promise.all([
         connection.getBalance(pdas.curveTreasurySol),
@@ -214,6 +430,67 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
     } finally {
       setReservesBusy(false);
     }
+  };
+
+  const selectWalletToken = (token: WalletTokenOption) => {
+    setMintInput(token.mint);
+    setTokenPickerOpen(false);
+    void refreshReserves(token.mint);
+  };
+
+  const selectTool = (toolId: string) => {
+    setActiveTool(toolId);
+    setToolHistory((history) => {
+      const next = [...history.slice(0, toolHistoryIndex + 1), toolId];
+      setToolHistoryIndex(next.length - 1);
+      return next;
+    });
+  };
+
+  const undoTool = () => {
+    setToolHistoryIndex((index) => {
+      const nextIndex = Math.max(0, index - 1);
+      setActiveTool(toolHistory[nextIndex] ?? "cross");
+      return nextIndex;
+    });
+  };
+
+  const redoTool = () => {
+    setToolHistoryIndex((index) => {
+      const nextIndex = Math.min(toolHistory.length - 1, index + 1);
+      setActiveTool(toolHistory[nextIndex] ?? "cross");
+      return nextIndex;
+    });
+  };
+
+  const exportChartSvg = () => {
+    const svg = document.querySelector(".market-chart");
+    if (!svg) return;
+    const source = new XMLSerializer().serializeToString(svg);
+    const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `humbletrust-${selectedSymbol.toLowerCase()}-${timeframe}-chart.svg`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const resetChart = () => {
+    setTimeframe("1s");
+    setChartMode("candles");
+    setMetricMode("mcap");
+    setQuoteMode("SOL");
+    setShowVolume(true);
+    setShowMa(true);
+    setShowCrosshair(true);
+    setLogScale(false);
+    setAutoScale(true);
+    setActiveTool("cross");
+    setToolHistory(["cross"]);
+    setToolHistoryIndex(0);
   };
 
   const runBuy = async () => {
@@ -291,7 +568,7 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
         </div>
       </div>
 
-      <div className="trade-grid">
+      <div className={fullChart ? "trade-grid chart-expanded-grid" : "trade-grid"}>
         <div className="swap-panel">
           <div className="panel-head">
             <div className="panel-title">
@@ -301,13 +578,57 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
           </div>
 
           <label className="form-label">Token mint</label>
-          <input
-            className="form-input"
-            placeholder="Mint public key"
-            value={mintInput}
-            onChange={(e) => setMintInput(e.target.value)}
-            onBlur={refreshReserves}
-          />
+          <div className="token-picker">
+            <input
+              className="form-input"
+              placeholder={wallet.connected ? "Click to pick wallet token or paste mint" : "Connect wallet or paste mint"}
+              value={mintInput}
+              onChange={(e) => setMintInput(e.target.value)}
+              onFocus={() => {
+                setTokenPickerOpen(true);
+                void loadWalletTokens();
+              }}
+              onClick={() => {
+                setTokenPickerOpen(true);
+                void loadWalletTokens();
+              }}
+              onBlur={() => window.setTimeout(() => setTokenPickerOpen(false), 180)}
+            />
+            {tokenPickerOpen && (
+              <div className="token-picker-menu">
+                <div className="token-picker-head">
+                  <span>Wallet tokens</span>
+                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={loadWalletTokens}>
+                    {tokenPickerBusy ? "Loading" : "Refresh"}
+                  </button>
+                </div>
+                {!wallet.connected && <div className="token-picker-empty">Connect wallet to list token balances.</div>}
+                {wallet.connected && tokenPickerBusy && <div className="token-picker-empty">Scanning wallet token accounts...</div>}
+                {wallet.connected && !tokenPickerBusy && walletTokens.length === 0 && (
+                  <div className="token-picker-empty">No SPL tokens found in this wallet on devnet.</div>
+                )}
+                {tokenPickerError && <div className="token-picker-error">{tokenPickerError}</div>}
+                {walletTokens.map((token) => (
+                  <button
+                    type="button"
+                    key={token.mint}
+                    className="token-picker-row"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => selectWalletToken(token)}
+                  >
+                    <div className="token-picker-logo">
+                      {token.logo ? <img src={token.logo} alt="" /> : token.symbol.slice(0, 2)}
+                    </div>
+                    <div className="token-picker-main">
+                      <strong>{token.symbol}</strong>
+                      <span>{token.name} · {shortAddress(token.mint)}</span>
+                    </div>
+                    <div className="token-picker-balance">{formatCompact(token.balance, 4)}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div className="trade-tabs">
             <button className={side === "buy" ? "active" : ""} onClick={() => setSide("buy")} type="button">Buy</button>
@@ -317,7 +638,7 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
           <div className="swap-box">
             <div className="swap-box-head">
               <span>From</span>
-              <span>{side === "buy" ? "SOL" : "Token"}</span>
+              <span>{side === "buy" ? "SOL" : selectedSymbol}</span>
             </div>
             <input
               className="swap-amount-input"
@@ -336,7 +657,7 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
           <div className="swap-box">
             <div className="swap-box-head">
               <span>To est.</span>
-              <span>{side === "buy" ? "Token" : "SOL"}</span>
+              <span>{side === "buy" ? selectedSymbol : "SOL"}</span>
             </div>
             <div className="swap-output">
               {side === "buy" ? formatCompact(estimatedTokens, 4) : formatCompact(estimatedSol, 6)}
@@ -369,56 +690,151 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
           {tradeError && <div className="trade-error">{tradeError}</div>}
         </div>
 
-        <div className="curve-panel">
-          <div className="panel-head">
-            <div className="panel-title">
-              <BarChart3 size={16} color="var(--solana-blue)" /> Curve Chart
-            </div>
-            <div className="panel-actions">
-              <span className="network-pill blue">{reserveSource === "chain" ? "LIVE DEVNET" : "PREVIEW"}</span>
-              <button className="reserve-refresh" onClick={refreshReserves} disabled={!validMint || reservesBusy || !canUseCurve}>
-                <RefreshCw size={13} className={reservesBusy ? "spin" : undefined} /> Refresh
-              </button>
-            </div>
-          </div>
-
-          <div className="curve-chart-wrap">
-            <svg className="curve-chart" viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} role="img" aria-label="Bonding curve candle preview">
-              {[0, 1, 2, 3].map((line) => {
-                const y = CHART_PAD + ((CHART_HEIGHT - CHART_PAD * 2) * line) / 3;
-                return <line key={`h-${line}`} x1={CHART_PAD} y1={y} x2={CHART_WIDTH - CHART_PAD} y2={y} className="candle-grid" />;
-              })}
-              {[0, 1, 2, 3, 4].map((line) => {
-                const x = CHART_PAD + ((CHART_WIDTH - CHART_PAD * 2) * line) / 4;
-                return <line key={`v-${line}`} x1={x} y1={CHART_PAD} x2={x} y2={CHART_HEIGHT - CHART_PAD} className="candle-grid" />;
-              })}
-              <path
-                d={`M ${CHART_PAD} ${CHART_HEIGHT - CHART_PAD} H ${CHART_WIDTH - CHART_PAD} M ${CHART_PAD} ${CHART_PAD} V ${CHART_HEIGHT - CHART_PAD}`}
-                className="curve-axis"
-              />
-              {chart.candles.map((candle, index) => (
-                <g key={index} className={candle.active ? "candle active" : "candle"}>
-                  <line
-                    x1={candle.x}
-                    y1={candle.yHigh}
-                    x2={candle.x}
-                    y2={candle.yLow}
-                    className={candle.up ? "candle-wick up" : "candle-wick down"}
-                  />
-                  <rect
-                    x={candle.x - candle.candleWidth / 2}
-                    y={candle.bodyY}
-                    width={candle.candleWidth}
-                    height={candle.bodyHeight}
-                    rx="1.5"
-                    className={candle.up ? "candle-body up" : "candle-body down"}
-                  />
-                </g>
+        <div className={fullChart ? "curve-panel terminal-full" : "curve-panel"}>
+          <div className="chart-terminal">
+            <div className="chart-topbar">
+              <button className="chart-round" type="button">+</button>
+              <span className="chart-divider" />
+              {TIMEFRAMES.map((tf) => (
+                <button
+                  type="button"
+                  key={tf}
+                  onClick={() => setTimeframe(tf)}
+                  className={timeframe === tf ? "chart-menu-btn active" : "chart-menu-btn"}
+                >
+                  {tf}
+                </button>
               ))}
-            </svg>
-            <div className="curve-axis-label top">{formatPrice(chart.maxPrice)} SOL/token</div>
-            <div className="curve-axis-label bottom">{formatPrice(chart.minPrice)} SOL/token</div>
-            <div className="curve-axis-label right">+{formatCompact(chart.maxSol, 2)} SOL</div>
+              <span className="chart-divider" />
+              <button type="button" className={chartMode === "line" ? "chart-menu-btn active" : "chart-menu-btn"} onClick={() => setChartMode("line")}>Line</button>
+              <button type="button" className={chartMode === "candles" ? "chart-menu-btn active" : "chart-menu-btn"} onClick={() => setChartMode("candles")}>Candles</button>
+              <button type="button" className={chartMode === "area" ? "chart-menu-btn active" : "chart-menu-btn"} onClick={() => setChartMode("area")}>Area</button>
+              <span className="chart-divider" />
+              <button type="button" className="chart-menu-btn" onClick={() => setShowIndicators((v) => !v)}>fx Indicators</button>
+              <span className="chart-divider" />
+              <button type="button" className="chart-menu-btn active" onClick={() => setMetricMode((v) => v === "price" ? "mcap" : "price")}>
+                {metricMode === "price" ? "Price" : "Price / MCap"}
+              </button>
+              <button type="button" className="chart-menu-btn active" onClick={() => setQuoteMode((v) => v === "SOL" ? "USD" : "SOL")}>
+                {quoteMode === "SOL" ? "USD / SOL" : "USD / SOL"}
+              </button>
+              <button type="button" className="chart-menu-btn" onClick={() => setFullChart((v) => !v)}>
+                {fullChart ? "Exit Full" : "Full"}
+              </button>
+              <button type="button" className="chart-icon-btn" title="Undo" onClick={undoTool}>↶</button>
+              <button type="button" className="chart-icon-btn" title="Redo" onClick={redoTool}>↷</button>
+              <button type="button" className="chart-icon-btn" title="Reset chart" onClick={resetChart}>⟲</button>
+              <button type="button" className="chart-icon-btn" title="Export chart SVG" onClick={exportChartSvg}>▣</button>
+            </div>
+
+            {showIndicators && (
+              <div className="indicator-menu">
+                <label><input type="checkbox" checked={showVolume} onChange={(e) => setShowVolume(e.target.checked)} /> Volume</label>
+                <label><input type="checkbox" checked={showMa} onChange={(e) => setShowMa(e.target.checked)} /> Moving average</label>
+                <label><input type="checkbox" checked={showCrosshair} onChange={(e) => setShowCrosshair(e.target.checked)} /> Crosshair</label>
+                <label><input type="checkbox" checked={logScale} onChange={(e) => setLogScale(e.target.checked)} /> Log</label>
+                <label><input type="checkbox" checked={autoScale} onChange={(e) => setAutoScale(e.target.checked)} /> Auto scale</label>
+              </div>
+            )}
+
+            <div className="chart-body">
+              <div className="chart-left-tools">
+                {DRAWING_TOOLS.map((tool) => (
+                  <button
+                    type="button"
+                    key={tool.id}
+                    title={tool.label}
+                    className={activeTool === tool.id ? "tool-btn active" : "tool-btn"}
+                    onClick={() => tool.id === "trash" ? resetChart() : selectTool(tool.id)}
+                  >
+                    {tool.mark}
+                  </button>
+                ))}
+              </div>
+
+              <div className="chart-stage">
+                <div className="chart-title">
+                  <span className="pair-dot" />
+                  {selectedSymbol} / SOL <strong>({metricMode === "mcap" ? "Market Cap" : "Price"})</strong> on HumbleCurve · {timeframe} · devnet
+                </div>
+                <div className="chart-ohlc">
+                  O {formatChartValue(chart.active.open, metricMode, quoteMode)}
+                  {" "}H {formatChartValue(chart.active.high, metricMode, quoteMode)}
+                  {" "}L {formatChartValue(chart.active.low, metricMode, quoteMode)}
+                  {" "}C {formatChartValue(chart.active.close, metricMode, quoteMode)}
+                </div>
+                <div className="chart-volume-label">Volume <span>{showVolume ? "7" : "off"}</span></div>
+                <svg className="market-chart" viewBox={`0 0 ${CHART_W} ${CHART_H}`} role="img" aria-label="Trading chart">
+                  <defs>
+                    <linearGradient id="terminalArea" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor="rgba(18,191,164,.22)" />
+                      <stop offset="100%" stopColor="rgba(18,191,164,0)" />
+                    </linearGradient>
+                  </defs>
+                  {chart.priceLabels.map((label, index) => (
+                    <line key={`h-${index}`} x1={CHART_LEFT} x2={CHART_W - CHART_RIGHT} y1={label.y} y2={label.y} className="terminal-grid" />
+                  ))}
+                  {chart.timeLabels.map((label, index) => (
+                    <line key={`v-${index}`} y1={CHART_TOP} y2={chart.volumeBase} x1={label.x} x2={label.x} className="terminal-grid" />
+                  ))}
+                  {chart.chartMode === "area" && <path d={chart.areaPath} fill="url(#terminalArea)" />}
+                  {(chart.chartMode === "line" || chart.chartMode === "area") && <path d={chart.linePath} className="chart-line-path" />}
+                  {chart.chartMode === "candles" && chart.candles.map((candle, index) => (
+                    <g key={index} className={candle.active ? "terminal-candle active" : "terminal-candle"}>
+                      <line x1={candle.x} x2={candle.x} y1={candle.yHigh} y2={candle.yLow} className={candle.up ? "terminal-wick up" : "terminal-wick down"} />
+                      <rect
+                        x={candle.x - candle.candleWidth / 2}
+                        y={candle.bodyY}
+                        width={candle.candleWidth}
+                        height={candle.bodyHeight}
+                        rx="1"
+                        className={candle.up ? "terminal-body up" : "terminal-body down"}
+                      />
+                    </g>
+                  ))}
+                  {chart.showVolume && chart.candles.map((candle, index) => (
+                    <rect
+                      key={`vol-${index}`}
+                      x={candle.x - candle.candleWidth / 2}
+                      y={candle.volumeY}
+                      width={candle.candleWidth}
+                      height={candle.volumeHeight}
+                      className={candle.up ? "volume-bar up" : "volume-bar down"}
+                    />
+                  ))}
+                  {chart.showMa && <path d={chart.maPath} className="ma-path" />}
+                  {showCrosshair && (
+                    <>
+                      <line x1={chart.active.x} x2={chart.active.x} y1={CHART_TOP} y2={chart.volumeBase} className="crosshair-line" />
+                      <line x1={CHART_LEFT} x2={CHART_W - CHART_RIGHT} y1={chart.active.yClose} y2={chart.active.yClose} className="crosshair-line" />
+                    </>
+                  )}
+                  <line x1={CHART_LEFT} x2={CHART_W - CHART_RIGHT} y1={chart.active.yClose} y2={chart.active.yClose} className="current-price-line" />
+                  {chart.priceLabels.map((label, index) => (
+                    <text key={`p-${index}`} x={CHART_W - 72} y={label.y + 4} className="chart-price-label">{label.label}</text>
+                  ))}
+                  {chart.timeLabels.map((label, index) => (
+                    <text key={`t-${index}`} x={label.x} y={CHART_H - 9} className="chart-time-label">{label.label}</text>
+                  ))}
+                  <rect x={CHART_W - 72} y={chart.active.yClose - 13} width="72" height="26" rx="2" className="price-tag-bg" />
+                  <text x={CHART_W - 66} y={chart.active.yClose + 4} className="price-tag-text">{formatChartValue(chart.active.close, metricMode, quoteMode)}</text>
+                  <rect x={Math.max(CHART_LEFT, chart.active.x - 54)} y={CHART_H - 31} width="142" height="26" rx="2" className="time-tag-bg" />
+                  <text x={Math.max(CHART_LEFT + 8, chart.active.x - 45)} y={CHART_H - 13} className="time-tag-text">19 May '26 00:21:41</text>
+                </svg>
+              </div>
+            </div>
+
+            <div className="chart-bottom-tabs">
+              <button type="button" className="active">Transactions</button>
+              <button type="button">Top Traders</button>
+              <button type="button">KOLs</button>
+              <button type="button">Holders</button>
+              <button type="button">Bubblemaps</button>
+              <div className="chart-status">
+                00:24:48 (UTC+1) <button type="button" onClick={() => setLogScale((v) => !v)} className={logScale ? "active" : ""}>log</button>
+                <button type="button" onClick={() => setAutoScale((v) => !v)} className={autoScale ? "active" : ""}>auto</button>
+              </div>
+            </div>
           </div>
 
           <div className="curve-stat-grid">
@@ -469,6 +885,9 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
                 }}
               />
             </div>
+            <button className="reserve-refresh reserve-refresh-wide" onClick={() => refreshReserves()} disabled={!validMint || reservesBusy || !canUseCurve}>
+              <RefreshCw size={13} className={reservesBusy ? "spin" : undefined} /> {reserveSource === "chain" ? "Live devnet" : "Refresh"}
+            </button>
           </div>
           {reserveError && <div className="trade-error">{reserveError}</div>}
         </div>
