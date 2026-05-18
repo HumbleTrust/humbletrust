@@ -17,6 +17,11 @@ export const getProgramV2 = (provider: AnchorProvider) => {
   return new Program(idlV2Json as Idl, provider);
 };
 
+export const isProgramExecutable = async (connection: Connection, programId: PublicKey) => {
+  const account = await connection.getAccountInfo(programId, "confirmed");
+  return Boolean(account?.executable);
+};
+
 export const findPdas = (mint: PublicKey) => {
   const [tokenMetadata] = PublicKey.findProgramAddressSync(
     [Buffer.from("token_metadata"), mint.toBuffer()],
