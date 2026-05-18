@@ -1,12 +1,30 @@
-import { useState, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useWallet, useAnchorWallet, useConnection } from "@solana/wallet-adapter-react";
 import { AnchorProvider } from "@coral-xyz/anchor";
 import { Rocket, ExternalLink, Loader, Upload, X, Award, Lock, UserCheck } from "lucide-react";
-import { getProgramV2, launchTokenV2, initCreatorReputationV2 } from "../lib/program";
+import {
+  PROGRAM_ID_V2_PK,
+  getProgram,
+  getProgramV2,
+  initCreatorReputation,
+  initCreatorReputationV2,
+  isProgramExecutable,
+  launchToken,
+  launchTokenV2,
+} from "../lib/program";
 import { fileToHexLogo, MAX_LOGO_BYTES, saveToken } from "../lib/image";
 import { HexLogo } from "../components/HexLogo";
 
 interface LaunchResult { signature: string; mint: string; }
+type LaunchMode = "checking" | "v1" | "v2";
+
+const V1_SUPPLY = "1000000000";
+const V1_AIRDROPS = [0, 2, 5, 8] as const;
+
+const toV1Airdrop = (value: number): 0 | 2 | 5 | 8 =>
+  V1_AIRDROPS.reduce((best, candidate) =>
+    Math.abs(candidate - value) < Math.abs(best - value) ? candidate : best
+  );
 
 export const Launch = () => {
   const wallet = useWallet();
@@ -22,6 +40,8 @@ export const Launch = () => {
   const [repDone, setRepDone] = useState(false);
   const [repError, setRepError] = useState<string | null>(null);
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
+  const [launchMode, setLaunchMode] = useState<LaunchMode>("checking");
+  const [programStatusError, setProgramStatusError] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
@@ -30,35 +50,94 @@ export const Launch = () => {
   const [burn, setBurn] = useState<25 | 50>(50);
   const [creatorAlloc, setCreatorAlloc] = useState(3);
   const [curveLiquidity, setCurveLiquidity] = useState(35);
-  const [airdrop, setAirdrop] = useState(2);
+  const [airdrop, setAirdrop] = useState<number>(2);
   const [initialSol, setInitialSol] = useState("0.5");
   const [tier, setTier] = useState<0 | 1>(0);
   const [antiBot, setAntiBot] = useState(60);
 
-  const circulation = useMemo(
+  useEffect(() => {
+    let mounted = true;
+    setLaunchMode("checking");
+    setProgramStatusError(null);
+
+    isProgramExecutable(connection, PROGRAM_ID_V2_PK)
+      .then((available) => {
+        if (mounted) setLaunchMode(available ? "v2" : "v1");
+      })
+      .catch((err) => {
+        console.warn("Unable to check v2 program on devnet", err);
+        if (mounted) {
+          setLaunchMode("v1");
+          setProgramStatusError("Could not verify v2 deploy on devnet; using live v1 program.");
+        }
+      });
+
+    return () => { mounted = false; };
+  }, [connection]);
+
+  useEffect(() => {
+    if (launchMode === "v1") setAirdrop((value) => toV1Airdrop(value));
+    if (launchMode === "v2") {
+      setAirdrop((value) => Math.min(value, 5));
+      setCreatorAlloc((value) => Math.min(value, 5));
+    }
+  }, [launchMode]);
+
+  const isCheckingProgram = launchMode === "checking";
+  const isV2Launch = launchMode === "v2";
+  const v1Airdrop = useMemo(() => toV1Airdrop(airdrop), [airdrop]);
+
+  const v2Circulation = useMemo(
     () => 100 - lockPercent - creatorAlloc - curveLiquidity - airdrop,
     [lockPercent, creatorAlloc, curveLiquidity, airdrop]
   );
+  const v1Circulation = useMemo(
+    () => 100 - lockPercent - creatorAlloc,
+    [lockPercent, creatorAlloc]
+  );
+  const circulation = isV2Launch ? v2Circulation : v1Circulation;
   const initialSolNum = useMemo(() => Number(initialSol), [initialSol]);
-  const validInitialSol = Number.isFinite(initialSolNum) && initialSolNum >= 0.5;
+  const validInitialSol = !isV2Launch || (Number.isFinite(initialSolNum) && initialSolNum >= 0.5);
 
   const trustBreakdown = useMemo(() => {
+    if (!isV2Launch) {
+      const days = lockDays >= 360 ? 25 : lockDays >= 270 ? 20 : lockDays >= 180 ? 16 : lockDays >= 90 ? 12 : lockDays >= 60 ? 8 : 4;
+      const lock = lockPercent >= 60 ? 18 : lockPercent >= 50 ? 15 : lockPercent >= 40 ? 11 : 6;
+      const burnScore = burn === 50 ? 12 : 6;
+      const air = v1Airdrop === 8 ? 10 : v1Airdrop === 5 ? 6 : v1Airdrop === 2 ? 3 : 0;
+      const raw = days + lock + burnScore + air;
+      return {
+        mode: "v1" as const,
+        days,
+        lock,
+        creator: 0,
+        curve: 0,
+        circ: 0,
+        air,
+        burn: burnScore,
+        raw,
+        score: Math.min(100, raw),
+      };
+    }
+
     const lock = lockPercent < 30 ? 0 : lockPercent <= 39 ? 10 : lockPercent <= 60 ? 20 : 15;
     const creator = Math.max(0, 20 - 4 * creatorAlloc);
     const curve = Math.max(0, Math.min(25, 1.5 * (curveLiquidity - 20)));
-    const circ = Math.max(0, Math.min(20, 1.2 * (circulation - 10)));
+    const circ = Math.max(0, Math.min(20, 1.2 * (v2Circulation - 10)));
     const air = Math.max(0, 15 - 3 * airdrop);
     const burnScore = burn === 50 ? 10 : 5;
     const raw = lock + creator + curve + circ + air + burnScore;
     return {
+      mode: "v2" as const,
+      days: 0,
       lock, creator, curve, circ, air, burn: burnScore, raw,
       score: Math.min(100, Math.round((raw / 110) * 100)),
     };
-  }, [lockPercent, creatorAlloc, curveLiquidity, circulation, airdrop, burn]);
+  }, [isV2Launch, lockDays, lockPercent, creatorAlloc, curveLiquidity, v2Circulation, airdrop, v1Airdrop, burn]);
 
   const trustScore = trustBreakdown.score;
-  const validDistribution = circulation >= 15 && circulation <= 40;
-  const validCombinedLiquidity = curveLiquidity + circulation >= 50;
+  const validDistribution = isV2Launch ? v2Circulation >= 15 && v2Circulation <= 40 : v1Circulation >= 55;
+  const validCombinedLiquidity = !isV2Launch || curveLiquidity + v2Circulation >= 50;
 
   const handleLogoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setLogoErr(null);
@@ -80,17 +159,26 @@ export const Launch = () => {
     setBusy(true); setError(null); setResult(null);
     try {
       const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
-      const program = getProgramV2(provider);
-      const { signature, mint } = await launchTokenV2(program, anchorWallet.publicKey, {
-        name, symbol,
-        lockPercent, lockDays, burnOption: burn,
-        creatorAllocation: creatorAlloc,
-        curveLiquidityPercent: curveLiquidity,
-        circulationPercent: circulation,
-        airdropPercent: airdrop,
-        initialSol: initialSolNum,
-        tier, antiBotSeconds: antiBot,
-      });
+      const v2Available = await isProgramExecutable(connection, PROGRAM_ID_V2_PK).catch(() => false);
+      const useV2 = isV2Launch && v2Available;
+      setLaunchMode(v2Available ? "v2" : "v1");
+      const { signature, mint } = useV2
+        ? await launchTokenV2(getProgramV2(provider), anchorWallet.publicKey, {
+            name, symbol,
+            lockPercent, lockDays, burnOption: burn,
+            creatorAllocation: creatorAlloc,
+            curveLiquidityPercent: curveLiquidity,
+            circulationPercent: v2Circulation,
+            airdropPercent: airdrop,
+            initialSol: initialSolNum,
+            tier, antiBotSeconds: antiBot,
+          })
+        : await launchToken(getProgram(provider), anchorWallet.publicKey, {
+            name, symbol, totalSupply: V1_SUPPLY,
+            lockPercent, lockDays, burnOption: burn,
+            creatorAllocation: creatorAlloc, airdropPercent: v1Airdrop,
+            tier, antiBotSeconds: antiBot,
+          });
       const mintStr = mint.toString();
       saveToken({
         mint: mintStr, name, symbol,
@@ -110,22 +198,37 @@ export const Launch = () => {
     setRepBusy(true); setRepError(null);
     try {
       const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
-      const program = getProgramV2(provider);
-      await initCreatorReputationV2(program, anchorWallet.publicKey);
+      const v2Available = await isProgramExecutable(connection, PROGRAM_ID_V2_PK).catch(() => false);
+      const useV2 = isV2Launch && v2Available;
+      setLaunchMode(v2Available ? "v2" : "v1");
+      if (useV2) {
+        await initCreatorReputationV2(getProgramV2(provider), anchorWallet.publicKey);
+      } else {
+        await initCreatorReputation(getProgram(provider), anchorWallet.publicKey);
+      }
       setRepDone(true);
     } catch (e: any) {
-      setRepError(e.message || String(e));
+      const message = e.message || String(e);
+      if (/already in use|already initialized/i.test(message)) {
+        setRepDone(true);
+      } else {
+        setRepError(message);
+      }
     } finally { setRepBusy(false); }
   };
 
-  const scoreColor = trustScore >= 85 ? "var(--green-neon)" : trustScore >= 70 ? "var(--solana-blue)" : trustScore >= 40 ? "var(--yellow)" : "var(--orange)";
-  const scoreLabel = trustScore >= 85 ? "ELITE" : trustScore >= 70 ? "STRONG" : trustScore >= 40 ? "OK" : "WEAK";
+  const scoreColor = isV2Launch
+    ? trustScore >= 85 ? "var(--green-neon)" : trustScore >= 70 ? "var(--solana-blue)" : trustScore >= 40 ? "var(--yellow)" : "var(--orange)"
+    : trustScore >= 81 ? "var(--green-neon)" : trustScore >= 66 ? "var(--solana-blue)" : trustScore >= 51 ? "var(--yellow)" : "var(--orange)";
+  const scoreLabel = isV2Launch
+    ? trustScore >= 85 ? "ELITE" : trustScore >= 70 ? "STRONG" : trustScore >= 40 ? "OK" : "WEAK"
+    : trustScore >= 81 ? "PROTECTED" : trustScore >= 66 ? "TRUSTED" : trustScore >= 51 ? "BASIC" : "WEAK";
   const circumference = 2 * Math.PI * 56;
   const offset = circumference - (trustScore / 100) * circumference;
 
   return (
     <section className="launch-bg">
-      <div className="sec-eyebrow">Launch · Anchor Program · Devnet</div>
+      <div className="sec-eyebrow">Launch · {isV2Launch ? "V2 Curve" : "V1 Live"} · Devnet</div>
       <h2 className="sec-h2">Create your <span className="hl-green">protected</span> token</h2>
       <p className="sec-sub">All rules enforced on-chain. Trust Score updates in real time.</p>
 
@@ -162,21 +265,25 @@ export const Launch = () => {
           <label className="form-label">Total Supply</label>
           <input className="form-input" value="1,000,000,000 fixed" readOnly />
 
-          <label className="form-label">Initial Liquidity (SOL)</label>
-          <input
-            className="form-input"
-            type="number"
-            min={0.5}
-            step={0.1}
-            value={initialSol}
-            onChange={(e) => setInitialSol(e.target.value)}
-            style={!validInitialSol ? { borderColor: "var(--red)" } : undefined}
-            title="Used for bonding curve liquidity. Not sent to creator. Not used for Raydium."
-          />
-          {!validInitialSol && (
-            <div style={{ color: "var(--red)", fontSize: ".75rem", marginTop: ".25rem" }}>
-              Initial liquidity must be at least 0.5 SOL.
-            </div>
+          {isV2Launch && (
+            <>
+              <label className="form-label">Initial Liquidity (SOL)</label>
+              <input
+                className="form-input"
+                type="number"
+                min={0.5}
+                step={0.1}
+                value={initialSol}
+                onChange={(e) => setInitialSol(e.target.value)}
+                style={!validInitialSol ? { borderColor: "var(--red)" } : undefined}
+                title="Used for bonding curve liquidity. Not sent to creator. Not used for Raydium."
+              />
+              {!validInitialSol && (
+                <div style={{ color: "var(--red)", fontSize: ".75rem", marginTop: ".25rem" }}>
+                  Initial liquidity must be at least 0.5 SOL.
+                </div>
+              )}
+            </>
           )}
 
           <div className="slider-group">
@@ -198,20 +305,35 @@ export const Launch = () => {
           </div>
 
           <div className="slider-group">
-            <div className="slider-header"><label className="form-label" style={{ margin: 0 }}>Creator allocation (0-5%)</label><span className="slider-val">{creatorAlloc}%</span></div>
-            <input type="range" min={0} max={5} value={creatorAlloc} onChange={(e) => setCreatorAlloc(+e.target.value)} />
+            <div className="slider-header"><label className="form-label" style={{ margin: 0 }}>Creator allocation (0-{isV2Launch ? 5 : 10}%)</label><span className="slider-val">{creatorAlloc}%</span></div>
+            <input type="range" min={0} max={isV2Launch ? 5 : 10} value={creatorAlloc} onChange={(e) => setCreatorAlloc(+e.target.value)} />
           </div>
 
-          <div className="slider-group">
-            <div className="slider-header"><label className="form-label" style={{ margin: 0 }}>Curve Liquidity % (25-50)</label><span className="slider-val">{curveLiquidity}%</span></div>
-            <input type="range" min={25} max={50} value={curveLiquidity} onChange={(e) => setCurveLiquidity(+e.target.value)} title="Percentage of supply allocated to bonding curve liquidity." />
-            <div className="slider-ticks"><span>25%</span><span>35%</span><span>50%</span></div>
-          </div>
+          {isV2Launch && (
+            <div className="slider-group">
+              <div className="slider-header"><label className="form-label" style={{ margin: 0 }}>Curve Liquidity % (25-50)</label><span className="slider-val">{curveLiquidity}%</span></div>
+              <input type="range" min={25} max={50} value={curveLiquidity} onChange={(e) => setCurveLiquidity(+e.target.value)} title="Percentage of supply allocated to bonding curve liquidity." />
+              <div className="slider-ticks"><span>25%</span><span>35%</span><span>50%</span></div>
+            </div>
+          )}
 
-          <div className="slider-group">
-            <div className="slider-header"><label className="form-label" style={{ margin: 0 }}>Airdrop allocation (0-5%)</label><span className="slider-val">{airdrop}%</span></div>
-            <input type="range" min={0} max={5} value={airdrop} onChange={(e) => setAirdrop(+e.target.value)} />
-          </div>
+          {isV2Launch ? (
+            <div className="slider-group">
+              <div className="slider-header"><label className="form-label" style={{ margin: 0 }}>Airdrop allocation (0-5%)</label><span className="slider-val">{airdrop}%</span></div>
+              <input type="range" min={0} max={5} value={airdrop} onChange={(e) => setAirdrop(+e.target.value)} />
+            </div>
+          ) : (
+            <>
+              <label className="form-label">Airdrop config</label>
+              <div className="air-row">
+                {V1_AIRDROPS.map((value) => (
+                  <div key={value} className={"air-btn " + (v1Airdrop === value ? "sel" : "")} onClick={() => setAirdrop(value)}>
+                    {value === 0 ? "Disabled" : value + "%"}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
 
           <label className="form-label">Tier</label>
           <div className="tier-row">
@@ -226,22 +348,35 @@ export const Launch = () => {
           </div>
 
           <div style={{ background: "rgba(20,102,255,.07)", border: "1px solid rgba(20,102,255,.2)", color: "var(--solana-blue)", padding: ".7rem", borderRadius: 8, fontSize: ".78rem", marginBottom: "1rem", lineHeight: 1.6 }}>
-            <strong>V2 devnet launch.</strong> Initial SOL funds the bonding curve treasury PDA. Creator never receives LP, and migration locks LP in a PDA.
+            {isCheckingProgram ? (
+              <><strong>Checking devnet program.</strong> Verifying the live launch contract before sending.</>
+            ) : isV2Launch ? (
+              <><strong>V2 devnet launch.</strong> Initial SOL funds the bonding curve treasury PDA. Creator never receives LP, and migration locks LP in a PDA.</>
+            ) : (
+              <><strong>Devnet launch.</strong> V1 program is live; v2 curve deploy is pending, so Launch uses the deployed token-lock program.</>
+            )}
+            {programStatusError && <div style={{ marginTop: ".35rem", color: "var(--muted2)" }}>{programStatusError}</div>}
           </div>
 
-          {!validDistribution && (
+          {!isV2Launch && !validDistribution && (
+            <div style={{ background: "rgba(255,59,59,.08)", border: "1px solid rgba(255,59,59,.2)", color: "var(--red)", padding: ".7rem", borderRadius: 8, fontSize: ".82rem", marginBottom: "1rem" }}>
+              Circulation = {circulation}% (must be at least 55%). Reduce lock % or creator allocation.
+            </div>
+          )}
+
+          {isV2Launch && !validDistribution && (
             <div style={{ background: "rgba(255,59,59,.08)", border: "1px solid rgba(255,59,59,.2)", color: "var(--red)", padding: ".7rem", borderRadius: 8, fontSize: ".82rem", marginBottom: "1rem" }}>
               Circulation = {circulation}% (must be between 15% and 40%). Adjust lock, creator, curve, or airdrop.
             </div>
           )}
 
-          {validDistribution && !validCombinedLiquidity && (
+          {isV2Launch && validDistribution && !validCombinedLiquidity && (
             <div style={{ background: "rgba(255,59,59,.08)", border: "1px solid rgba(255,59,59,.2)", color: "var(--red)", padding: ".7rem", borderRadius: 8, fontSize: ".82rem", marginBottom: "1rem" }}>
               Curve Liquidity % + Circulation % must be at least 50%.
             </div>
           )}
 
-          {validDistribution && validCombinedLiquidity && curveLiquidity + circulation < 55 && (
+          {isV2Launch && validDistribution && validCombinedLiquidity && curveLiquidity + circulation < 55 && (
             <div style={{ background: "rgba(255,205,64,.08)", border: "1px solid rgba(255,205,64,.2)", color: "var(--yellow)", padding: ".7rem", borderRadius: 8, fontSize: ".82rem", marginBottom: "1rem" }}>
               For higher TrustScore, recommended liquidity is at least 55%.
             </div>
@@ -323,8 +458,8 @@ export const Launch = () => {
             </div>
           )}
 
-          <button className="form-sub" onClick={handleLaunch} disabled={busy || !wallet.connected || !validDistribution || !validCombinedLiquidity || !validInitialSol || !name || !symbol}>
-            {busy ? <><Loader size={16} className="spin" style={{ display: "inline", marginRight: 8 }} />Launching...</> : <><Rocket size={16} style={{ display: "inline", marginRight: 8 }} />{wallet.connected ? "Launch token" : "Connect wallet to launch"}</>}
+          <button className="form-sub" onClick={handleLaunch} disabled={busy || isCheckingProgram || !wallet.connected || !validDistribution || !validCombinedLiquidity || !validInitialSol || !name || !symbol}>
+            {busy ? <><Loader size={16} className="spin" style={{ display: "inline", marginRight: 8 }} />Launching...</> : isCheckingProgram ? <><Loader size={16} className="spin" style={{ display: "inline", marginRight: 8 }} />Checking devnet...</> : <><Rocket size={16} style={{ display: "inline", marginRight: 8 }} />{wallet.connected ? "Launch token" : "Connect wallet to launch"}</>}
           </button>
         </div>
 
@@ -358,35 +493,61 @@ export const Launch = () => {
               <div className="dist-hd"><span className="dist-key">Creator (vested)</span><span className="dist-pct" style={{ color: "var(--solana-purple)" }}>{creatorAlloc}%</span></div>
               <div className="dist-bar"><div className="dist-fill" style={{ width: creatorAlloc + "%", background: "var(--solana-purple)" }} /></div>
             </div>
-            <div className="dist-row">
-              <div className="dist-hd"><span className="dist-key">Curve Liquidity</span><span className="dist-pct" style={{ color: "var(--yellow)" }}>{curveLiquidity}%</span></div>
-              <div className="dist-bar"><div className="dist-fill" style={{ width: curveLiquidity + "%", background: "var(--yellow)" }} /></div>
-            </div>
+            {isV2Launch && (
+              <div className="dist-row">
+                <div className="dist-hd"><span className="dist-key">Curve Liquidity</span><span className="dist-pct" style={{ color: "var(--yellow)" }}>{curveLiquidity}%</span></div>
+                <div className="dist-bar"><div className="dist-fill" style={{ width: curveLiquidity + "%", background: "var(--yellow)" }} /></div>
+              </div>
+            )}
             <div className="dist-row">
               <div className="dist-hd"><span className="dist-key">Circulation</span><span className="dist-pct" style={{ color: validDistribution ? "var(--solana-blue)" : "var(--red)" }}>{circulation}%</span></div>
               <div className="dist-bar"><div className="dist-fill" style={{ width: Math.max(0, circulation) + "%", background: validDistribution ? "var(--solana-blue)" : "var(--red)" }} /></div>
             </div>
-            <div className="dist-row">
-              <div className="dist-hd"><span className="dist-key">Airdrop</span><span className="dist-pct" style={{ color: "var(--muted2)" }}>{airdrop}%</span></div>
-              <div className="dist-bar"><div className="dist-fill" style={{ width: airdrop + "%", background: "var(--muted2)" }} /></div>
-            </div>
+            {isV2Launch && (
+              <div className="dist-row">
+                <div className="dist-hd"><span className="dist-key">Airdrop</span><span className="dist-pct" style={{ color: "var(--muted2)" }}>{airdrop}%</span></div>
+                <div className="dist-bar"><div className="dist-fill" style={{ width: airdrop + "%", background: "var(--muted2)" }} /></div>
+              </div>
+            )}
           </div>
 
           <div className="preview-label" style={{ marginTop: "1.5rem" }}>TrustScore Breakdown</div>
           <div style={{ fontSize: ".82rem", color: "var(--muted2)", lineHeight: 1.8, marginBottom: "1.25rem" }}>
-            Lock: +{trustBreakdown.lock.toFixed(0)}<br />
-            Creator: +{trustBreakdown.creator.toFixed(0)}<br />
-            Curve Liquidity: +{trustBreakdown.curve.toFixed(1)}<br />
-            Circulation: +{trustBreakdown.circ.toFixed(1)}<br />
-            Airdrop: +{trustBreakdown.air.toFixed(0)}<br />
-            Burn: +{trustBreakdown.burn.toFixed(0)}
+            {isV2Launch ? (
+              <>
+                Lock: +{trustBreakdown.lock.toFixed(0)}<br />
+                Creator: +{trustBreakdown.creator.toFixed(0)}<br />
+                Curve Liquidity: +{trustBreakdown.curve.toFixed(1)}<br />
+                Circulation: +{trustBreakdown.circ.toFixed(1)}<br />
+                Airdrop: +{trustBreakdown.air.toFixed(0)}<br />
+                Burn: +{trustBreakdown.burn.toFixed(0)}
+              </>
+            ) : (
+              <>
+                Lock days: +{trustBreakdown.days.toFixed(0)}<br />
+                Lock: +{trustBreakdown.lock.toFixed(0)}<br />
+                Airdrop: +{trustBreakdown.air.toFixed(0)}<br />
+                Burn: +{trustBreakdown.burn.toFixed(0)}
+              </>
+            )}
           </div>
 
           <div className="preview-label" style={{ marginTop: "1.5rem" }}>Vesting schedule</div>
           <div style={{ fontSize: ".82rem", color: "var(--muted2)", lineHeight: 1.8 }}>
-            Day 30: 33% of creator vault ({(creatorAlloc * 0.33).toFixed(2)}% of supply)<br />
-            Day 60: 33% of creator vault ({(creatorAlloc * 0.33).toFixed(2)}% of supply)<br />
-            Day 90: 34% of creator vault ({(creatorAlloc * 0.34).toFixed(2)}% of supply)<br />
+            {isV2Launch ? (
+              <>
+                Day 30: 33% of creator vault ({(creatorAlloc * 0.33).toFixed(2)}% of supply)<br />
+                Day 60: 33% of creator vault ({(creatorAlloc * 0.33).toFixed(2)}% of supply)<br />
+                Day 90: 34% of creator vault ({(creatorAlloc * 0.34).toFixed(2)}% of supply)<br />
+              </>
+            ) : (
+              <>
+                Day 30: 2% of creator allocation ({creatorAlloc > 0 ? (0.02 * creatorAlloc).toFixed(2) : "0"}% of supply)<br />
+                Day 60: 3% of creator allocation ({creatorAlloc > 0 ? (0.03 * creatorAlloc).toFixed(2) : "0"}% of supply)<br />
+                Day 90: 5% of creator allocation ({creatorAlloc > 0 ? (0.05 * creatorAlloc).toFixed(2) : "0"}% of supply)<br />
+                Remaining allocation released via Add-to-Circulation.<br />
+              </>
+            )}
             Total creator: <span style={{ color: "var(--text)" }}>{creatorAlloc}%</span> of supply
           </div>
         </div>

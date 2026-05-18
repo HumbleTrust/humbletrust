@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAnchorWallet, useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { AnchorProvider } from "@coral-xyz/anchor";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
@@ -13,7 +13,14 @@ import {
   TrendingUp,
   Zap,
 } from "lucide-react";
-import { buyOnCurveV2, findV2Pdas, getProgramV2, sellOnCurveV2 } from "../lib/program";
+import {
+  PROGRAM_ID_V2_PK,
+  buyOnCurveV2,
+  findV2Pdas,
+  getProgramV2,
+  isProgramExecutable,
+  sellOnCurveV2,
+} from "../lib/program";
 
 const PREVIEW_TOKEN_RESERVE = 350_000_000;
 const PREVIEW_SOL_RESERVE = 0.5;
@@ -107,6 +114,20 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
   const [busy, setBusy] = useState<"buy" | "sell" | null>(null);
   const [txSig, setTxSig] = useState<string | null>(null);
   const [tradeError, setTradeError] = useState<string | null>(null);
+  const [v2Available, setV2Available] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    isProgramExecutable(connection, PROGRAM_ID_V2_PK)
+      .then((available) => {
+        if (mounted) setV2Available(available);
+      })
+      .catch((err) => {
+        console.warn("Unable to check v2 curve program on devnet", err);
+        if (mounted) setV2Available(false);
+      });
+    return () => { mounted = false; };
+  }, [connection]);
 
   const solIn = parsePositive(solAmount, 0);
   const previewSolReserve = parsePositive(reserveSol, PREVIEW_SOL_RESERVE);
@@ -122,13 +143,18 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
 
   const validMint = mintInput.trim().length > 30;
   const validCreator = creatorInput.trim().length > 30;
-  const canTrade = wallet.connected && busy === null && validMint && validCreator;
+  const canUseCurve = v2Available === true;
+  const canTrade = canUseCurve && wallet.connected && busy === null && validMint && validCreator;
   const solscanUrl = validMint
     ? `https://solscan.io/token/${mintInput.trim()}?cluster=devnet`
     : null;
 
   const refreshReserves = async () => {
     if (!validMint) return;
+    if (!canUseCurve) {
+      setReserveError("V2 curve program is not deployed on devnet yet.");
+      return;
+    }
     setReservesBusy(true);
     setReserveError(null);
     try {
@@ -158,6 +184,9 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
     if (!anchorWallet || !wallet.connected) return;
     setBusy("buy"); setTradeError(null); setTxSig(null);
     try {
+      const deployed = await isProgramExecutable(connection, PROGRAM_ID_V2_PK);
+      setV2Available(deployed);
+      if (!deployed) throw new Error("V2 curve program is not deployed on devnet yet.");
       const mint = new PublicKey(mintInput.trim());
       const creator = new PublicKey(creatorInput.trim());
       const ata = getAssociatedTokenAddressSync(mint, anchorWallet.publicKey);
@@ -177,6 +206,9 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
     if (!anchorWallet || !wallet.connected) return;
     setBusy("sell"); setTradeError(null); setTxSig(null);
     try {
+      const deployed = await isProgramExecutable(connection, PROGRAM_ID_V2_PK);
+      setV2Available(deployed);
+      if (!deployed) throw new Error("V2 curve program is not deployed on devnet yet.");
       const mint = new PublicKey(mintInput.trim());
       const creator = new PublicKey(creatorInput.trim());
       const ata = getAssociatedTokenAddressSync(mint, anchorWallet.publicKey);
@@ -197,8 +229,22 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
       <div className="sec-eyebrow">Trade</div>
       <h2 className="sec-h2">Trade <span className="hl-green">protected</span> tokens</h2>
       <p className="sec-sub">
-        V2 devnet tokens trade instantly through the HumbleTrust bonding curve, then migrate to Raydium after the SOL threshold is reached.
+        {canUseCurve
+          ? "V2 devnet tokens trade instantly through the HumbleTrust bonding curve, then migrate to Raydium after the SOL threshold is reached."
+          : "V2 curve trading is waiting for the devnet program deploy. Launch currently uses the live v1 token-lock flow."}
       </p>
+
+      {v2Available === false && (
+        <div className="trade-alert">
+          <AlertTriangle size={18} color="var(--orange)" style={{ flexShrink: 0, marginTop: 2 }} />
+          <div>
+            <div className="trade-alert-title">V2 curve deploy pending</div>
+            <div className="trade-alert-text">
+              The configured v2 program id is not executable on devnet yet, so curve buy/sell actions are disabled.
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="trade-alert">
         <AlertTriangle size={18} color="var(--orange)" style={{ flexShrink: 0, marginTop: 2 }} />
@@ -217,7 +263,7 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
             <div className="panel-title">
               <Zap size={16} color="var(--green-neon)" /> Mini Swap
             </div>
-            <span className="network-pill">DEVNET</span>
+            <span className="network-pill">{canUseCurve ? "DEVNET" : "V2 PENDING"}</span>
           </div>
 
           <label className="form-label">Token mint</label>
@@ -292,7 +338,7 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
             </div>
             <div className="panel-actions">
               <span className="network-pill blue">{reserveSource === "chain" ? "LIVE DEVNET" : "PREVIEW"}</span>
-              <button className="reserve-refresh" onClick={refreshReserves} disabled={!validMint || reservesBusy}>
+              <button className="reserve-refresh" onClick={refreshReserves} disabled={!validMint || reservesBusy || !canUseCurve}>
                 <RefreshCw size={13} className={reservesBusy ? "spin" : undefined} /> Refresh
               </button>
             </div>
