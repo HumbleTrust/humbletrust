@@ -2700,16 +2700,18 @@ fn mint_to_vault<'info>(
 }
 
 fn percent_of(amount: u64, percent: u64) -> Result<u64> {
-    amount
-        .checked_mul(percent)
+    (amount as u128)
+        .checked_mul(percent as u128)
         .and_then(|v| v.checked_div(100))
+        .and_then(|v| u64::try_from(v).ok())
         .ok_or(error!(HumbleV2Error::MathOverflow))
 }
 
 fn bps_amount(amount: u64, bps: u64) -> Result<u64> {
-    amount
-        .checked_mul(bps)
-        .and_then(|v| v.checked_div(FEE_DENOMINATOR_BPS))
+    (amount as u128)
+        .checked_mul(bps as u128)
+        .and_then(|v| v.checked_div(FEE_DENOMINATOR_BPS as u128))
+        .and_then(|v| u64::try_from(v).ok())
         .ok_or(error!(HumbleV2Error::MathOverflow))
 }
 
