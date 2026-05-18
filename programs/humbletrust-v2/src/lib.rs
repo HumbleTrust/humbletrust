@@ -1483,7 +1483,7 @@ pub struct CreateTokenWithLockV2<'info> {
         seeds = [b"token_metadata_v2", mint.key().as_ref()],
         bump
     )]
-    pub token_metadata: Account<'info, TokenMetadataV2>,
+    pub token_metadata: Box<Account<'info, TokenMetadataV2>>,
 
     #[account(
         init,
@@ -1491,7 +1491,7 @@ pub struct CreateTokenWithLockV2<'info> {
         mint::decimals = 9,
         mint::authority = token_metadata
     )]
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
     #[account(
         init,
@@ -1501,7 +1501,7 @@ pub struct CreateTokenWithLockV2<'info> {
         seeds = [b"locked_vault_v2", mint.key().as_ref()],
         bump
     )]
-    pub locked_vault: Account<'info, TokenAccount>,
+    pub locked_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init,
@@ -1511,7 +1511,7 @@ pub struct CreateTokenWithLockV2<'info> {
         seeds = [b"creator_vault_v2", mint.key().as_ref()],
         bump
     )]
-    pub creator_vault: Account<'info, TokenAccount>,
+    pub creator_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init,
@@ -1521,7 +1521,7 @@ pub struct CreateTokenWithLockV2<'info> {
         seeds = [b"curve_pool_vault_v2", mint.key().as_ref()],
         bump
     )]
-    pub curve_pool_vault: Account<'info, TokenAccount>,
+    pub curve_pool_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init,
@@ -1531,7 +1531,7 @@ pub struct CreateTokenWithLockV2<'info> {
         seeds = [b"circulation_vault_v2", mint.key().as_ref()],
         bump
     )]
-    pub circulation_vault: Account<'info, TokenAccount>,
+    pub circulation_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init,
@@ -1541,7 +1541,7 @@ pub struct CreateTokenWithLockV2<'info> {
         seeds = [b"airdrop_vault_v2", mint.key().as_ref()],
         bump
     )]
-    pub airdrop_vault: Account<'info, TokenAccount>,
+    pub airdrop_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init,
@@ -1550,7 +1550,7 @@ pub struct CreateTokenWithLockV2<'info> {
         seeds = [b"curve_treasury_sol_v2", mint.key().as_ref()],
         bump
     )]
-    pub curve_treasury_sol: Account<'info, CurveTreasurySol>,
+    pub curve_treasury_sol: Box<Account<'info, CurveTreasurySol>>,
 
     #[account(
         init,
@@ -1559,7 +1559,7 @@ pub struct CreateTokenWithLockV2<'info> {
         seeds = [b"lp_lock_vault_v2", mint.key().as_ref()],
         bump
     )]
-    pub lp_lock_vault: Account<'info, LpLockVault>,
+    pub lp_lock_vault: Box<Account<'info, LpLockVault>>,
 
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
@@ -1994,17 +1994,17 @@ pub struct LockLpTokensV2<'info> {
         seeds = [b"token_metadata_v2", token_mint.key().as_ref()],
         bump = token_metadata.bump
     )]
-    pub token_metadata: Account<'info, TokenMetadataV2>,
+    pub token_metadata: Box<Account<'info, TokenMetadataV2>>,
 
-    pub token_mint: Account<'info, Mint>,
-    pub lp_mint: Account<'info, Mint>,
+    pub token_mint: Box<Account<'info, Mint>>,
+    pub lp_mint: Box<Account<'info, Mint>>,
 
     #[account(
         mut,
         constraint = creator_lp_account.owner == creator.key() @ HumbleV2Error::InvalidTokenAccountOwner,
         constraint = creator_lp_account.mint == lp_mint.key() @ HumbleV2Error::InvalidMintForTokenAccount
     )]
-    pub creator_lp_account: Account<'info, TokenAccount>,
+    pub creator_lp_account: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init,
@@ -2013,7 +2013,7 @@ pub struct LockLpTokensV2<'info> {
         seeds = [b"lp_lock_v2", token_mint.key().as_ref()],
         bump
     )]
-    pub lp_lock: Account<'info, LpLockV2>,
+    pub lp_lock: Box<Account<'info, LpLockV2>>,
 
     #[account(
         init,
@@ -2023,7 +2023,7 @@ pub struct LockLpTokensV2<'info> {
         seeds = [b"lp_vault_v2", token_mint.key().as_ref()],
         bump
     )]
-    pub lp_vault: Account<'info, TokenAccount>,
+    pub lp_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init,
@@ -2032,7 +2032,7 @@ pub struct LockLpTokensV2<'info> {
         seeds = [b"lp_fee_pool_v2", token_mint.key().as_ref()],
         bump
     )]
-    pub lp_fee_pool: Account<'info, LpFeePoolV2>,
+    pub lp_fee_pool: Box<Account<'info, LpFeePoolV2>>,
 
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
