@@ -1,4 +1,4 @@
-import { Shield, Settings, DollarSign, Rocket, TrendingUp, Lock, Flame, Vote, Snowflake, Eye, Clock, Award, Users } from "lucide-react";
+import { Shield, Settings, DollarSign, Rocket, TrendingUp, Lock, Flame, Eye, Clock, Award, Users, BarChart3, Database, FileCheck } from "lucide-react";
 
 export const Landing = ({ goLaunch, goDiscover }: { goLaunch: () => void; goDiscover: () => void }) => (
   <>
@@ -8,82 +8,83 @@ export const Landing = ({ goLaunch, goDiscover }: { goLaunch: () => void; goDisc
         Live on Devnet · Solana · Anchor 0.32
       </div>
       <h1 className="hero-h1">
-        The <span className="hl-green">Anti-Rug</span> Token<br />
-        <span className="hl-solana">Launchpad for Solana</span>
+        HumbleTrust<br />
+        <span className="hl-solana">Trust & Safety infrastructure for Solana</span>
       </h1>
       <p className="hero-p">
-        Every token locked on-chain. Every creator scored for trust.
-        Protection from block one — no rug pulls, no excuses.
+        Launch protected tokens, route early trading through a bonding curve, score risk from the first block,
+        and prepare liquidity for locked DEX migration.
       </p>
       <div className="hero-btns">
         <button className="btn-p" onClick={goLaunch}>
-          <Rocket size={16} /> Launch Your Token
+          <Rocket size={16} /> Launch Protected Token
         </button>
         <button className="btn-s" onClick={goDiscover}>
           <Eye size={16} /> Explore Tokens
         </button>
       </div>
       <div className="hero-stats">
-        <div className="hstat"><span className="hstat-n">$5</span><div className="hstat-l">Standard Launch</div></div>
-        <div className="hstat"><span className="hstat-n">$25</span><div className="hstat-l">Premium Launch</div></div>
-        <div className="hstat"><span className="hstat-n">0-100</span><div className="hstat-l">Trust Score</div></div>
-        <div className="hstat"><span className="hstat-n">100%</span><div className="hstat-l">On-Chain Rules</div></div>
+        <div className="hstat"><span className="hstat-n">v2</span><div className="hstat-l">Devnet Program</div></div>
+        <div className="hstat"><span className="hstat-n">1B</span><div className="hstat-l">Fixed Supply</div></div>
+        <div className="hstat"><span className="hstat-n">0-100</span><div className="hstat-l">TrustScore</div></div>
+        <div className="hstat"><span className="hstat-n">NFT</span><div className="hstat-l">Launch Certificate</div></div>
       </div>
     </section>
 
     <section>
-      <div className="sec-eyebrow">How It Works</div>
-      <h2 className="sec-h2">Four steps. Every rule enforced on-chain.</h2>
-      <p className="sec-sub">No promises, no UI tricks. Real Solana program does the work.</p>
+      <div className="sec-eyebrow">How v2 Works</div>
+      <h2 className="sec-h2">Trust rules first. Trading second. Migration last.</h2>
+      <p className="sec-sub">The current production frontend is wired to the v2 devnet program.</p>
       <div className="how-grid">
         <div className="how-card">
           <span className="how-n">01</span>
           <div className="how-icon-wrap"><Settings size={20} /></div>
-          <div className="how-t">Set Parameters</div>
-          <div className="how-d">Choose lock % (30–80%), lock duration (30–360 days), creator allocation (0–10%), burn option (25% or 50%), airdrop config, anti-bot delay.</div>
+          <div className="how-t">Set Protected Parameters</div>
+          <div className="how-d">Choose lock 30-80%, creator 0-5%, curve liquidity 25-50%, airdrop 0-5%, burn 25/50%, initial SOL, and anti-bot delay.</div>
         </div>
         <div className="how-card">
           <span className="how-n">02</span>
           <div className="how-icon-wrap"><DollarSign size={20} /></div>
-          <div className="how-t">Pay ~$5 (or $25 Premium)</div>
-          <div className="how-d">Flat fee in SOL goes to the protocol treasury. Premium tier unlocks featured listing and custom vesting.</div>
+          <div className="how-t">Fund The Curve</div>
+          <div className="how-d">Initial SOL goes to the curve treasury PDA. It is not sent to the creator, not used as Raydium LP, and does not give control.</div>
         </div>
         <div className="how-card">
           <span className="how-n">03</span>
-          <div className="how-icon-wrap"><Rocket size={20} /></div>
-          <div className="how-t">Launch Protected</div>
-          <div className="how-d">Token mints with locked supply on-chain. Anti-bot delay holds back snipers. Your Trust Score is calculated immediately.</div>
+          <div className="how-icon-wrap"><TrendingUp size={20} /></div>
+          <div className="how-t">Trade Instantly</div>
+          <div className="how-d">Buy and sell are live on the HumbleTrust bonding curve with 1% total fee, anti-bot gating, and wallet balance-aware swap UX.</div>
         </div>
         <div className="how-card">
           <span className="how-n">04</span>
-          <div className="how-icon-wrap"><TrendingUp size={20} /></div>
-          <div className="how-t">Build Trust</div>
-          <div className="how-d">Score grows as you hit vesting milestones (30/60/90), burn tokens, gain community votes. High scores unlock airdrop rewards.</div>
+          <div className="how-icon-wrap"><Award size={20} /></div>
+          <div className="how-t">Prove The Launch</div>
+          <div className="how-d">Creators can receive a Token-2022 NonTransferable Launch Certificate NFT linked to the on-chain launch record.</div>
         </div>
       </div>
     </section>
 
     <section className="feat-bg">
-      <div className="sec-eyebrow">Protection Features</div>
-      <h2 className="sec-h2">Every angle covered. <span className="hl-solana">On-chain.</span></h2>
-      <p className="sec-sub">Nine layers of protection enforced by smart contracts — not promises.</p>
+      <div className="sec-eyebrow">Current Status</div>
+      <h2 className="sec-h2">What is live, and what is still being built.</h2>
+      <p className="sec-sub">HumbleTrust is devnet alpha. The app is usable, but mainnet is blocked until audits, indexing, and DEX migration are complete.</p>
       <div className="feat-grid">
         {[
-          { icon: <Lock size={18} />, t: "Locked Supply", d: "30–80% of supply locked to PDA vault. No creator access.", s: "active", l: "ACTIVE" },
-          { icon: <Clock size={18} />, t: "Time-Lock", d: "30–360 day lock duration enforced on-chain via Clock sysvar.", s: "active", l: "ACTIVE" },
-          { icon: <Flame size={18} />, t: "Burn on Unlock", d: "25% or 50% of locked supply burned at unlock time.", s: "active", l: "ACTIVE" },
-          { icon: <Award size={18} />, t: "Creator Vesting", d: "Day 30 / 60 / 90 unlock tranches. No instant dumps.", s: "active", l: "ACTIVE" },
-          { icon: <Shield size={18} />, t: "Anti-Bot Delay", d: "0–600s post-launch trading lock blocks sniper bots.", s: "active", l: "ACTIVE" },
-          { icon: <Vote size={18} />, t: "Community Voting", d: "Token holders vote. Complaints can freeze malicious tokens.", s: "active", l: "ACTIVE" },
-          { icon: <Snowflake size={18} />, t: "Auto Freeze", d: "20+ complaints + score < 30 → automatic on-chain freeze.", s: "active", l: "ACTIVE" },
-          { icon: <Users size={18} />, t: "Airdrop Epochs", d: "Monthly airdrops gated by min Trust Score ≥ 56.", s: "active", l: "ACTIVE" },
-          { icon: <Lock size={18} />, t: "LP Lock (Raydium)", d: "Liquidity tokens auto-locked in PDA. Coming Phase 4.", s: "soon", l: "PHASE 4" },
-        ].map((f, i) => (
-          <div key={i} className="feat-card">
+          { icon: <Lock size={18} />, t: "PDA Vault Distribution", d: "Locked, creator, curve, circulation, and airdrop vaults are split and validated on-chain.", s: "active", l: "LIVE" },
+          { icon: <TrendingUp size={18} />, t: "Bonding Curve Swap", d: "Devnet buy and sell are live with wallet token picker, MAX sell, and Solscan links.", s: "active", l: "LIVE" },
+          { icon: <Shield size={18} />, t: "TrustScore v2", d: "Formula uses lock, creator %, curve %, circulation %, airdrop %, and burn bonus, normalized to 100.", s: "active", l: "LIVE" },
+          { icon: <FileCheck size={18} />, t: "Token Metadata", d: "New v2 launches create Metaplex metadata during the launch transaction.", s: "active", l: "LIVE" },
+          { icon: <Award size={18} />, t: "Launch Certificate NFT", d: "Token-2022 NonTransferable certificate can be minted after v2 launch and linked to the certificate PDA.", s: "active", l: "LIVE" },
+          { icon: <Flame size={18} />, t: "Locked Vault Burn", d: "25% or 50% burn option applies to the locked allocation without breaking curve liquidity.", s: "active", l: "LIVE" },
+          { icon: <Clock size={18} />, t: "Auto-Raydium Migration", d: "Threshold state and trigger reward exist. Real Raydium/OpenBook CPI pool creation is still in progress.", s: "soon", l: "IN PROGRESS" },
+          { icon: <Database size={18} />, t: "Chain Discover Index", d: "Discover currently uses browser cache. Program-account/event indexing is the next sync layer.", s: "soon", l: "NEXT" },
+          { icon: <BarChart3 size={18} />, t: "Real Market Chart", d: "Current chart previews the curve. Real candles, trades, holders, and top traders are next.", s: "soon", l: "NEXT" },
+          { icon: <Users size={18} />, t: "Creator Reputation", d: "PDA groundwork exists. Profile history and score effects still need frontend integration.", s: "soon", l: "NEXT" },
+        ].map((f) => (
+          <div key={f.t} className="feat-card">
             <div className="feat-icon">{f.icon}</div>
             <div className="feat-t">{f.t}</div>
             <div className="feat-d">{f.d}</div>
-            <div className={"feat-status " + (f.s === "active" ? "fs-active" : f.s === "soon" ? "fs-soon" : "fs-plan")}>{f.l}</div>
+            <div className={"feat-status " + (f.s === "active" ? "fs-active" : "fs-soon")}>{f.l}</div>
           </div>
         ))}
       </div>

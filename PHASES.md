@@ -1,110 +1,204 @@
-# HumbleTrust — Roadmap & Phases
+# HumbleTrust - Project Phases
 
-> Anti-rug token launchpad for Solana. Trust enforced by code, not promises.
+HumbleTrust is Trust & Safety infrastructure for Solana. The platform combines protected token creation, bonding-curve liquidity, TrustScore, creator accountability, and future DEX migration into one verifiable launch system.
 
-**Program ID (devnet):** `Gcz7NMtCqKdvzh53DF1ecoEYe7Hma9kWwdtCmmeBaxRi`
-**Fee wallet:** `FYRtG8JMun6vqucUaXGcSZrWib6gNVEW4dd2LEP92mGM` (Jupiter mainnet)
-**Stack:** Anchor 0.32 / Solana 3.x / React 18 + Vite / TS
+**Frontend:** https://humbletrust.vercel.app
+**v1 legacy program:** `Gcz7NMtCqKdvzh53DF1ecoEYe7Hma9kWwdtCmmeBaxRi`
+**v2 active devnet program:** `FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr`
+**Last synced:** May 19, 2026
 
----
+## Current Status
 
-## ✅ Phase 1 — Environment
-- WSL Ubuntu, Rust 1.95, Solana 3.1.15, Anchor 0.32.1, Node 20, Yarn 1.22 — DONE
+| Area | Status | Notes |
+| --- | --- | --- |
+| v1 legacy program | Complete | Kept for earlier devnet tokens and compatibility |
+| v2 token creation | Complete on devnet | Fixed 1B supply, five vaults, initial SOL, metadata, burn, TrustScore |
+| v2 bonding curve | Complete on devnet | Buy/sell, anti-bot delay, 1% fee, constant product math |
+| v2 frontend launch | Complete on production Vercel | Launch form uses v2 fields and shows TrustScore breakdown |
+| v2 frontend trade | Complete on production Vercel | Buy/sell, wallet token picker, MAX button, chart preview |
+| Auto-Raydium migration | In progress | Threshold/state/reward hook exists; real CPI pool creation still pending |
+| Creator reputation | In progress | PDA groundwork exists; profile/history integration pending |
+| Launch certificate NFT | Complete on devnet | Token-2022 NonTransferable certificate mint + certificate PDA |
+| Discover indexing | In progress | Current frontend uses browser cache; chain indexing is next |
+| Mainnet readiness | Planned | Requires tests, audit, multisig, RPC/monitoring plan |
 
-## ✅ Phase 2 — Core contract
-- 10 instructions (create_token_with_lock, vesting, voting, freeze, airdrop, verify_creator)
-- 4 PDAs (token_metadata, locked_vault, creator_vault, circulation_vault, rewards_vault)
-- TrustScore engine (calculate_initial + recalculate)
-- Vesting 30/60/90 enforced
-- Tiered fees ($5 Standard / $25 Premium) in lamports
-- Anti-bot delay 0–600s
-- Deployed on devnet, upgradeable
+## Phase 1 - Environment
 
-## 🚧 Phase 3 — Frontend + UX (current)
-- ✅ React+Vite scaffold with brand theme
-- ✅ Wallet adapter (Phantom + Solflare)
-- ✅ Logo upload + Hex frames everywhere
-- ✅ Launch form with live TrustScore ring
-- ✅ Discover page with hex grid
-- ✅ Wired to deployed contract via Anchor client
-- 📋 **Phase 3.5 (TODO):** Real Premium perks (custom vesting, featured listing, score boost, airdrop priority)
-- 📋 **Phase 3.6 (TODO):** Jupiter swap integration in Trade tab + TrustScore badges on all tokens
+**Status:** Complete
 
-## 🚧 Phase 4 — Initial Liquidity (devnet, in progress)
-**Goal:** Created tokens automatically appear on DEXes (Raydium → Jupiter → DexScreener → Birdeye)
+- WSL Ubuntu development environment.
+- Rust/Solana/Anchor toolchain.
+- Node/Vite frontend environment.
+- GitHub and Vercel deployment flow.
 
-### What we add to contract:
-- New instruction `add_initial_liquidity(sol_amount, token_amount, lock_days)`
-- Raydium AMM v4 CPI integration
-- LP tokens auto-locked in `lp_lock_vault` PDA
-- Lock duration enforced on-chain
-- New struct `LpLock { mint, unlock_time, lp_amount, claimed_fees }`
-- New instruction `claim_lp_fees` (monthly distribution)
+## Phase 2 - v1 Core Contract
 
-### Flow:
-1. Creator creates token (Phase 2 flow, no change)
-2. Creator calls `add_initial_liquidity` with X SOL + Y tokens from creator_vault
-3. Contract creates Raydium pool via CPI (token / SOL pair)
-4. LP tokens sent to `lp_lock_vault` PDA (creator CANNOT withdraw)
-5. Pool indexed by Jupiter in 5–15 min, by DexScreener in ~1h
-6. Trading happens on Raydium, LP fees accrue in PDA
-7. After 30 days, creator can `claim_lp_fees` (split below)
+**Status:** Complete / legacy
 
-### Economic model (revised):
-- LP fees from Raydium = 0.25% per trade (industry standard)
-- Distribution from accumulated fees:
-  - **50%** creator (Standard) / **60%** creator (Premium)
-  - **30%** treasury (FEE_WALLET)
-  - **20%** DAO / airdrop pool
-- **No additional fee on top** — we share Raydium's existing fee
+- Original Anchor program deployed on devnet.
+- Locking, creator vault, circulation vault, rewards vault.
+- TrustScore and token safety mechanics.
+- Kept as a stable legacy program for older test tokens.
 
-## 🚧 Phase 4.5 — Creator Reputation (devnet, in progress)
-- New PDA `creator_reputation` per wallet
-- Tracks: total_launches, avg_trust_score, total_locked_value, complaints_count, successful_unlocks
-- Bonus: each successful launch (no complaints, completed vesting) → +5 to next launch's initial TrustScore
-- Penalty: complaints or freeze → score reset
-- Displayed on creator profile page (DISCOVER)
+## Phase 3 - Frontend Foundation
 
-## 🚧 Phase 4.6 — Launch Certificate NFT (Soulbound) (devnet, in progress)
-- Non-transferable NFT minted to creator at launch
-- Metadata includes: lock %, lock days, vesting schedule, initial TrustScore, timestamp, Program ID
-- Functions as proof-of-launch (verifiable on-chain)
-- Shows in Phantom as "Humble.Trust Launch Certificate #N"
-- Implementation: Token-2022 with NonTransferable extension
+**Status:** Complete
 
-## 🚧 Phase 5 — Mainnet readiness (in progress)
-- ✅ Wash trading detection — record_trade is oracle-only, suspected_wash from oracle
-- ✅ Dynamic fees — GlobalState holds configurable standard/premium lamports
-- ✅ update_fee_parameters — authority adjusts fees without redeploy (tracks SOL price)
-- ✅ Emergency pause — toggle_launches_pause halts new launches instantly
-- ✅ upgrade_authority field — points to Squads multisig before mainnet
-- 📋 Pyth Oracle live integration — read SOL/USD price feed, auto-compute fee lamports
-- 📋 Squads v4 multisig setup — transfer BPFUpgradeableLoader upgrade authority
-- 📋 Security audit — CertiK / Halborn / OtterSec
-- 📋 Fresh mainnet deploy (new Program ID, new IDL)
+- React + Vite + TypeScript frontend.
+- Phantom/Solflare wallet adapter.
+- Launch, Discover, Trade, About navigation.
+- Solscan devnet links.
+- Production deploy on Vercel.
 
-## 📋 Phase 6 — Advanced features
-- Time-bound tax breaks (higher launch fee + 0% trade fees first 30 days)
-- Vault analytics dashboard for creators
-- Mobile PWA
-- API for 3rd-party integrations
+## Phase 4 - v2 Trust & Safety Launch System
 
----
+**Status:** Mostly complete on devnet
 
-## 🆚 vs Competitors (as of May 2026)
+Implemented:
 
-| | Pump.fun | Believe | Moonshot | **HumbleTrust** |
-|---|---|---|---|---|
-| Fee | $0.02 | ~$5 | ~$1 | $5–25 |
-| Anti-rug on-chain | ❌ | ❌ | ⚠️ Manual | ✅ Enforced |
-| TrustScore | ❌ | ❌ | ❌ | ✅ 0–100 dynamic |
-| LP lock | Burn after graduation | Burn | Manual | ✅ PDA lock + claim |
-| Vesting | ❌ | ❌ | Optional | ✅ 30/60/90 enforced |
-| Anti-bot delay | ❌ | ❌ | ❌ | ✅ 0–600s |
-| Voting/freeze | ❌ | ❌ | ❌ | ✅ Community + auto |
-| Creator earns | ❌ | Trading fee | ❌ | ✅ LP fee share |
-| Reputation tracking | ❌ | ❌ | ❌ | ✅ (Phase 4.5) |
+- New v2 program ID.
+- `create_token_with_lock_v2`.
+- Fixed supply: 1B tokens, 9 decimals.
+- PDA supply architecture:
+  - `locked_vault`
+  - `creator_vault`
+  - `curve_pool_vault`
+  - `curve_treasury_sol`
+  - `circulation_vault`
+  - `airdrop_vault`
+  - `lp_lock_vault`
+- Initial SOL goes to the bonding-curve treasury PDA.
+- Curve Liquidity % goes to the curve token pool PDA.
+- Creator allocation limited to 0-5%.
+- Airdrop allocation limited to 0-5%.
+- Curve liquidity limited to 25-50%.
+- Circulation limited to 15-40%.
+- `Q + R >= 50` enforced.
+- Supply sum equals 100%.
+- Burn option on Locked Vault: 25% or 50%.
+- v2 TrustScore formula normalized to 0-100.
+- Metaplex metadata creation for new mints.
+- Mint authority revoked after launch.
 
-## 🎯 Tagline
-"Pump.fun is fast and cheap, but every other token is a rug.
-HumbleTrust costs more — but every token is structurally protected. And you can see exactly how much by looking at its TrustScore."
+Remaining:
+
+- More end-to-end Anchor tests around every validation branch.
+- Better transaction/event indexing for frontend state.
+
+## Phase 4b - Bonding Curve Trading
+
+**Status:** Complete on devnet
+
+Implemented:
+
+- `buy_v2`.
+- `sell_v2`.
+- Constant product curve math.
+- u128 intermediate calculations.
+- 1% total fee:
+  - 0.5% platform
+  - 0.5% creator
+- Anti-bot delay.
+- `is_migrated` guard blocks curve trading after migration state.
+- Frontend Mini Swap supports buy and sell.
+- Wallet token picker and MAX sell balance are live.
+
+Remaining:
+
+- Event-backed candles and real trade history.
+- Better slippage UX.
+- More devnet edge-case testing for very small and very large amounts.
+
+## Phase 4c - Auto-Raydium Migration
+
+**Status:** In progress
+
+Implemented:
+
+- Migration threshold constant: 50 SOL.
+- `migrate_to_raydium_v2` threshold check.
+- Migration trigger wallet tracking.
+- 0.1 SOL reward hook for the trigger wallet.
+- `is_migrated` state flag.
+- LP lock destination field.
+
+Not implemented yet:
+
+- Real Raydium AMM/OpenBook CPI pool creation.
+- Real LP token mint/receipt into `lp_lock_vault`.
+- Burn of leftover curve tokens after actual DEX pool creation.
+- Jupiter/DexScreener indexing verification.
+
+Next decision:
+
+- Continue Raydium AMM v4/OpenBook route, or spike Orca/Meteora if Raydium devnet CPI is too unstable.
+
+## Phase 4.5 - Creator Reputation
+
+**Status:** In progress
+
+Planned/partial:
+
+- Creator reputation PDA per wallet.
+- Track launches, complaints, score history, successful unlocks.
+- Creator profile page.
+- Clean-launch bonus for future launches.
+
+Next:
+
+- Connect profile UI to real program accounts.
+- Decide exact score effects before mainnet.
+
+## Phase 4.6 - Launch Certificate NFT
+
+**Status:** Complete on devnet
+
+Implemented:
+
+- Token-2022 NonTransferable certificate mint.
+- Minted to creator after successful v2 launch.
+- Certificate PDA seeded by token mint.
+- Certificate record stores creator, token mint, certificate mint, lock %, lock days, initial TrustScore, tier, airdrop %, burn option, timestamp, and serial number.
+- `global_state_v2` initialized on devnet for certificate serial numbers.
+
+Remaining:
+
+- Rich artwork/collection metadata.
+- Better display in Discover/creator profiles.
+- Tests for duplicate certificate prevention and PDA data integrity.
+
+## Phase 5 - Mainnet Readiness
+
+**Status:** Planned
+
+Required before mainnet:
+
+- Full v2 test suite.
+- Program audit.
+- Squads multisig for upgrade authority.
+- Backend/indexer for Discover and analytics.
+- Production RPC provider and monitoring.
+- Incident response process.
+- Clear mainnet launch checklist.
+
+## Phase 6 - Ecosystem
+
+**Status:** Future
+
+Ideas:
+
+- Public TrustScore API.
+- Creator dashboards.
+- Holder analytics.
+- Mobile PWA.
+- Governance and reporting workflows.
+- Partner integrations.
+
+## Immediate Next Work
+
+1. Replace localStorage Discover with chain-indexed program account discovery.
+2. Replace chart preview with real event-backed candles and transaction history.
+3. Implement and test real Auto-Raydium migration CPI or choose an alternative DEX path.
+4. Finish creator reputation UI.
+5. Add certificate NFT display in Discover/profile.
+6. Add complete v2 Anchor tests.

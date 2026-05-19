@@ -1,6 +1,18 @@
 import { Program, AnchorProvider, BN, Idl } from "@coral-xyz/anchor";
-import { PublicKey, Keypair, SystemProgram, SYSVAR_RENT_PUBKEY, Connection, LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { PublicKey, Keypair, SystemProgram, SYSVAR_RENT_PUBKEY, Connection, LAMPORTS_PER_SOL, Transaction } from "@solana/web3.js";
+import {
+  AuthorityType,
+  createAssociatedTokenAccountInstruction,
+  createInitializeMint2Instruction,
+  createInitializeNonTransferableMintInstruction,
+  createMintToInstruction,
+  createSetAuthorityInstruction,
+  ExtensionType,
+  getAssociatedTokenAddressSync,
+  getMintLen,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 import idlJson from "./idl.json";
 import idlV2Json from "./idl_v2.json";
 import { PROGRAM_ID, PROGRAM_ID_V2, FEE_WALLET, HUMBLETRUST_METRICS_AUTHORITY } from "./constants";
@@ -102,6 +114,15 @@ export const findV2Pdas = (mint: PublicKey) => {
     metaplexMetadata,
   };
 };
+
+export const findGlobalStateV2Pda = () =>
+  PublicKey.findProgramAddressSync([Buffer.from("global_state_v2")], PROGRAM_ID_V2_PK);
+
+export const findLaunchCertV2Pda = (tokenMint: PublicKey) =>
+  PublicKey.findProgramAddressSync(
+    [Buffer.from("launch_cert_v2"), tokenMint.toBuffer()],
+    PROGRAM_ID_V2_PK
+  );
 
 const getCreatorFeeWalletV2 = async (program: Program, mint: PublicKey) => {
   const pdas = findV2Pdas(mint);
@@ -293,6 +314,103 @@ export const sellOnCurveV2 = async (
     })
     .rpc();
   return { signature: tx, pdas };
+};
+
+export const mintLaunchCertificateV2 = async (
+  program: Program,
+  creator: PublicKey,
+  tokenMint: PublicKey,
+  tokenName = "HumbleTrust Token"
+) => {
+  const provider = program.provider as AnchorProvider;
+  const connection = provider.connection;
+  const pdas = findV2Pdas(tokenMint);
+  const [globalState] = findGlobalStateV2Pda();
+  const [launchCertificate] = findLaunchCertV2Pda(tokenMint);
+
+  const globalInfo = await connection.getAccountInfo(globalState, "confirmed");
+  if (!globalInfo) {
+    throw new Error("global_state_v2 is not initialized on devnet yet");
+  }
+
+  const existingCertificate = await connection.getAccountInfo(launchCertificate, "confirmed");
+  if (existingCertificate) {
+    return {
+      signature: "",
+      certificateMint: PublicKey.default,
+      certificateTokenAccount: PublicKey.default,
+      launchCertificate,
+      alreadyMinted: true,
+    };
+  }
+
+  const certificateMint = Keypair.generate();
+  const certificateTokenAccount = getAssociatedTokenAddressSync(
+    certificateMint.publicKey,
+    creator,
+    false,
+    TOKEN_2022_PROGRAM_ID
+  );
+  void tokenName;
+  const mintLen = getMintLen([ExtensionType.NonTransferable]);
+  const mintRent = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+  const certificateIx = await program.methods
+    .mintLaunchCertificateV2(certificateMint.publicKey)
+    .accounts({
+      creator,
+      mint: tokenMint,
+      tokenMetadata: pdas.tokenMetadata,
+      globalState,
+      launchCertificate,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+
+  const tx = new Transaction().add(
+    SystemProgram.createAccount({
+      fromPubkey: creator,
+      newAccountPubkey: certificateMint.publicKey,
+      space: mintLen,
+      lamports: mintRent,
+      programId: TOKEN_2022_PROGRAM_ID,
+    }),
+    createInitializeNonTransferableMintInstruction(certificateMint.publicKey, TOKEN_2022_PROGRAM_ID),
+    createInitializeMint2Instruction(certificateMint.publicKey, 0, creator, null, TOKEN_2022_PROGRAM_ID),
+    createAssociatedTokenAccountInstruction(
+      creator,
+      certificateTokenAccount,
+      creator,
+      certificateMint.publicKey,
+      TOKEN_2022_PROGRAM_ID
+    ),
+    createMintToInstruction(
+      certificateMint.publicKey,
+      certificateTokenAccount,
+      creator,
+      1,
+      [],
+      TOKEN_2022_PROGRAM_ID
+    ),
+    createSetAuthorityInstruction(
+      certificateMint.publicKey,
+      creator,
+      AuthorityType.MintTokens,
+      null,
+      [],
+      TOKEN_2022_PROGRAM_ID
+    ),
+    certificateIx
+  );
+
+  const signature = await provider.sendAndConfirm(tx, [certificateMint]);
+  return {
+    signature,
+    certificateMint: certificateMint.publicKey,
+    certificateTokenAccount,
+    launchCertificate,
+    alreadyMinted: false,
+  };
 };
 
 // ─── Phase 4.5 ───────────────────────────────────────────────────────────────
