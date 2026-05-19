@@ -13,7 +13,7 @@ export const Footer = ({ setPage }: { setPage: (p: Page) => void }) => (
           </span>
         </div>
         <p style={{ color: "var(--muted2)", fontSize: ".88rem", lineHeight: 1.65, maxWidth: 320 }}>
-          Trust & Safety infrastructure for Solana. Protected launches, curve trading, certificates, and on-chain risk signals.
+          Trust & Safety layer + protected launchpad for Solana. Devnet is active; mainnet is prepared through audit, indexing, and Raydium CPMM migration work.
         </p>
       </div>
       <div>
@@ -22,6 +22,7 @@ export const Footer = ({ setPage }: { setPage: (p: Page) => void }) => (
           <li><a href="#" onClick={(e) => { e.preventDefault(); setPage("launch"); }}>Launch token</a></li>
           <li><a href="#" onClick={(e) => { e.preventDefault(); setPage("discover"); }}>Discover</a></li>
           <li><a href="#" onClick={(e) => { e.preventDefault(); setPage("trade"); }}>Trade</a></li>
+          <li><a href="#" onClick={(e) => { e.preventDefault(); setPage("status"); }}>DEVNET / MAINNET status</a></li>
           <li><a href="#" onClick={(e) => { e.preventDefault(); setPage("about"); }}>How it works</a></li>
         </ul>
       </div>
@@ -46,7 +47,7 @@ export const Footer = ({ setPage }: { setPage: (p: Page) => void }) => (
     </div>
     <div className="foot-bottom">
       <span>© 2026 Humble.Trust. All on-chain.</span>
-      <span>Live on Devnet</span>
+      <span>DEVNET active · MAINNET preparation</span>
     </div>
   </footer>
 );

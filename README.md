@@ -1,12 +1,15 @@
-# HumbleTrust - Trust & Safety Infrastructure for Solana
+# HumbleTrust - Trust & Safety Layer + Protected Launchpad for Solana
 
-HumbleTrust is not just a token launchpad. It is a Solana trust and safety layer for launching, trading, scoring, and monitoring protected tokens.
+HumbleTrust is not just a token launchpad. It is a Solana Trust & Safety layer with a protected launchpad as the first enforced product surface.
 
-The current devnet build includes a v2 launch flow with PDA-based token distribution, initial SOL bonding-curve liquidity, creator vesting, burn options, metadata creation, live TrustScore calculation, and an integrated devnet trade screen.
+The current devnet build includes a v2 launch flow with PDA-based token distribution, initial SOL bonding-curve liquidity, creator vesting, burn options, metadata creation, live TrustScore calculation, backend indexing, real OHLCV chart plumbing, and an integrated devnet trade screen.
 
 **Production frontend:** https://humbletrust.vercel.app
 **GitHub:** https://github.com/HumbleTrust/humbletrust
 **Current status date:** May 19, 2026
+**Network status:** DEVNET active, MAINNET preparation
+
+See the explicit split in [`DEVNET_MAINNET_READINESS.md`](./DEVNET_MAINNET_READINESS.md).
 
 ## Program IDs
 
@@ -67,11 +70,23 @@ The current devnet build includes a v2 launch flow with PDA-based token distribu
   - buy and sell modes
   - token picker from connected wallet balances
   - MAX button for sell amount
+  - 0.5% / 1% / 3% / custom slippage guard
   - Solscan links
-  - TradingView-style curve chart preview
+  - TradingView Lightweight Charts connected to backend OHLCV/WebSocket
 - Launch Certificate NFT minting after v2 launch
-- Discover page shows locally launched tokens from the browser cache.
+- Discover page reads indexed launches from `/backend` instead of browser localStorage.
+- Token Detail page shows indexed TrustScore breakdown, OHLCV chart, recent trades, migration status, and certificate link.
 - About/Home pages now describe HumbleTrust as trust and safety infrastructure, not only a launchpad.
+
+### Backend / Trust Layer API
+
+The `/backend` package is the first real Trust Layer surface:
+
+- listens to HumbleTrust v2 Anchor events;
+- watches known Raydium CPMM pools after migration;
+- writes `tokens`, `trades`, `ohlcv`, and `wallets` to Postgres/Supabase;
+- serves `GET /tokens`, `GET /tokens/:mint`, `GET /tokens/:mint/trades`, `GET /tokens/:mint/ohlcv`, `GET /wallet/:address/reputation`;
+- serves live chart updates at `ws(s)://<backend>/chart/<mint>?tf=1m`.
 
 ## TrustScore v2
 
@@ -104,18 +119,18 @@ These items are not complete yet and should not be presented as production-ready
 
 | Area | Current state | Next step |
 | --- | --- | --- |
-| Auto-Raydium migration | Threshold check, migration state, trigger wallet, and reward hook exist | Implement real Raydium/OpenBook CPI pool creation or choose a safer devnet DEX route |
+| Raydium CPMM migration | Real CPMM CPI builders and account validation are added | Verify end-to-end devnet pool create/deposit/migration transaction |
 | Launch Certificate NFT | Token-2022 NonTransferable mint + certificate PDA is live after v2 launch | Add richer artwork/collection metadata and profile display |
-| Creator reputation | PDA/instruction groundwork exists | Build creator profile UI and connect launch history |
-| Discover indexing | Uses browser localStorage for current frontend launches | Replace with on-chain program account indexing/events |
-| Chart data | Uses curve preview/reserve model | Build event-backed candles, trades, holders, top traders, and transaction feed |
+| Creator reputation | Backend wallet table computes simple real reputation from indexed launches/trades/complaints | Build creator profile UI and abuse-resistant graph signals |
+| Discover indexing | Backend `/tokens` is wired to frontend | Deploy backend/Supabase and backfill historical devnet launches |
+| Chart data | Backend OHLCV + WebSocket + Lightweight Charts are wired | Add Raydium vault-delta parser precision and top traders/holders |
 | Mainnet readiness | Devnet alpha only | Add full tests, audit prep, multisig authority, monitoring, and production RPC plan |
 
 ## Recommended Work Order
 
 1. Chain-indexed Discover/token registry from program accounts and events.
 2. Event-backed Trade chart and transaction feed.
-3. Real Auto-Raydium migration CPI spike, including devnet reliability testing.
+3. Real Raydium CPMM migration CPI spike, including devnet reliability testing.
 4. Creator reputation/profile page.
 5. Full Anchor test suite for v2 launch, buy, sell, burn, fees, metadata, certificate NFT, and migration state.
 6. Security audit and mainnet readiness.
@@ -129,6 +144,22 @@ cd app
 npm install
 npm run dev
 npm run build
+```
+
+Set `VITE_API_BASE_URL` to the backend URL for Vercel or local testing:
+
+```bash
+VITE_API_BASE_URL=http://localhost:8787
+```
+
+### Backend / indexer
+
+```bash
+cd backend
+cp .env.example .env
+npm install
+npm run db:migrate
+npm run dev
 ```
 
 ### Anchor program
@@ -157,6 +188,8 @@ humbletrust/
     src/
       pages/
       lib/
+  backend/
+    src/
   programs/
     humbletrust/
   tests/
