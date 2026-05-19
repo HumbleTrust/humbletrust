@@ -60,16 +60,17 @@ export const Discover = ({ openToken }: { openToken: (mint: string) => void }) =
         </button>
       </div>
 
-      {error && (
-        <div className="trade-error">
-          Backend unavailable: {error}. Start `/backend` with `npm run dev` and a Postgres `DATABASE_URL`.
+      {error && !busy && (
+        <div className="coming-soon">
+          <h3>Indexer is spinning up</h3>
+          <p>The token registry will be available shortly. Be the first to launch on devnet.</p>
         </div>
       )}
 
       {!error && sorted.length === 0 && (
         <div className="coming-soon">
-          <h3>{busy ? "Loading indexed launches..." : "No indexed launches yet"}</h3>
-          <p>Create a token on devnet, then let the backend indexer ingest the launch event.</p>
+          <h3>{busy ? "Loading indexed launches..." : "No launches indexed yet"}</h3>
+          {!busy && <p>Launch a token on devnet — it will appear here once the indexer picks it up.</p>}
         </div>
       )}
 
