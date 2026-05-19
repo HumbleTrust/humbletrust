@@ -215,7 +215,15 @@ footer { background: var(--bg2); border-top: 1px solid var(--border); padding: 6
 .trade-tabs button.active { background: var(--green-neon); color: #05070F; box-shadow: 0 0 18px rgba(0,255,148,.2); }
 .swap-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: .8rem; }
 .swap-box-head, .swap-meta-row { display: flex; justify-content: space-between; align-items: center; gap: .75rem; color: var(--muted); font-family: var(--font-mono); font-size: .72rem; }
+.swap-input-row { display: flex; align-items: center; gap: .65rem; }
 .swap-amount-input { width: 100%; background: transparent; border: 0; color: var(--text); outline: none; font-family: var(--font-head); font-size: 1.7rem; font-weight: 800; padding-top: .35rem; }
+.swap-amount-input::-webkit-outer-spin-button, .swap-amount-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.swap-amount-input[type="number"] { -moz-appearance: textfield; }
+.swap-max-btn { flex: 0 0 auto; border: 1px solid rgba(0,255,148,.28); background: rgba(0,255,148,.1); color: var(--green-neon); border-radius: 7px; padding: .42rem .62rem; font-family: var(--font-head); font-size: .72rem; font-weight: 900; cursor: pointer; }
+.swap-max-btn:hover { background: rgba(0,255,148,.18); }
+.swap-max-btn:disabled { opacity: .38; cursor: not-allowed; }
+.swap-balance-line { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-top: .45rem; color: var(--muted); font-family: var(--font-mono); font-size: .68rem; }
+.swap-balance-line strong { color: var(--green-neon); font-size: .68rem; overflow-wrap: anywhere; text-align: right; }
 .swap-output { min-height: 2.45rem; display: flex; align-items: center; color: var(--green-neon); font-family: var(--font-head); font-size: 1.7rem; font-weight: 800; word-break: break-word; }
 .swap-arrow { width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; margin: -.25rem auto; background: var(--bg4); color: var(--green-neon); border: 1px solid var(--border2); position: relative; z-index: 1; }
 .swap-meta-row { margin-top: .75rem; color: var(--muted2); }

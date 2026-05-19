@@ -94,6 +94,20 @@ const formatCompact = (value: number, decimals = 2) => {
 
 const shortAddress = (value: string) => `${value.slice(0, 4)}...${value.slice(-4)}`;
 
+const formatTokenAmount = (value: number, decimals = 9) => {
+  if (!Number.isFinite(value) || value <= 0) return "0";
+  return value
+    .toLocaleString("en-US", {
+      useGrouping: false,
+      maximumFractionDigits: Math.min(decimals, 9),
+    })
+    .replace(/\.?0+$/, "") || "0";
+};
+
+const normalizeAmountInput = (value: string) => value.replace(",", ".").trim();
+
+const isAmountInput = (value: string) => value === "" || /^\d*(\.\d*)?$/.test(value);
+
 const formatPrice = (value: number) => {
   if (!Number.isFinite(value) || value <= 0) return "0";
   if (value < 0.000001) return value.toExponential(2);
@@ -274,6 +288,7 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
   const wallet = useWallet();
   const anchorWallet = useAnchorWallet();
   const { connection } = useConnection();
+  const walletAddress = wallet.publicKey?.toBase58() ?? "";
   const [mintInput, setMintInput] = useState("");
   const [side, setSide] = useState<TradeSide>("buy");
   const [solAmount, setSolAmount] = useState("0.1");
@@ -346,17 +361,25 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
   );
 
   const validMint = mintInput.trim().length > 30;
+  const selectedMint = mintInput.trim();
   const canUseCurve = v2Available === true;
   const canTrade = canUseCurve && wallet.connected && busy === null && validMint;
   const solscanUrl = validMint
-    ? `https://solscan.io/token/${mintInput.trim()}?cluster=devnet`
+    ? `https://solscan.io/token/${selectedMint}?cluster=devnet`
     : null;
   const savedTokenMap = useMemo(() => {
     const map = new Map<string, ReturnType<typeof listTokens>[number]>();
     listTokens().forEach((token) => map.set(token.mint, token));
     return map;
   }, [walletTokens.length, tokenPickerOpen]);
-  const selectedSymbol = savedTokenMap.get(mintInput.trim())?.symbol || "TOKEN";
+  const selectedWalletToken = walletTokens.find((token) => token.mint === selectedMint);
+  const selectedDecimals = selectedWalletToken?.decimals ?? 9;
+  const selectedSymbol = selectedWalletToken?.symbol || savedTokenMap.get(selectedMint)?.symbol || "TOKEN";
+  const sellBalanceExceeded = side === "sell" && !!selectedWalletToken && tokensIn > selectedWalletToken.balance + 10 ** -selectedDecimals;
+  const sellBalanceMissing = side === "sell" && wallet.connected && validMint && !tokenPickerBusy && !selectedWalletToken;
+  const canSubmitTrade = canTrade && (side === "buy"
+    ? solIn > 0
+    : tokensIn > 0 && !!selectedWalletToken && !sellBalanceExceeded);
 
   const loadWalletTokens = async () => {
     if (!wallet.publicKey) {
@@ -392,13 +415,21 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
           });
         }
       });
-      setWalletTokens([...byMint.values()].sort((a, b) => b.balance - a.balance).slice(0, 25));
+      setWalletTokens([...byMint.values()].sort((a, b) => b.balance - a.balance));
     } catch (e: any) {
       setTokenPickerError(e.message || String(e));
     } finally {
       setTokenPickerBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (!wallet.connected || !wallet.publicKey) {
+      setWalletTokens([]);
+      return;
+    }
+    void loadWalletTokens();
+  }, [walletAddress, wallet.connected, connection]);
 
   const refreshReserves = async (mintOverride?: string) => {
     const mintValue = (mintOverride ?? mintInput).trim();
@@ -436,6 +467,11 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
     setMintInput(token.mint);
     setTokenPickerOpen(false);
     void refreshReserves(token.mint);
+  };
+
+  const setMaxSellAmount = () => {
+    if (!selectedWalletToken) return;
+    setTokensAmount(formatTokenAmount(selectedWalletToken.balance, selectedDecimals));
   };
 
   const selectTool = (toolId: string) => {
@@ -525,7 +561,7 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
       const ata = getAssociatedTokenAddressSync(mint, anchorWallet.publicKey);
       const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
       const program = getProgramV2(provider);
-      const { signature } = await sellOnCurveV2(program, anchorWallet.publicKey, mint, ata, toRawTokenAmount(tokensAmount), 0);
+      const { signature } = await sellOnCurveV2(program, anchorWallet.publicKey, mint, ata, toRawTokenAmount(tokensAmount, selectedDecimals), 0);
       setTxSig(signature);
       await refreshReserves();
     } catch (e: any) {
@@ -640,14 +676,42 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
               <span>From</span>
               <span>{side === "buy" ? "SOL" : selectedSymbol}</span>
             </div>
-            <input
-              className="swap-amount-input"
-              type="number"
-              min={side === "buy" ? 0.01 : 1}
-              step={side === "buy" ? 0.01 : 1000}
-              value={side === "buy" ? solAmount : tokensAmount}
-              onChange={(e) => side === "buy" ? setSolAmount(e.target.value) : setTokensAmount(e.target.value)}
-            />
+            <div className="swap-input-row">
+              <input
+                className="swap-amount-input"
+                type="text"
+                inputMode="decimal"
+                value={side === "buy" ? solAmount : tokensAmount}
+                onChange={(e) => {
+                  const next = normalizeAmountInput(e.target.value);
+                  if (!isAmountInput(next)) return;
+                  if (side === "buy") setSolAmount(next);
+                  else setTokensAmount(next);
+                }}
+              />
+              {side === "sell" && (
+                <button
+                  type="button"
+                  className="swap-max-btn"
+                  disabled={!selectedWalletToken}
+                  onClick={setMaxSellAmount}
+                >
+                  MAX
+                </button>
+              )}
+            </div>
+            {side === "sell" && (
+              <div className="swap-balance-line">
+                <span>Wallet balance</span>
+                <strong>
+                  {selectedWalletToken
+                    ? `${formatTokenAmount(selectedWalletToken.balance, selectedDecimals)} ${selectedSymbol}`
+                    : wallet.connected && validMint
+                      ? "0 TOKEN"
+                      : "Select token"}
+                </strong>
+              </div>
+            )}
           </div>
 
           <div className="swap-arrow">
@@ -669,13 +733,19 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
             <strong>{(CURVE_FEE_RATE * 100).toFixed(0)}%</strong>
           </div>
           <div className="swap-meta-row">
-            <span>{side === "buy" ? "Price impact" : "Raw sell amount"}</span>
-            <strong>{side === "buy" ? `${formatCompact(priceImpact, 2)}%` : toRawTokenAmount(tokensAmount)}</strong>
+            <span>{side === "buy" ? "Price impact" : "Sell amount"}</span>
+            <strong>{side === "buy" ? `${formatCompact(priceImpact, 2)}%` : `${formatTokenAmount(tokensIn, selectedDecimals)} ${selectedSymbol}`}</strong>
           </div>
+          {sellBalanceExceeded && (
+            <div className="trade-error">Sell amount is higher than wallet balance. Use MAX or lower the amount.</div>
+          )}
+          {sellBalanceMissing && (
+            <div className="trade-error">This mint is not found in the connected wallet token balances.</div>
+          )}
 
           <button
             onClick={side === "buy" ? runBuy : runSell}
-            disabled={!canTrade || (side === "buy" ? solIn <= 0 : tokensIn <= 0)}
+            disabled={!canSubmitTrade}
             className={side === "buy" ? "swap-action" : "swap-action sell-mode"}
           >
             {busy === "buy" ? "Buying..." : busy === "sell" ? "Selling..." : side === "buy" ? "Buy on Curve" : "Sell on Curve"}
