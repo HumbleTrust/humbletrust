@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useWallet, useAnchorWallet, useConnection } from "@solana/wallet-adapter-react";
 import { AnchorProvider } from "@coral-xyz/anchor";
+import { PublicKey } from "@solana/web3.js";
 import { Rocket, ExternalLink, Loader, Upload, X, Award, Lock, UserCheck } from "lucide-react";
 import {
   PROGRAM_ID_V2_PK,
@@ -11,11 +12,12 @@ import {
   isProgramExecutable,
   launchToken,
   launchTokenV2,
+  mintLaunchCertificateV2,
 } from "../lib/program";
 import { fileToHexLogo, MAX_LOGO_BYTES, saveToken } from "../lib/image";
 import { HexLogo } from "../components/HexLogo";
 
-interface LaunchResult { signature: string; mint: string; }
+interface LaunchResult { signature: string; mint: string; certificateSignature?: string; certificateMint?: string; }
 type LaunchMode = "checking" | "v1" | "v2";
 
 const V1_SUPPLY = "1000000000";
@@ -39,6 +41,11 @@ export const Launch = () => {
   const [repBusy, setRepBusy] = useState(false);
   const [repDone, setRepDone] = useState(false);
   const [repError, setRepError] = useState<string | null>(null);
+  const [certBusy, setCertBusy] = useState(false);
+  const [certDone, setCertDone] = useState(false);
+  const [certError, setCertError] = useState<string | null>(null);
+  const [certMint, setCertMint] = useState<string | null>(null);
+  const [certSignature, setCertSignature] = useState<string | null>(null);
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [launchMode, setLaunchMode] = useState<LaunchMode>("checking");
   const [programStatusError, setProgramStatusError] = useState<string | null>(null);
@@ -154,9 +161,48 @@ export const Launch = () => {
 
   const clearLogo = () => { setLogoDataUrl(null); if (fileInput.current) fileInput.current.value = ""; };
 
+  const mintCertificateForMint = async (mintStr: string, tokenLabel: string) => {
+    if (!anchorWallet || !wallet.connected) return null;
+    setCertBusy(true);
+    setCertError(null);
+    try {
+      const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
+      const cert = await mintLaunchCertificateV2(
+        getProgramV2(provider),
+        anchorWallet.publicKey,
+        new PublicKey(mintStr),
+        tokenLabel || "HumbleTrust Token"
+      );
+
+      if (cert.alreadyMinted) {
+        setCertDone(true);
+        setCertMint(null);
+        setCertSignature(null);
+        return cert;
+      }
+
+      const certificateMint = cert.certificateMint.toString();
+      setCertDone(true);
+      setCertMint(certificateMint);
+      setCertSignature(cert.signature);
+      return cert;
+    } catch (e: any) {
+      const message = e.message || String(e);
+      if (/already in use|already initialized/i.test(message)) {
+        setCertDone(true);
+      } else {
+        setCertError(message);
+      }
+      return null;
+    } finally {
+      setCertBusy(false);
+    }
+  };
+
   const handleLaunch = async () => {
     if (!anchorWallet || !wallet.connected) { alert("Connect wallet first"); return; }
     setBusy(true); setError(null); setResult(null);
+    setCertDone(false); setCertError(null); setCertMint(null); setCertSignature(null);
     try {
       const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
       const v2Available = await isProgramExecutable(connection, PROGRAM_ID_V2_PK).catch(() => false);
@@ -180,18 +226,58 @@ export const Launch = () => {
             tier, antiBotSeconds: antiBot,
           });
       const mintStr = mint.toString();
-      saveToken({
+      const savedToken = {
         mint: mintStr, name, symbol,
         logo: logoDataUrl || undefined,
         createdAt: Date.now(),
         trustScore, tier, signature,
         launchMode: useV2 ? "v2" : "v1",
-      });
+      } as const;
+      saveToken(savedToken);
       setResult({ signature, mint: mintStr });
+
+      if (useV2) {
+        const cert = await mintCertificateForMint(mintStr, name);
+        if (cert && !cert.alreadyMinted) {
+          const certificateMint = cert.certificateMint.toString();
+          const certificateSignature = cert.signature;
+          saveToken({
+            ...savedToken,
+            hasCertificate: true,
+            certificateMint,
+            certificateSignature,
+          });
+          setResult({ signature, mint: mintStr, certificateMint, certificateSignature });
+        }
+      }
     } catch (e: any) {
       console.error(e);
       setError(e.message || String(e));
     } finally { setBusy(false); }
+  };
+
+  const handleMintCertificate = async () => {
+    if (!result) return;
+    const cert = await mintCertificateForMint(result.mint, name);
+    if (cert && !cert.alreadyMinted) {
+      const certificateMint = cert.certificateMint.toString();
+      const certificateSignature = cert.signature;
+      setResult((prev) => prev ? { ...prev, certificateMint, certificateSignature } : prev);
+      saveToken({
+        mint: result.mint,
+        name,
+        symbol,
+        logo: logoDataUrl || undefined,
+        createdAt: Date.now(),
+        trustScore,
+        tier,
+        signature: result.signature,
+        launchMode: "v2",
+        hasCertificate: true,
+        certificateMint,
+        certificateSignature,
+      });
+    }
   };
 
   const handleInitReputation = async () => {
@@ -395,6 +481,23 @@ export const Launch = () => {
               <div style={{ color: "var(--muted2)", fontSize: ".75rem", wordBreak: "break-all" }}>Mint: {result.mint}</div>
               <div style={{ color: "var(--muted2)", fontSize: ".75rem", wordBreak: "break-all" }}>Tx: {result.signature}</div>
               <a href={"https://solscan.io/token/" + result.mint + "?cluster=devnet"} target="_blank" rel="noreferrer" style={{ color: "var(--green-neon)", display: "inline-flex", alignItems: "center", gap: 4, marginTop: ".5rem", textDecoration: "none" }}>View on Solscan <ExternalLink size={12} /></a>
+              {certBusy && (
+                <div style={{ color: "var(--solana-blue)", fontSize: ".75rem", marginTop: ".55rem", display: "flex", alignItems: "center", gap: 6 }}>
+                  <Loader size={12} className="spin" /> Minting Launch Certificate NFT...
+                </div>
+              )}
+              {certDone && (
+                <div style={{ color: "var(--green-neon)", fontSize: ".75rem", marginTop: ".55rem" }}>
+                  ✅ Launch Certificate NFT {certMint ? "minted" : "already exists"}
+                  {certMint && (
+                    <>
+                      <div style={{ color: "var(--muted2)", wordBreak: "break-all" }}>Certificate mint: {certMint}</div>
+                      <a href={"https://solscan.io/token/" + certMint + "?cluster=devnet"} target="_blank" rel="noreferrer" style={{ color: "var(--green-neon)", display: "inline-flex", alignItems: "center", gap: 4, textDecoration: "none" }}>View certificate <ExternalLink size={12} /></a>
+                    </>
+                  )}
+                </div>
+              )}
+              {certError && <div style={{ color: "var(--red)", fontSize: ".75rem", marginTop: ".55rem" }}>Certificate NFT: {certError}</div>}
             </div>
           )}
 
@@ -436,11 +539,22 @@ export const Launch = () => {
                   <span style={{ fontSize: ".82rem", fontWeight: 600 }}>Phase 4.6 — Mint Launch Certificate (Soulbound)</span>
                 </div>
                 <div style={{ fontSize: ".75rem", color: "var(--muted2)", marginBottom: ".5rem" }}>
-                  Creates an on-chain record of your launch parameters (lock%, days, score, timestamp). Token-2022 NonTransferable NFT — shows in Phantom as "Humble.Trust Launch Certificate".
+                  Creates a Token-2022 NonTransferable devnet NFT and links it to an on-chain certificate PDA with lock%, days, score, and timestamp.
                 </div>
-                <div style={{ fontSize: ".72rem", color: "var(--muted)", fontStyle: "italic" }}>
-                  Available after <code>init_global_state</code> is called by deployer on devnet.
-                </div>
+                {certDone ? (
+                  <div style={{ fontSize: ".75rem", color: "var(--green-neon)" }}>✅ Certificate NFT minted</div>
+                ) : (
+                  <>
+                    <button
+                      onClick={handleMintCertificate}
+                      disabled={certBusy || !isV2Launch}
+                      style={{ background: "rgba(20,102,255,.12)", border: "1px solid rgba(20,102,255,.35)", color: "var(--solana-blue)", borderRadius: 6, padding: ".35rem .75rem", fontSize: ".78rem", cursor: certBusy || !isV2Launch ? "not-allowed" : "pointer" }}
+                    >
+                      {certBusy ? <><Loader size={12} className="spin" style={{ display: "inline", marginRight: 4 }} />Minting...</> : "Mint Certificate NFT"}
+                    </button>
+                    {certError && <div style={{ fontSize: ".72rem", color: "var(--red)", marginTop: ".3rem" }}>{certError}</div>}
+                  </>
+                )}
               </div>
 
               {/* Phase 4 — LP Lock */}

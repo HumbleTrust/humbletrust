@@ -1,26 +1,25 @@
-import { Shield, TrendingUp, Lock, Flame, Vote, Award, Zap, DollarSign, FileText } from "lucide-react";
+import { Shield, TrendingUp, Lock, Flame, Award, Zap, DollarSign, FileText, Database, BarChart3, Users, FileCheck } from "lucide-react";
 
 export const About = () => (
   <>
     <section>
-      <div className="sec-eyebrow">About Humble.Trust</div>
-      <h2 className="sec-h2">A trust layer for <span className="hl-solana">all of Solana</span></h2>
-      <p className="sec-sub" style={{ maxWidth: 720 }}>
-        Every week thousands of tokens launch on Solana. Most are rugs. Humble.Trust enforces
-        protection at the protocol level — locking creator tokens, scoring trust in real time,
-        and freezing bad actors automatically. No promises, no UI tricks. Pure on-chain rules.
+      <div className="sec-eyebrow">About HumbleTrust</div>
+      <h2 className="sec-h2">Trust & Safety infrastructure <span className="hl-solana">for Solana</span></h2>
+      <p className="sec-sub" style={{ maxWidth: 760 }}>
+        HumbleTrust is Trust & Safety infrastructure for Solana: protected token creation, bonding-curve trading,
+        launch certificates, creator accountability, and future locked DEX migration.
       </p>
     </section>
 
     <section className="feat-bg">
       <div className="sec-eyebrow">The Problem</div>
-      <h2 className="sec-h2">Why most launchpads <span className="hl-solana">fail investors</span></h2>
+      <h2 className="sec-h2">Solana needs safety rails <span className="hl-green">at launch time</span></h2>
       <div className="how-grid">
         {[
-          { n: "01", icon: <Zap size={20} />, t: "No enforcement", d: "Pump.fun and clones let anyone launch with zero accountability. Rugs happen within minutes of listing." },
-          { n: "02", icon: <FileText size={20} />, t: "Promises, not code", d: 'Creators write "we won\'t rug" in Telegram. There is no on-chain mechanism enforcing any of it.' },
-          { n: "03", icon: <TrendingUp size={20} />, t: "No reputation system", d: "A serial rugger relaunches tomorrow with a fresh wallet. History is invisible." },
-          { n: "04", icon: <DollarSign size={20} />, t: "Liquidity removed instantly", d: "LP tokens are not locked. Creators pull liquidity the moment price pumps." },
+          { n: "01", icon: <Zap size={20} />, t: "No enforcement", d: "Fast launch tools let anyone launch with almost no accountability. Risk appears minutes after listing." },
+          { n: "02", icon: <FileText size={20} />, t: "Promises, not code", d: "Creators can promise locks or fair launches, but users need verifiable rules and custody." },
+          { n: "03", icon: <DollarSign size={20} />, t: "Liquidity control", d: "When creators control liquidity directly, investors are exposed to instant rug mechanics." },
+          { n: "04", icon: <Shield size={20} />, t: "Weak reputation", d: "Without creator history and launch records, the same bad wallet pattern can repeat under a new token." },
         ].map((c) => (
           <div key={c.n} className="how-card">
             <span className="how-n">{c.n}</span>
@@ -33,20 +32,17 @@ export const About = () => (
     </section>
 
     <section>
-      <div className="sec-eyebrow">TrustScore System</div>
-      <h2 className="sec-h2">How we score <span className="hl-green">0–100</span></h2>
-      <p className="sec-sub">Every token gets a dynamic real-time score based on verifiable on-chain data.</p>
+      <div className="sec-eyebrow">TrustScore v2</div>
+      <h2 className="sec-h2">Initial score, normalized <span className="hl-green">0-100</span></h2>
+      <p className="sec-sub">The live v2 launch form calculates the same allocation-based score that the program stores on-chain.</p>
       <div className="feat-grid">
         {[
-          { icon: <Lock size={18} />, t: "Lock duration", pts: "+25", d: "Up to +25 pts. Longer lock = higher trust. 360 days earns max." },
-          { icon: <Shield size={18} />, t: "Lock percentage", pts: "+18", d: "Up to +18 pts. More supply locked means less creator can dump." },
-          { icon: <Flame size={18} />, t: "Burn on unlock", pts: "+12", d: "50% burn = +12 pts. Permanently removes tokens from supply." },
-          { icon: <Vote size={18} />, t: "Airdrop config", pts: "+10", d: "Up to +10 pts. Sharing with community signals good intent." },
-          { icon: <TrendingUp size={18} />, t: "Verified volume", pts: "+10", d: "Up to +10 pts. Oracle-verified real trading activity." },
-          { icon: <Award size={18} />, t: "Vesting milestones", pts: "+15", d: "Up to +15 pts. Completing day 30/60/90 tranches without cash-out." },
-          { icon: <Shield size={18} />, t: "Creator verified", pts: "+8", d: "+8 pts when metrics authority confirms creator identity." },
-          { icon: <TrendingUp size={18} />, t: "Token age", pts: "+8", d: "Up to +8 pts. Tokens that survive 30+ days earn credibility." },
-          { icon: <Vote size={18} />, t: "Community votes", pts: "±18", d: "+5 or -18 pts. Token holders vote to signal trust or fraud." },
+          { icon: <Lock size={18} />, t: "Lock Score", pts: "0/10/20/15", d: "Best range is 40-60%. 61-80% is still protected but leaves less liquid supply." },
+          { icon: <Shield size={18} />, t: "Creator Score", pts: "max 20", d: "Creator allocation is capped at 5%. Lower creator % earns a stronger score." },
+          { icon: <TrendingUp size={18} />, t: "Curve Liquidity", pts: "max 25", d: "Curve liquidity must be 25-50% and feeds the bonding curve token vault." },
+          { icon: <Database size={18} />, t: "Circulation", pts: "max 20", d: "Circulation must be 15-40%. Q + R must be at least 50%." },
+          { icon: <Users size={18} />, t: "Airdrop", pts: "max 15", d: "Airdrop is capped at 5%; smaller airdrops score higher in v2." },
+          { icon: <Flame size={18} />, t: "Burn Bonus", pts: "+5/+10", d: "25% or 50% burn applies to the Locked Vault and improves the score." },
         ].map((item) => (
           <div key={item.t} className="feat-card">
             <div className="feat-icon">{item.icon}</div>
@@ -61,10 +57,10 @@ export const About = () => (
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "1rem", marginTop: "2rem" }}>
         {[
-          { range: "81–100", label: "PROTECTED", color: "var(--green-neon)", desc: "Full vesting, long lock, community-verified." },
-          { range: "66–80", label: "TRUSTED", color: "var(--solana-blue)", desc: "Strong fundamentals. Minor gaps in engagement." },
-          { range: "51–65", label: "BASIC", color: "var(--yellow)", desc: "Minimum standards met. Proceed with caution." },
-          { range: "0–50", label: "WEAK", color: "var(--orange)", desc: "Short lock, minimal burn, or complaints received." },
+          { range: "85-100", label: "ELITE", color: "var(--green-neon)", desc: "Strong allocation, high liquidity, low creator risk." },
+          { range: "70-84", label: "STRONG", color: "var(--solana-blue)", desc: "Healthy launch with minor trade-offs." },
+          { range: "40-69", label: "OK", color: "var(--yellow)", desc: "Valid, but users should review the breakdown." },
+          { range: "0-39", label: "WEAK", color: "var(--orange)", desc: "Low trust configuration or weak liquidity." },
         ].map((tier) => (
           <div key={tier.label} style={{ background: "var(--bg3)", borderRadius: 10, padding: "1rem", border: `1px solid ${tier.color}33` }}>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: "1.1rem", fontWeight: 700, color: tier.color }}>{tier.range}</div>
@@ -76,46 +72,27 @@ export const About = () => (
     </section>
 
     <section className="feat-bg">
-      <div className="sec-eyebrow">Fee Model</div>
-      <h2 className="sec-h2">Simple, <span className="hl-green">transparent</span> economics</h2>
-      <div className="how-grid">
-        {[
-          { n: "$5", icon: <Shield size={20} />, t: "Standard Launch", d: "Full on-chain protection. Lock, vesting, burn, anti-bot, voting. TrustScore from day one." },
-          { n: "$25", icon: <Award size={20} />, t: "Premium Launch", d: "Featured listing, 60% LP fee share (vs 40% Standard), score boost eligible, priority airdrop queue." },
-          { n: "40/60", icon: <DollarSign size={20} />, t: "LP Fee Split", d: "Standard: 40% creator · 35% treasury · 25% rewards. Premium: 60% creator · 30% treasury · 10% rewards." },
-        ].map((c) => (
-          <div key={c.n} className="how-card">
-            <span className="how-n">{c.n}</span>
-            <div className="how-icon-wrap">{c.icon}</div>
-            <div className="how-t">{c.t}</div>
-            <div className="how-d">{c.d}</div>
-          </div>
-        ))}
-      </div>
-    </section>
-
-    <section>
-      <div className="sec-eyebrow">Roadmap</div>
-      <h2 className="sec-h2">Where we are. <span className="hl-solana">Where we're going.</span></h2>
+      <div className="sec-eyebrow">Current Devnet Status</div>
+      <h2 className="sec-h2">What is done. <span className="hl-solana">What comes next.</span></h2>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1.25rem" }}>
         {[
-          { phase: "Phase 1–2", title: "Core Protocol", status: "done", items: ["Anchor program on Solana devnet", "10 instructions, 5 PDAs", "TrustScore engine (0–100)", "Vesting + locking + burn + anti-bot"] },
-          { phase: "Phase 3", title: "Frontend", status: "done", items: ["React + Vite + TypeScript", "Phantom & Solflare wallet adapter", "Live TrustScore ring preview", "Discover hex-grid with Solscan links"] },
-          { phase: "Phase 4", title: "Liquidity Layer", status: "active", items: ["LP token lock vault (PDA)", "Raydium CPI integration (devnet)", "Fee distribution 50/30/20 on-chain", "Jupiter/DexScreener auto-indexing"] },
-          { phase: "Phase 4.5–4.6", title: "Reputation + NFT", status: "active", items: ["CreatorReputation PDA per wallet", "+5 clean-launch score bonus", "Soulbound Certificate NFT", "Token-2022 NonTransferable mint"] },
-          { phase: "Phase 5", title: "Mainnet Readiness", status: "upcoming", items: ["Pyth oracle dynamic pricing", "Squads multisig upgrade authority", "CertiK / OtterSec security audit", "Emergency pause (GlobalState)"] },
-          { phase: "Phase 6", title: "Ecosystem", status: "upcoming", items: ["Mobile PWA", "Vault analytics dashboard", "Public API for integrations", "Governance token launch"] },
+          { phase: "Live", title: "v2 Protected Launch", status: "done", items: ["Fixed 1B supply", "L/C/Q/R/A vault split", "Initial SOL curve treasury PDA", "Metaplex metadata", "Mint authority revoked"] },
+          { phase: "Live", title: "Bonding Curve Trade", status: "done", items: ["Buy and sell on devnet", "1% total fee", "Wallet token picker", "MAX sell amount", "Trading-style chart preview"] },
+          { phase: "Live", title: "Launch Certificate NFT", status: "done", items: ["Token-2022 NonTransferable mint", "Certificate PDA record", "Linked token mint", "TrustScore and launch timestamp"] },
+          { phase: "In progress", title: "Auto-Raydium Migration", status: "active", items: ["50 SOL threshold state exists", "Trigger reward hook exists", "Real Raydium/OpenBook CPI pool creation pending", "LP custody verification pending"] },
+          { phase: "Next", title: "Global Indexing", status: "active", items: ["Replace browser-cache Discover", "Read program accounts/events", "Real candles and trade feed", "Holders and top traders"] },
+          { phase: "Next", title: "Mainnet Readiness", status: "upcoming", items: ["Full v2 tests", "Audit", "Squads multisig", "Production RPC and monitoring"] },
         ].map((p) => {
           const borderColor = p.status === "done" ? "rgba(0,255,148,.2)" : p.status === "active" ? "rgba(20,102,255,.2)" : "rgba(255,255,255,.06)";
           const badgeBg = p.status === "done" ? "rgba(0,255,148,.1)" : p.status === "active" ? "rgba(20,102,255,.1)" : "rgba(255,255,255,.04)";
           const badgeColor = p.status === "done" ? "var(--green-neon)" : p.status === "active" ? "var(--solana-blue)" : "var(--muted)";
           const bulletColor = p.status === "done" ? "var(--green-neon)" : p.status === "active" ? "var(--solana-blue)" : "var(--muted)";
           return (
-            <div key={p.phase} style={{ background: "var(--bg3)", borderRadius: 12, padding: "1.25rem", border: `1px solid ${borderColor}` }}>
+            <div key={p.title} style={{ background: "var(--bg3)", borderRadius: 12, padding: "1.25rem", border: `1px solid ${borderColor}` }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: ".6rem" }}>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: ".72rem", color: "var(--muted)" }}>{p.phase}</div>
                 <div style={{ fontSize: ".68rem", padding: "2px 8px", borderRadius: 4, background: badgeBg, color: badgeColor }}>
-                  {p.status === "done" ? "COMPLETE" : p.status === "active" ? "IN PROGRESS" : "UPCOMING"}
+                  {p.status === "done" ? "LIVE" : p.status === "active" ? "IN PROGRESS" : "UPCOMING"}
                 </div>
               </div>
               <div style={{ fontFamily: "var(--font-head)", fontWeight: 700, fontSize: "1rem", marginBottom: ".75rem" }}>{p.title}</div>
@@ -133,38 +110,23 @@ export const About = () => (
       </div>
     </section>
 
-    <section className="feat-bg">
-      <div className="sec-eyebrow">Competitive Analysis</div>
-      <h2 className="sec-h2">What the <span className="hl-green">competition</span> doesn't do</h2>
-      <div style={{ overflowX: "auto", marginTop: "1.5rem" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".82rem", maxWidth: 920, margin: "0 auto" }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid rgba(255,255,255,.08)" }}>
-              {["Feature", "Pump.fun", "Believe", "Moonshot", "HumbleTrust"].map((h) => (
-                <th key={h} style={{ padding: ".75rem .5rem", textAlign: h === "Feature" ? "left" : "center", color: h === "HumbleTrust" ? "var(--green-neon)" : "var(--muted)", fontFamily: "var(--font-mono)", fontWeight: 400, fontSize: ".72rem" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {[
-              ["Anti-rug enforced on-chain", "❌", "❌", "⚠️ manual", "✅"],
-              ["TrustScore 0–100", "❌", "❌", "❌", "✅"],
-              ["LP lock enforced", "Burn only", "Burn only", "Manual", "✅ PDA"],
-              ["Creator vesting schedule", "❌", "❌", "Optional", "✅ 30/60/90"],
-              ["Anti-bot trading delay", "❌", "❌", "❌", "✅ 0–600s"],
-              ["Community vote + auto-freeze", "❌", "❌", "❌", "✅"],
-              ["Creator earns LP fees", "❌", "Trading fee", "❌", "✅ 40–60%"],
-              ["Reputation across launches", "❌", "❌", "❌", "✅ Phase 4.5"],
-              ["Soulbound launch certificate", "❌", "❌", "❌", "✅ Phase 4.6"],
-            ].map((row) => (
-              <tr key={String(row[0])} style={{ borderBottom: "1px solid rgba(255,255,255,.04)" }}>
-                {row.map((cell, i) => (
-                  <td key={i} style={{ padding: ".65rem .5rem", textAlign: i === 0 ? "left" : "center", color: i === 4 ? "var(--green-neon)" : i === 0 ? "var(--text)" : "var(--muted2)" }}>{cell}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <section>
+      <div className="sec-eyebrow">What To Build Next</div>
+      <h2 className="sec-h2">The next real upgrades</h2>
+      <div className="feat-grid">
+        {[
+          { icon: <Database size={18} />, t: "Chain-indexed Discover", d: "Show all v2 launches globally, not only tokens saved in local browser storage." },
+          { icon: <BarChart3 size={18} />, t: "Real chart candles", d: "Use program events and curve trades for candles, volume, transaction list, holders, and top traders." },
+          { icon: <TrendingUp size={18} />, t: "Raydium CPI migration", d: "Complete pool creation, LP lock, leftover burn, and post-migration curve disable flow." },
+          { icon: <Users size={18} />, t: "Creator profiles", d: "Expose launch history, clean-launch record, complaints, and reputation effects." },
+          { icon: <FileCheck size={18} />, t: "Audit pack", d: "Add tests, threat model, deployment checklist, and audit-ready documentation." },
+        ].map((item) => (
+          <div key={item.t} className="feat-card">
+            <div className="feat-icon">{item.icon}</div>
+            <div className="feat-t">{item.t}</div>
+            <div className="feat-d">{item.d}</div>
+          </div>
+        ))}
       </div>
     </section>
   </>

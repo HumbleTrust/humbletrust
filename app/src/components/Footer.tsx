@@ -13,7 +13,7 @@ export const Footer = ({ setPage }: { setPage: (p: Page) => void }) => (
           </span>
         </div>
         <p style={{ color: "var(--muted2)", fontSize: ".88rem", lineHeight: 1.65, maxWidth: 320 }}>
-          Anti-rug token launchpad on Solana. Every token locked on-chain. Every creator scored for trust.
+          Trust & Safety infrastructure for Solana. Protected launches, curve trading, certificates, and on-chain risk signals.
         </p>
       </div>
       <div>
@@ -38,7 +38,7 @@ export const Footer = ({ setPage }: { setPage: (p: Page) => void }) => (
         <div className="foot-h">Resources</div>
         <ul className="foot-list">
           <li><a href="https://github.com/HumbleTrust/humbletrust" target="_blank" rel="noreferrer">GitHub</a></li>
-          <li><a href={`https://solscan.io/account/Gcz7NMtCqKdvzh53DF1ecoEYe7Hma9kWwdtCmmeBaxRi?cluster=devnet`} target="_blank" rel="noreferrer">Program on Solscan</a></li>
+          <li><a href="https://solscan.io/account/FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr?cluster=devnet" target="_blank" rel="noreferrer">v2 Program on Solscan</a></li>
           <li><a href="#" onClick={(e) => { e.preventDefault(); setPage("about"); }}>Whitepaper</a></li>
           <li><a href="#" onClick={(e) => { e.preventDefault(); setPage("about"); }}>Roadmap</a></li>
         </ul>

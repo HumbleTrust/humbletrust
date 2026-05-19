@@ -35,6 +35,8 @@ export interface SavedToken {
   signature: string;
   launchMode?: "v1" | "v2";
   hasCertificate?: boolean;   // Phase 4.6
+  certificateMint?: string;
+  certificateSignature?: string;
   hasLpLock?: boolean;        // Phase 4
 }
 
