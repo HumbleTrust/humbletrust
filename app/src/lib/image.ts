@@ -33,6 +33,7 @@ export interface SavedToken {
   trustScore: number;
   tier: 0 | 1;
   signature: string;
+  launchMode?: "v1" | "v2";
   hasCertificate?: boolean;   // Phase 4.6
   hasLpLock?: boolean;        // Phase 4
 }

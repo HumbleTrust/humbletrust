@@ -32,7 +32,13 @@ export const Discover = () => {
       </div>
       <div className="tok-grid-real">
         {tokens.map((t) => {
-          const scoreColor = t.trustScore >= 81 ? "var(--green-neon)" : t.trustScore >= 66 ? "var(--solana-blue)" : t.trustScore >= 51 ? "var(--yellow)" : "var(--orange)";
+          const isV2Token = t.launchMode !== "v1";
+          const scoreColor = isV2Token
+            ? t.trustScore >= 85 ? "var(--green-neon)" : t.trustScore >= 70 ? "var(--solana-blue)" : t.trustScore >= 40 ? "var(--yellow)" : "var(--orange)"
+            : t.trustScore >= 81 ? "var(--green-neon)" : t.trustScore >= 66 ? "var(--solana-blue)" : t.trustScore >= 51 ? "var(--yellow)" : "var(--orange)";
+          const scoreLabel = isV2Token
+            ? t.trustScore >= 85 ? "ELITE" : t.trustScore >= 70 ? "STRONG" : t.trustScore >= 40 ? "OK" : "WEAK"
+            : t.trustScore >= 81 ? "PROTECTED" : t.trustScore >= 66 ? "TRUSTED" : t.trustScore >= 51 ? "BASIC" : "WEAK";
           const url = "https://solscan.io/token/" + t.mint + "?cluster=devnet";
           return (
             <div
@@ -54,7 +60,7 @@ export const Discover = () => {
               <div className="tok-card-score-row">
                 <span className="tok-card-score-k">Trust Score</span>
                 <span className="tok-card-score-v" style={{ color: scoreColor }}>
-                  {t.trustScore} / 100 <ExternalLink size={12} style={{ display: "inline", marginLeft: 4, opacity: 0.5 }} />
+                  {t.trustScore} / 100 · {scoreLabel} <ExternalLink size={12} style={{ display: "inline", marginLeft: 4, opacity: 0.5 }} />
                 </span>
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: ".5rem", flexWrap: "wrap" }}>

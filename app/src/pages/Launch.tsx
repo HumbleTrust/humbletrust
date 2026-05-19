@@ -185,6 +185,7 @@ export const Launch = () => {
         logo: logoDataUrl || undefined,
         createdAt: Date.now(),
         trustScore, tier, signature,
+        launchMode: useV2 ? "v2" : "v1",
       });
       setResult({ signature, mint: mintStr });
     } catch (e: any) {
@@ -520,7 +521,9 @@ export const Launch = () => {
                 Curve Liquidity: +{trustBreakdown.curve.toFixed(1)}<br />
                 Circulation: +{trustBreakdown.circ.toFixed(1)}<br />
                 Airdrop: +{trustBreakdown.air.toFixed(0)}<br />
-                Burn: +{trustBreakdown.burn.toFixed(0)}
+                Burn: +{trustBreakdown.burn.toFixed(0)}<br />
+                <span style={{ color: "var(--text)" }}>Raw: {trustBreakdown.raw.toFixed(1)} / 110</span><br />
+                <span style={{ color: scoreColor }}>TrustScore: {trustScore} / 100</span>
               </>
             ) : (
               <>
