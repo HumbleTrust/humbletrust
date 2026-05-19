@@ -171,6 +171,7 @@ pub mod humbletrust_v2 {
         let token_metadata_ai = ctx.accounts.token_metadata.to_account_info();
         let score = calculate_trust_score_v2(
             lock_percent,
+            lock_days,
             creator_percent,
             curve_liquidity_percent,
             circulation_percent,
@@ -3798,6 +3799,7 @@ fn rewards_multiplier_bps(score: u8) -> u16 {
 fn refresh_dynamic_score(meta: &mut TokenMetadataV2, now: i64) {
     let base = calculate_trust_score_v2(
         meta.lock_percent,
+        meta.lock_days,
         meta.creator_percent,
         meta.curve_liquidity_percent,
         meta.circulation_percent,
@@ -3862,40 +3864,93 @@ fn refresh_dynamic_score(meta: &mut TokenMetadataV2, now: i64) {
 
 fn calculate_trust_score_v2(
     lock_percent: u8,
+    lock_days: u16,
     creator_percent: u8,
     curve_liquidity_percent: u8,
     circulation_percent: u8,
     airdrop_percent: u8,
     burn_option: u8,
 ) -> TrustScoreV2 {
-    let lock_tenths = match lock_percent {
-        0..=29 => 0,
-        30..=39 => 100,
-        40..=60 => 200,
-        61..=80 => 150,
-        _ => 0,
-    };
-    let creator_tenths = 10 * 20u16.saturating_sub(4 * creator_percent as u16);
-    let curve_liquidity_tenths =
-        (15 * curve_liquidity_percent.saturating_sub(20) as u16).clamp(0, 250);
-    let circulation_tenths = (12 * circulation_percent.saturating_sub(10) as u16).clamp(0, 200);
-    let airdrop_tenths = 10 * 15u16.saturating_sub(3 * airdrop_percent as u16);
-    let burn_tenths = match burn_option {
-        25 => 50,
-        50 => 100,
-        _ => 0,
+    // Lock duration: 0–250 tenths (0–25 pts). Longer lock = stronger commitment.
+    let lock_days_tenths: u16 = match lock_days {
+        0..=29   => 0,
+        30..=59  => 40,
+        60..=89  => 80,
+        90..=179 => 120,
+        180..=269 => 180,
+        270..=359 => 220,
+        360..    => 250,
     };
 
+    // Lock percent: 0–200 tenths (0–20 pts). More supply locked = less dump risk.
+    let lock_pct_tenths: u16 = match lock_percent {
+        0..=29  => 0,
+        30..=39 => 60,
+        40..=49 => 100,
+        50..=59 => 140,
+        60..=69 => 170,
+        70..    => 200,
+    };
+
+    // Combined into score_lock_tenths (max 450).
+    let lock_tenths = lock_days_tenths + lock_pct_tenths;
+
+    // Creator percent: 0–150 tenths (0–15 pts). Lower = less rug risk.
+    let creator_tenths: u16 = match creator_percent {
+        0       => 150,
+        1..=3   => 120,
+        4..=5   => 90,
+        6..=8   => 60,
+        9..=10  => 30,
+        _       => 0,
+    };
+
+    // Curve liquidity: 0–100 tenths (0–10 pts). More curve liquidity = safer market.
+    let curve_liquidity_tenths: u16 = match curve_liquidity_percent {
+        0..=19  => 0,
+        20..=29 => 30,
+        30..=39 => 60,
+        40..=49 => 80,
+        50..    => 100,
+    };
+
+    // Circulation: 0–80 tenths (0–8 pts). Healthy range 15–40% signals good distribution.
+    let circulation_tenths: u16 = match circulation_percent {
+        0..=9   => 0,
+        10..=14 => 40,
+        15..=40 => 80,
+        41..=60 => 40,
+        _       => 20,
+    };
+
+    // Airdrop: 0–100 tenths (0–10 pts). Having one signals community intent.
+    let airdrop_tenths: u16 = match airdrop_percent {
+        0       => 0,
+        1..=4   => 50,
+        5..=9   => 80,
+        10..    => 100,
+    };
+
+    // Burn on unlock: 0–120 tenths (0–12 pts). Permanent supply reduction.
+    let burn_tenths: u16 = match burn_option {
+        25 => 60,
+        50 => 120,
+        _  => 0,
+    };
+
+    // Max raw_tenths = 450 + 150 + 100 + 80 + 100 + 120 = 1000.
     let raw_tenths = lock_tenths
         + creator_tenths
         + curve_liquidity_tenths
         + circulation_tenths
         + airdrop_tenths
         + burn_tenths;
-    let normalized = ((raw_tenths as u32 * 100) + 550) / 1_100;
+
+    // Normalize: divide by 10 → 0–100 pts.
+    let trust_score = (raw_tenths / 10).min(100) as u8;
 
     TrustScoreV2 {
-        trust_score: normalized.min(100) as u8,
+        trust_score,
         lock_tenths,
         creator_tenths,
         curve_liquidity_tenths,

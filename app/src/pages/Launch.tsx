@@ -107,38 +107,55 @@ export const Launch = () => {
   const validInitialSol = !isV2Launch || (Number.isFinite(initialSolNum) && initialSolNum >= 0.5);
 
   const trustBreakdown = useMemo(() => {
+    // Lock duration pts — identical to contract calculate_trust_score_v2
+    const daysScore =
+      lockDays >= 360 ? 25 : lockDays >= 270 ? 22 : lockDays >= 180 ? 18 :
+      lockDays >= 90  ? 12 : lockDays >= 60  ? 8  : lockDays >= 30 ? 4 : 0;
+
+    // Lock percent pts
+    const lockPctScore =
+      lockPercent >= 70 ? 20 : lockPercent >= 60 ? 17 : lockPercent >= 50 ? 14 :
+      lockPercent >= 40 ? 10 : lockPercent >= 30 ? 6  : 0;
+
     if (!isV2Launch) {
-      const days = lockDays >= 360 ? 25 : lockDays >= 270 ? 20 : lockDays >= 180 ? 16 : lockDays >= 90 ? 12 : lockDays >= 60 ? 8 : 4;
-      const lock = lockPercent >= 60 ? 18 : lockPercent >= 50 ? 15 : lockPercent >= 40 ? 11 : 6;
       const burnScore = burn === 50 ? 12 : 6;
       const air = v1Airdrop === 8 ? 10 : v1Airdrop === 5 ? 6 : v1Airdrop === 2 ? 3 : 0;
-      const raw = days + lock + burnScore + air;
+      const raw = daysScore + lockPctScore + burnScore + air;
       return {
         mode: "v1" as const,
-        days,
-        lock,
-        creator: 0,
-        curve: 0,
-        circ: 0,
-        air,
-        burn: burnScore,
-        raw,
+        days: daysScore, lock: lockPctScore,
+        creator: 0, curve: 0, circ: 0,
+        air, burn: burnScore, raw,
         score: Math.min(100, raw),
       };
     }
 
-    const lock = lockPercent < 30 ? 0 : lockPercent <= 39 ? 10 : lockPercent <= 60 ? 20 : 15;
-    const creator = Math.max(0, 20 - 4 * creatorAlloc);
-    const curve = Math.max(0, Math.min(25, 1.5 * (curveLiquidity - 20)));
-    const circ = Math.max(0, Math.min(20, 1.2 * (v2Circulation - 10)));
-    const air = Math.max(0, 15 - 3 * airdrop);
-    const burnScore = burn === 50 ? 10 : 5;
-    const raw = lock + creator + curve + circ + air + burnScore;
+    // V2 — mirrors contract exactly (max 100 pts total)
+    const creator =
+      creatorAlloc === 0 ? 15 : creatorAlloc <= 3 ? 12 : creatorAlloc <= 5 ? 9 :
+      creatorAlloc <= 8 ? 6 : creatorAlloc <= 10 ? 3 : 0;
+
+    const curve =
+      curveLiquidity >= 50 ? 10 : curveLiquidity >= 40 ? 8 : curveLiquidity >= 30 ? 6 :
+      curveLiquidity >= 20 ? 3 : 0;
+
+    const circ =
+      v2Circulation >= 15 && v2Circulation <= 40 ? 8 :
+      (v2Circulation >= 10 && v2Circulation < 15) || (v2Circulation > 40 && v2Circulation <= 60) ? 4 :
+      v2Circulation > 60 ? 2 : 0;
+
+    // Airdrop: having one is GOOD — signals community intent
+    const air =
+      airdrop >= 10 ? 10 : airdrop >= 5 ? 8 : airdrop >= 1 ? 5 : 0;
+
+    const burnScore = burn === 50 ? 12 : burn === 25 ? 6 : 0;
+
+    const raw = daysScore + lockPctScore + creator + curve + circ + air + burnScore;
     return {
       mode: "v2" as const,
-      days: 0,
-      lock, creator, curve, circ, air, burn: burnScore, raw,
-      score: Math.min(100, Math.round((raw / 110) * 100)),
+      days: daysScore, lock: lockPctScore,
+      creator, curve, circ, air, burn: burnScore, raw,
+      score: Math.min(100, raw),
     };
   }, [isV2Launch, lockDays, lockPercent, creatorAlloc, curveLiquidity, v2Circulation, airdrop, v1Airdrop, burn]);
 
@@ -630,21 +647,23 @@ export const Launch = () => {
           <div style={{ fontSize: ".82rem", color: "var(--muted2)", lineHeight: 1.8, marginBottom: "1.25rem" }}>
             {isV2Launch ? (
               <>
-                Lock: +{trustBreakdown.lock.toFixed(0)}<br />
-                Creator: +{trustBreakdown.creator.toFixed(0)}<br />
-                Curve Liquidity: +{trustBreakdown.curve.toFixed(1)}<br />
-                Circulation: +{trustBreakdown.circ.toFixed(1)}<br />
-                Airdrop: +{trustBreakdown.air.toFixed(0)}<br />
-                Burn: +{trustBreakdown.burn.toFixed(0)}<br />
-                <span style={{ color: "var(--text)" }}>Raw: {trustBreakdown.raw.toFixed(1)} / 110</span><br />
-                <span style={{ color: scoreColor }}>TrustScore: {trustScore} / 100</span>
+                Lock duration ({lockDays}d): <span style={{ color: "var(--green-neon)" }}>+{trustBreakdown.days}</span> / 25<br />
+                Lock percent ({lockPercent}%): <span style={{ color: "var(--green-neon)" }}>+{trustBreakdown.lock}</span> / 20<br />
+                Creator % ({creatorAlloc}%): <span style={{ color: "var(--green-neon)" }}>+{trustBreakdown.creator}</span> / 15<br />
+                Curve liquidity ({curveLiquidity}%): <span style={{ color: "var(--green-neon)" }}>+{trustBreakdown.curve}</span> / 10<br />
+                Airdrop ({airdrop}%): <span style={{ color: "var(--green-neon)" }}>+{trustBreakdown.air}</span> / 10<br />
+                Burn ({burn}%): <span style={{ color: "var(--green-neon)" }}>+{trustBreakdown.burn}</span> / 12<br />
+                Circulation ({v2Circulation}%): <span style={{ color: "var(--green-neon)" }}>+{trustBreakdown.circ}</span> / 8<br />
+                <span style={{ color: "var(--text)" }}>Raw: {trustBreakdown.raw} / 100</span><br />
+                <span style={{ color: scoreColor }}>LaunchScore: {trustScore} / 100</span>
               </>
             ) : (
               <>
-                Lock days: +{trustBreakdown.days.toFixed(0)}<br />
-                Lock: +{trustBreakdown.lock.toFixed(0)}<br />
-                Airdrop: +{trustBreakdown.air.toFixed(0)}<br />
-                Burn: +{trustBreakdown.burn.toFixed(0)}
+                Lock duration ({lockDays}d): <span style={{ color: "var(--green-neon)" }}>+{trustBreakdown.days}</span> / 25<br />
+                Lock percent ({lockPercent}%): <span style={{ color: "var(--green-neon)" }}>+{trustBreakdown.lock}</span> / 20<br />
+                Airdrop: <span style={{ color: "var(--green-neon)" }}>+{trustBreakdown.air}</span> / 10<br />
+                Burn: <span style={{ color: "var(--green-neon)" }}>+{trustBreakdown.burn}</span> / 12<br />
+                <span style={{ color: scoreColor }}>LaunchScore: {trustScore} / 100</span>
               </>
             )}
           </div>
