@@ -262,7 +262,7 @@ export const buyOnCurveV2 = async (
   mint: PublicKey,
   buyerTokenAccount: PublicKey,
   solIn: number,
-  minTokensOut = 0
+  minTokensOut: string | number = 0
 ) => {
   const pdas = findV2Pdas(mint);
   const creatorFeeWallet = await getCreatorFeeWalletV2(program, mint);
@@ -271,7 +271,7 @@ export const buyOnCurveV2 = async (
     ? []
     : [createAssociatedTokenAccountInstruction(buyer, buyerTokenAccount, buyer, mint)];
   const tx = await program.methods
-    .buyV2(new BN(Math.floor(solIn * LAMPORTS_PER_SOL)), new BN(minTokensOut))
+    .buyV2(new BN(Math.floor(solIn * LAMPORTS_PER_SOL)), new BN(minTokensOut.toString()))
     .accounts({
       buyer,
       tokenMetadata: pdas.tokenMetadata,
@@ -295,12 +295,12 @@ export const sellOnCurveV2 = async (
   mint: PublicKey,
   sellerTokenAccount: PublicKey,
   tokensIn: string,
-  minSolOutLamports = 0
+  minSolOutLamports: string | number = 0
 ) => {
   const pdas = findV2Pdas(mint);
   const creatorFeeWallet = await getCreatorFeeWalletV2(program, mint);
   const tx = await program.methods
-    .sellV2(new BN(tokensIn), new BN(minSolOutLamports))
+    .sellV2(new BN(tokensIn), new BN(minSolOutLamports.toString()))
     .accounts({
       seller,
       tokenMetadata: pdas.tokenMetadata,

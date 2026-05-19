@@ -22,6 +22,7 @@ import {
   sellOnCurveV2,
 } from "../lib/program";
 import { listTokens } from "../lib/image";
+import { LiveMarketChart } from "../components/LiveMarketChart";
 
 const PREVIEW_TOKEN_RESERVE = 350_000_000;
 const PREVIEW_SOL_RESERVE = 0.5;
@@ -40,7 +41,7 @@ type TradeSide = "buy" | "sell";
 type ChartMode = "candles" | "line" | "area";
 type MetricMode = "price" | "mcap";
 type QuoteMode = "SOL" | "USD";
-type Timeframe = "1s" | "1m" | "5m" | "15m" | "1h" | "4h" | "D";
+type Timeframe = "1s" | "5s" | "1m" | "5m" | "1h";
 
 interface WalletTokenOption {
   mint: string;
@@ -51,15 +52,13 @@ interface WalletTokenOption {
   logo?: string;
 }
 
-const TIMEFRAMES: Timeframe[] = ["1s", "1m", "5m", "15m", "1h", "4h", "D"];
+const TIMEFRAMES: Timeframe[] = ["1s", "5s", "1m", "5m", "1h"];
 const CANDLE_COUNT: Record<Timeframe, number> = {
   "1s": 76,
+  "5s": 72,
   "1m": 68,
   "5m": 60,
-  "15m": 54,
   "1h": 48,
-  "4h": 42,
-  D: 36,
 };
 
 const DRAWING_TOOLS = [
@@ -145,6 +144,9 @@ const toRawTokenAmount = (amount: string, decimals = 9) => {
   const paddedFraction = fraction.padEnd(decimals, "0").slice(0, decimals);
   return `${whole}${paddedFraction}`.replace(/^0+(?=\d)/, "") || "0";
 };
+
+const rawTokenAmountFromUi = (amount: number, decimals = 9) =>
+  toRawTokenAmount(formatTokenAmount(Math.max(0, amount), decimals), decimals);
 
 const displayChartValue = (priceSol: number, metric: MetricMode, quote: QuoteMode) => {
   const metricValue = metric === "mcap" ? priceSol * TOTAL_SUPPLY_UI : priceSol;
@@ -306,6 +308,7 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
   const [tokenPickerOpen, setTokenPickerOpen] = useState(false);
   const [tokenPickerBusy, setTokenPickerBusy] = useState(false);
   const [tokenPickerError, setTokenPickerError] = useState<string | null>(null);
+  const [slippageBps, setSlippageBps] = useState(100);
   const [timeframe, setTimeframe] = useState<Timeframe>("1s");
   const [chartMode, setChartMode] = useState<ChartMode>("candles");
   const [metricMode, setMetricMode] = useState<MetricMode>("mcap");
@@ -499,19 +502,20 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
     });
   };
 
-  const exportChartSvg = () => {
-    const svg = document.querySelector(".market-chart");
-    if (!svg) return;
-    const source = new XMLSerializer().serializeToString(svg);
-    const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `humbletrust-${selectedSymbol.toLowerCase()}-${timeframe}-chart.svg`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+  const exportChartImage = () => {
+    const canvas = document.querySelector<HTMLCanvasElement>(".live-chart-host canvas");
+    if (!canvas) return;
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `humbletrust-${selectedSymbol.toLowerCase()}-${timeframe}-chart.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }, "image/png");
   };
 
   const resetChart = () => {
@@ -540,7 +544,11 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
       const ata = getAssociatedTokenAddressSync(mint, anchorWallet.publicKey);
       const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
       const program = getProgramV2(provider);
-      const { signature } = await buyOnCurveV2(program, anchorWallet.publicKey, mint, ata, Number(solAmount), 0);
+      const minTokensOut = rawTokenAmountFromUi(
+        estimatedTokens * (1 - slippageBps / 10_000),
+        selectedDecimals
+      );
+      const { signature } = await buyOnCurveV2(program, anchorWallet.publicKey, mint, ata, Number(solAmount), minTokensOut);
       setTxSig(signature);
       await refreshReserves();
     } catch (e: any) {
@@ -561,7 +569,17 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
       const ata = getAssociatedTokenAddressSync(mint, anchorWallet.publicKey);
       const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
       const program = getProgramV2(provider);
-      const { signature } = await sellOnCurveV2(program, anchorWallet.publicKey, mint, ata, toRawTokenAmount(tokensAmount, selectedDecimals), 0);
+      const minSolOutLamports = Math.floor(
+        estimatedSol * LAMPORTS_PER_SOL * (1 - slippageBps / 10_000)
+      ).toString();
+      const { signature } = await sellOnCurveV2(
+        program,
+        anchorWallet.publicKey,
+        mint,
+        ata,
+        toRawTokenAmount(tokensAmount, selectedDecimals),
+        minSolOutLamports
+      );
       setTxSig(signature);
       await refreshReserves();
     } catch (e: any) {
@@ -577,7 +595,7 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
       <h2 className="sec-h2">Trade <span className="hl-green">protected</span> tokens</h2>
       <p className="sec-sub">
         {canUseCurve
-          ? "V2 devnet tokens trade instantly through the HumbleTrust bonding curve, then migrate to Raydium after the SOL threshold is reached."
+          ? "V2 devnet tokens trade instantly through the HumbleTrust bonding curve. Raydium CPMM migration is the active devnet integration milestone after the SOL threshold."
           : "V2 curve trading is waiting for the devnet program deploy. Launch currently uses the live v1 token-lock flow."}
       </p>
 
@@ -600,6 +618,16 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
           <div className="trade-alert-text">
             Each token has a 0-600 second trading delay after launch. If a transaction fails immediately after launch,
             wait for the delay to expire and retry on devnet.
+          </div>
+        </div>
+      </div>
+
+      <div className="trade-alert trade-alert-blue">
+        <TrendingUp size={18} color="var(--solana-blue)" style={{ flexShrink: 0, marginTop: 2 }} />
+        <div>
+          <div className="trade-alert-title blue">Raydium CPMM migration status</div>
+          <div className="trade-alert-text">
+            HumbleTrust targets real Raydium CPMM CPI migration from PDA reserves. The current public trade flow stays on devnet curve until CPI pool creation, LP custody, and leftover burn are verified.
           </div>
         </div>
       </div>
@@ -733,6 +761,35 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
             <strong>{(CURVE_FEE_RATE * 100).toFixed(0)}%</strong>
           </div>
           <div className="swap-meta-row">
+            <span>Slippage guard</span>
+            <strong>{(slippageBps / 100).toFixed(slippageBps % 100 === 0 ? 0 : 1)}%</strong>
+          </div>
+          <div className="slippage-control">
+            {[50, 100, 300].map((bps) => (
+              <button
+                key={bps}
+                type="button"
+                className={slippageBps === bps ? "active" : ""}
+                onClick={() => setSlippageBps(bps)}
+              >
+                {(bps / 100).toFixed(bps % 100 === 0 ? 0 : 1)}%
+              </button>
+            ))}
+            <input
+              aria-label="Custom slippage percent"
+              value={(slippageBps / 100).toString()}
+              onChange={(e) => {
+                const value = Number(e.target.value);
+                if (Number.isFinite(value) && value >= 0 && value <= 25) {
+                  setSlippageBps(Math.round(value * 100));
+                }
+              }}
+            />
+          </div>
+          {slippageBps === 0 && (
+            <div className="trade-error">0% slippage can fail on any price movement. Use only for exact tests.</div>
+          )}
+          <div className="swap-meta-row">
             <span>{side === "buy" ? "Price impact" : "Sell amount"}</span>
             <strong>{side === "buy" ? `${formatCompact(priceImpact, 2)}%` : `${formatTokenAmount(tokensIn, selectedDecimals)} ${selectedSymbol}`}</strong>
           </div>
@@ -794,7 +851,7 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
               <button type="button" className="chart-icon-btn" title="Undo" onClick={undoTool}>↶</button>
               <button type="button" className="chart-icon-btn" title="Redo" onClick={redoTool}>↷</button>
               <button type="button" className="chart-icon-btn" title="Reset chart" onClick={resetChart}>⟲</button>
-              <button type="button" className="chart-icon-btn" title="Export chart SVG" onClick={exportChartSvg}>▣</button>
+              <button type="button" className="chart-icon-btn" title="Export chart PNG" onClick={exportChartImage}>▣</button>
             </div>
 
             {showIndicators && (
@@ -828,69 +885,15 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
                   {selectedSymbol} / SOL <strong>({metricMode === "mcap" ? "Market Cap" : "Price"})</strong> on HumbleCurve · {timeframe} · devnet
                 </div>
                 <div className="chart-ohlc">
-                  O {formatChartValue(chart.active.open, metricMode, quoteMode)}
-                  {" "}H {formatChartValue(chart.active.high, metricMode, quoteMode)}
-                  {" "}L {formatChartValue(chart.active.low, metricMode, quoteMode)}
-                  {" "}C {formatChartValue(chart.active.close, metricMode, quoteMode)}
+                  Live OHLCV from HumbleTrust indexer
                 </div>
-                <div className="chart-volume-label">Volume <span>{showVolume ? "7" : "off"}</span></div>
-                <svg className="market-chart" viewBox={`0 0 ${CHART_W} ${CHART_H}`} role="img" aria-label="Trading chart">
-                  <defs>
-                    <linearGradient id="terminalArea" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="rgba(18,191,164,.22)" />
-                      <stop offset="100%" stopColor="rgba(18,191,164,0)" />
-                    </linearGradient>
-                  </defs>
-                  {chart.priceLabels.map((label, index) => (
-                    <line key={`h-${index}`} x1={CHART_LEFT} x2={CHART_W - CHART_RIGHT} y1={label.y} y2={label.y} className="terminal-grid" />
-                  ))}
-                  {chart.timeLabels.map((label, index) => (
-                    <line key={`v-${index}`} y1={CHART_TOP} y2={chart.volumeBase} x1={label.x} x2={label.x} className="terminal-grid" />
-                  ))}
-                  {chart.chartMode === "area" && <path d={chart.areaPath} fill="url(#terminalArea)" />}
-                  {(chart.chartMode === "line" || chart.chartMode === "area") && <path d={chart.linePath} className="chart-line-path" />}
-                  {chart.chartMode === "candles" && chart.candles.map((candle, index) => (
-                    <g key={index} className={candle.active ? "terminal-candle active" : "terminal-candle"}>
-                      <line x1={candle.x} x2={candle.x} y1={candle.yHigh} y2={candle.yLow} className={candle.up ? "terminal-wick up" : "terminal-wick down"} />
-                      <rect
-                        x={candle.x - candle.candleWidth / 2}
-                        y={candle.bodyY}
-                        width={candle.candleWidth}
-                        height={candle.bodyHeight}
-                        rx="1"
-                        className={candle.up ? "terminal-body up" : "terminal-body down"}
-                      />
-                    </g>
-                  ))}
-                  {chart.showVolume && chart.candles.map((candle, index) => (
-                    <rect
-                      key={`vol-${index}`}
-                      x={candle.x - candle.candleWidth / 2}
-                      y={candle.volumeY}
-                      width={candle.candleWidth}
-                      height={candle.volumeHeight}
-                      className={candle.up ? "volume-bar up" : "volume-bar down"}
-                    />
-                  ))}
-                  {chart.showMa && <path d={chart.maPath} className="ma-path" />}
-                  {showCrosshair && (
-                    <>
-                      <line x1={chart.active.x} x2={chart.active.x} y1={CHART_TOP} y2={chart.volumeBase} className="crosshair-line" />
-                      <line x1={CHART_LEFT} x2={CHART_W - CHART_RIGHT} y1={chart.active.yClose} y2={chart.active.yClose} className="crosshair-line" />
-                    </>
-                  )}
-                  <line x1={CHART_LEFT} x2={CHART_W - CHART_RIGHT} y1={chart.active.yClose} y2={chart.active.yClose} className="current-price-line" />
-                  {chart.priceLabels.map((label, index) => (
-                    <text key={`p-${index}`} x={CHART_W - 72} y={label.y + 4} className="chart-price-label">{label.label}</text>
-                  ))}
-                  {chart.timeLabels.map((label, index) => (
-                    <text key={`t-${index}`} x={label.x} y={CHART_H - 9} className="chart-time-label">{label.label}</text>
-                  ))}
-                  <rect x={CHART_W - 72} y={chart.active.yClose - 13} width="72" height="26" rx="2" className="price-tag-bg" />
-                  <text x={CHART_W - 66} y={chart.active.yClose + 4} className="price-tag-text">{formatChartValue(chart.active.close, metricMode, quoteMode)}</text>
-                  <rect x={Math.max(CHART_LEFT, chart.active.x - 54)} y={CHART_H - 31} width="142" height="26" rx="2" className="time-tag-bg" />
-                  <text x={Math.max(CHART_LEFT + 8, chart.active.x - 45)} y={CHART_H - 13} className="time-tag-text">19 May '26 00:21:41</text>
-                </svg>
+                <div className="chart-volume-label">Volume <span>{showVolume ? "live" : "off"}</span></div>
+                <LiveMarketChart
+                  mint={selectedMint}
+                  timeframe={timeframe}
+                  mode={chartMode}
+                  showVolume={showVolume}
+                />
               </div>
             </div>
 

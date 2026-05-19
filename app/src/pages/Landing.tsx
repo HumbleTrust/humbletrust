@@ -9,11 +9,11 @@ export const Landing = ({ goLaunch, goDiscover }: { goLaunch: () => void; goDisc
       </div>
       <h1 className="hero-h1">
         HumbleTrust<br />
-        <span className="hl-solana">Trust & Safety infrastructure for Solana</span>
+        <span className="hl-solana">Trust & Safety layer + protected launchpad for Solana</span>
       </h1>
       <p className="hero-p">
-        Launch protected tokens, route early trading through a bonding curve, score risk from the first block,
-        and prepare liquidity for locked DEX migration.
+        HumbleTrust starts as a protected launchpad and grows into a trust layer: on-chain launch records,
+        PDA custody, TrustScore primitives, certificates, bonding-curve trading, and Raydium CPMM migration readiness.
       </p>
       <div className="hero-btns">
         <button className="btn-p" onClick={goLaunch}>
@@ -32,9 +32,9 @@ export const Landing = ({ goLaunch, goDiscover }: { goLaunch: () => void; goDisc
     </section>
 
     <section>
-      <div className="sec-eyebrow">How v2 Works</div>
-      <h2 className="sec-h2">Trust rules first. Trading second. Migration last.</h2>
-      <p className="sec-sub">The current production frontend is wired to the v2 devnet program.</p>
+      <div className="sec-eyebrow">Layer + Launchpad</div>
+      <h2 className="sec-h2">Launchpad is the first use case. Trust layer is the product.</h2>
+      <p className="sec-sub">The current production frontend is wired to the v2 devnet program and exposes the first enforced trust primitives.</p>
       <div className="how-grid">
         <div className="how-card">
           <span className="how-n">01</span>
@@ -57,7 +57,7 @@ export const Landing = ({ goLaunch, goDiscover }: { goLaunch: () => void; goDisc
         <div className="how-card">
           <span className="how-n">04</span>
           <div className="how-icon-wrap"><Award size={20} /></div>
-          <div className="how-t">Prove The Launch</div>
+          <div className="how-t">Record The Trust Signal</div>
           <div className="how-d">Creators can receive a Token-2022 NonTransferable Launch Certificate NFT linked to the on-chain launch record.</div>
         </div>
       </div>
@@ -65,8 +65,8 @@ export const Landing = ({ goLaunch, goDiscover }: { goLaunch: () => void; goDisc
 
     <section className="feat-bg">
       <div className="sec-eyebrow">Current Status</div>
-      <h2 className="sec-h2">What is live, and what is still being built.</h2>
-      <p className="sec-sub">HumbleTrust is devnet alpha. The app is usable, but mainnet is blocked until audits, indexing, and DEX migration are complete.</p>
+      <h2 className="sec-h2">DEVNET is active. MAINNET is preparation, not marketing.</h2>
+      <p className="sec-sub">HumbleTrust is devnet alpha. The app is usable, but mainnet is blocked until audits, indexing, and Raydium CPMM migration are complete.</p>
       <div className="feat-grid">
         {[
           { icon: <Lock size={18} />, t: "PDA Vault Distribution", d: "Locked, creator, curve, circulation, and airdrop vaults are split and validated on-chain.", s: "active", l: "LIVE" },
@@ -75,7 +75,7 @@ export const Landing = ({ goLaunch, goDiscover }: { goLaunch: () => void; goDisc
           { icon: <FileCheck size={18} />, t: "Token Metadata", d: "New v2 launches create Metaplex metadata during the launch transaction.", s: "active", l: "LIVE" },
           { icon: <Award size={18} />, t: "Launch Certificate NFT", d: "Token-2022 NonTransferable certificate can be minted after v2 launch and linked to the certificate PDA.", s: "active", l: "LIVE" },
           { icon: <Flame size={18} />, t: "Locked Vault Burn", d: "25% or 50% burn option applies to the locked allocation without breaking curve liquidity.", s: "active", l: "LIVE" },
-          { icon: <Clock size={18} />, t: "Auto-Raydium Migration", d: "Threshold state and trigger reward exist. Real Raydium/OpenBook CPI pool creation is still in progress.", s: "soon", l: "IN PROGRESS" },
+          { icon: <Clock size={18} />, t: "Raydium CPMM Migration", d: "Threshold state and trigger reward exist. Real CPMM CPI pool creation is the active migration milestone.", s: "soon", l: "IN PROGRESS" },
           { icon: <Database size={18} />, t: "Chain Discover Index", d: "Discover currently uses browser cache. Program-account/event indexing is the next sync layer.", s: "soon", l: "NEXT" },
           { icon: <BarChart3 size={18} />, t: "Real Market Chart", d: "Current chart previews the curve. Real candles, trades, holders, and top traders are next.", s: "soon", l: "NEXT" },
           { icon: <Users size={18} />, t: "Creator Reputation", d: "PDA groundwork exists. Profile history and score effects still need frontend integration.", s: "soon", l: "NEXT" },

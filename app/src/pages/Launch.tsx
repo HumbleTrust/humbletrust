@@ -557,17 +557,17 @@ export const Launch = () => {
                 )}
               </div>
 
-              {/* Phase 4 — LP Lock */}
+              {/* Phase 4 — Raydium CPMM Migration */}
               <div style={{ background: "rgba(153,69,255,.05)", border: "1px solid rgba(153,69,255,.15)", borderRadius: 8, padding: ".75rem" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: ".35rem" }}>
                   <Lock size={14} color="var(--solana-purple)" />
-                  <span style={{ fontSize: ".82rem", fontWeight: 600 }}>Phase 4 — Lock LP Tokens</span>
+                  <span style={{ fontSize: ".82rem", fontWeight: 600 }}>Phase 4 — Raydium CPMM Migration</span>
                 </div>
                 <div style={{ fontSize: ".75rem", color: "var(--muted2)", marginBottom: ".5rem" }}>
-                  After adding liquidity on Raydium/Orca, lock your LP tokens here. The protocol enforces the lock and distributes fees: {tier === 1 ? "60%" : "50%"} creator / 30% treasury / 20% rewards.
+                  Target flow: when the curve reaches 50 SOL, v2 migrates PDA reserves into a Raydium CPMM pool and locks LP custody in a PDA. This is still a devnet integration milestone, not a completed mainnet feature.
                 </div>
                 <div style={{ fontSize: ".72rem", color: "var(--muted)", fontStyle: "italic" }}>
-                  Add your LP token mint address and amount after creating a Raydium pool.
+                  Manual LP input is not enough for the final anti-rug model; the next contract step is real Raydium CPMM CPI.
                 </div>
               </div>
             </div>

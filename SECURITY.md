@@ -1,6 +1,6 @@
 # Security Policy
 
-HumbleTrust is Trust & Safety infrastructure for Solana and is currently running on **devnet only**. This document covers responsible disclosure, current security status, and known limitations.
+HumbleTrust is a Trust & Safety layer + protected launchpad for Solana and is currently running on **devnet only**. This document covers responsible disclosure, current security status, and known limitations.
 
 ## Reporting A Vulnerability
 
@@ -39,7 +39,7 @@ Mainnet deployment is blocked until the v2 test suite, audit, multisig authority
 
 | Area | Current state | Mainnet requirement |
 | --- | --- | --- |
-| Auto-Raydium migration | Threshold/state/reward hook exists, but real Raydium/OpenBook CPI pool creation is not complete | Implement and audit real pool creation, LP custody, and fallback behavior |
+| Raydium CPMM migration | Threshold/state/reward hook exists, but real Raydium CPMM CPI pool creation is not complete | Implement and audit real pool creation from PDA reserves, LP custody, leftover burn, and fallback behavior |
 | Discover indexing | Current frontend can show locally launched tokens from browser storage | Replace with chain-indexed program accounts/events |
 | Chart data | Trade chart is a curve/reserve preview, not a full market data indexer | Add real events, candles, transaction feed, holders, and top traders |
 | Launch certificate NFT | Token-2022 NonTransferable certificate mint + certificate PDA is live on devnet | Add tests, richer metadata, and audit review |

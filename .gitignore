@@ -7,6 +7,12 @@ test-ledger/
 *.json
 *.key
 *.pem
+!package.json
+!package-lock.json
+!tsconfig.json
+!*/package.json
+!*/package-lock.json
+!*/tsconfig.json
 id.json
 wallet.json
 keypair.json
@@ -19,6 +25,8 @@ dist/
 build/
 .cache/
 *.tsbuildinfo
+app/vite.config.js
+app/vite.config.d.ts
 
 # Yarn
 .yarn/
@@ -28,6 +36,7 @@ build/
 .env
 .env.*
 !.env.example
+!*/.env.example
 
 # OS junk
 .DS_Store

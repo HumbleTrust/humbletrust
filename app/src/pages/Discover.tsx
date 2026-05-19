@@ -1,79 +1,115 @@
-import { useEffect, useState } from "react";
-import { ExternalLink, Award, Lock } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ExternalLink, Award, Lock, RefreshCw } from "lucide-react";
 import { HexLogo } from "../components/HexLogo";
-import { listTokens, SavedToken } from "../lib/image";
+import { ApiToken, getTokens } from "../lib/api";
 
-export const Discover = () => {
-  const [tokens, setTokens] = useState<SavedToken[]>([]);
+const scoreColor = (score: number) =>
+  score >= 85 ? "var(--green-neon)" : score >= 70 ? "var(--solana-blue)" : score >= 40 ? "var(--yellow)" : "var(--orange)";
 
-  useEffect(() => { setTokens(listTokens()); }, []);
+const scoreLabel = (score: number) =>
+  score >= 85 ? "ELITE" : score >= 70 ? "STRONG" : score >= 40 ? "OK" : "WEAK";
 
-  if (tokens.length === 0) {
-    return (
-      <section>
-        <div className="sec-eyebrow">Discover</div>
-        <h2 className="sec-h2">All <span className="hl-green">protected</span> tokens</h2>
-        <p className="sec-sub">Tokens launched on Humble.Trust devnet, stored locally per browser.</p>
-        <div className="coming-soon">
-          <h3>No tokens yet</h3>
-          <p>Go to <strong>LAUNCH</strong> and create your first protected token.</p>
-        </div>
-      </section>
-    );
-  }
+const compact = (value: string | number) =>
+  Number(value || 0).toLocaleString("en-US", { notation: "compact", maximumFractionDigits: 2 });
+
+export const Discover = ({ openToken }: { openToken: (mint: string) => void }) => {
+  const [tokens, setTokens] = useState<ApiToken[]>([]);
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [sort, setSort] = useState<"trust" | "volume" | "new">("new");
+
+  const load = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await getTokens(150);
+      setTokens(result.tokens);
+    } catch (e: any) {
+      setError(e.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => { void load(); }, []);
+
+  const sorted = useMemo(() => {
+    return [...tokens].sort((a, b) => {
+      if (sort === "trust") return Number(b.trust_score) - Number(a.trust_score);
+      if (sort === "volume") return Number(b.volume_sol) - Number(a.volume_sol);
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [tokens, sort]);
 
   return (
     <section>
       <div className="sec-eyebrow">Discover</div>
-      <h2 className="sec-h2">All <span className="hl-green">protected</span> tokens</h2>
-      <p className="sec-sub">Tokens launched on Humble.Trust devnet, stored locally per browser.</p>
-      <div style={{ background: "rgba(20,102,255,.07)", border: "1px solid rgba(20,102,255,.18)", color: "var(--muted2)", padding: ".6rem .9rem", borderRadius: 8, fontSize: ".78rem", marginBottom: "1.5rem" }}>
-        Trust Scores shown here are snapshots from launch time. Live scores may differ as votes, trades, and time-lock changes accumulate on-chain.
+      <h2 className="sec-h2">Trust Layer <span className="hl-green">registry</span></h2>
+      <p className="sec-sub">
+        Tokens indexed from the HumbleTrust backend on devnet. This page uses Postgres/indexer data, not browser localStorage.
+      </p>
+
+      <div className="discover-toolbar">
+        <div className="trade-tabs small-tabs">
+          <button className={sort === "new" ? "active" : ""} onClick={() => setSort("new")} type="button">New</button>
+          <button className={sort === "trust" ? "active" : ""} onClick={() => setSort("trust")} type="button">TrustScore</button>
+          <button className={sort === "volume" ? "active" : ""} onClick={() => setSort("volume")} type="button">Volume</button>
+        </div>
+        <button className="reserve-refresh" onClick={load} disabled={busy} type="button">
+          <RefreshCw size={13} className={busy ? "spin" : undefined} /> Refresh
+        </button>
       </div>
+
+      {error && (
+        <div className="trade-error">
+          Backend unavailable: {error}. Start `/backend` with `npm run dev` and a Postgres `DATABASE_URL`.
+        </div>
+      )}
+
+      {!error && sorted.length === 0 && (
+        <div className="coming-soon">
+          <h3>{busy ? "Loading indexed launches..." : "No indexed launches yet"}</h3>
+          <p>Create a token on devnet, then let the backend indexer ingest the launch event.</p>
+        </div>
+      )}
+
       <div className="tok-grid-real">
-        {tokens.map((t) => {
-          const isV2Token = t.launchMode !== "v1";
-          const scoreColor = isV2Token
-            ? t.trustScore >= 85 ? "var(--green-neon)" : t.trustScore >= 70 ? "var(--solana-blue)" : t.trustScore >= 40 ? "var(--yellow)" : "var(--orange)"
-            : t.trustScore >= 81 ? "var(--green-neon)" : t.trustScore >= 66 ? "var(--solana-blue)" : t.trustScore >= 51 ? "var(--yellow)" : "var(--orange)";
-          const scoreLabel = isV2Token
-            ? t.trustScore >= 85 ? "ELITE" : t.trustScore >= 70 ? "STRONG" : t.trustScore >= 40 ? "OK" : "WEAK"
-            : t.trustScore >= 81 ? "PROTECTED" : t.trustScore >= 66 ? "TRUSTED" : t.trustScore >= 51 ? "BASIC" : "WEAK";
+        {sorted.map((t) => {
+          const color = scoreColor(Number(t.trust_score));
           const url = "https://solscan.io/token/" + t.mint + "?cluster=devnet";
           return (
-            <div
-              key={t.mint}
-              className="tok-card-real"
-              onClick={() => window.open(url, "_blank")}
-            >
+            <div key={t.mint} className="tok-card-real token-card-click" onClick={() => openToken(t.mint)}>
               <div className="tok-card-top">
-                <HexLogo src={t.logo} label={t.symbol} size={56} variant={t.tier === 1 ? "gradient" : "green"} />
+                <HexLogo label={t.symbol || t.mint.slice(0, 3)} size={56} variant={Number(t.trust_score) >= 85 ? "gradient" : "green"} />
                 <div className="tok-card-meta">
                   <div className="tok-card-name">
-                    {t.name}
-                    <span className={"tok-card-tier " + (t.tier === 1 ? "premium" : "standard")}>{t.tier === 1 ? "PREMIUM" : "STANDARD"}</span>
+                    {t.name || "Indexed token"}
+                    <span className={"tok-card-tier " + (t.status === "migrated" ? "premium" : "standard")}>{t.status}</span>
                   </div>
-                  <div className="tok-card-symbol">${t.symbol}</div>
+                  <div className="tok-card-symbol">${t.symbol || t.mint.slice(0, 4)}</div>
                 </div>
               </div>
               <div className="tok-card-mint">Mint: {t.mint.slice(0, 8)}...{t.mint.slice(-6)}</div>
               <div className="tok-card-score-row">
                 <span className="tok-card-score-k">Trust Score</span>
-                <span className="tok-card-score-v" style={{ color: scoreColor }}>
-                  {t.trustScore} / 100 · {scoreLabel} <ExternalLink size={12} style={{ display: "inline", marginLeft: 4, opacity: 0.5 }} />
+                <span className="tok-card-score-v" style={{ color }}>
+                  {t.trust_score} / 100 · {scoreLabel(Number(t.trust_score))}
                 </span>
               </div>
+              <div className="tok-card-score-row">
+                <span className="tok-card-score-k">Volume</span>
+                <span className="tok-card-score-v">{compact(t.volume_sol)} SOL</span>
+              </div>
               <div style={{ display: "flex", gap: 6, marginTop: ".5rem", flexWrap: "wrap" }}>
-                {t.hasCertificate && (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: ".68rem", background: "rgba(20,102,255,.12)", color: "var(--solana-blue)", borderRadius: 4, padding: "2px 6px" }}>
-                    <Award size={10} /> Certificate
-                  </span>
+                {t.certificate_mint && (
+                  <span className="mini-chip blue"><Award size={10} /> Certificate</span>
                 )}
-                {t.hasLpLock && (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: ".68rem", background: "rgba(153,69,255,.12)", color: "var(--solana-purple)", borderRadius: 4, padding: "2px 6px" }}>
-                    <Lock size={10} /> LP Locked
-                  </span>
+                {t.raydium_pool && (
+                  <span className="mini-chip purple"><Lock size={10} /> Raydium/LP</span>
                 )}
+                <a href={url} target="_blank" rel="noreferrer" className="mini-chip green" onClick={(e) => e.stopPropagation()}>
+                  Solscan <ExternalLink size={10} />
+                </a>
               </div>
             </div>
           );

@@ -4,16 +4,16 @@ export const About = () => (
   <>
     <section>
       <div className="sec-eyebrow">About HumbleTrust</div>
-      <h2 className="sec-h2">Trust & Safety infrastructure <span className="hl-solana">for Solana</span></h2>
+      <h2 className="sec-h2">Trust & Safety layer + protected launchpad <span className="hl-solana">for Solana</span></h2>
       <p className="sec-sub" style={{ maxWidth: 760 }}>
-        HumbleTrust is Trust & Safety infrastructure for Solana: protected token creation, bonding-curve trading,
-        launch certificates, creator accountability, and future locked DEX migration.
+        HumbleTrust is not positioned as only a token launcher. The launchpad is the first enforced workflow for a broader trust layer:
+        protected token creation, bonding-curve trading, launch certificates, creator accountability, on-chain risk signals, and Raydium CPMM migration.
       </p>
     </section>
 
     <section className="feat-bg">
       <div className="sec-eyebrow">The Problem</div>
-      <h2 className="sec-h2">Solana needs safety rails <span className="hl-green">at launch time</span></h2>
+      <h2 className="sec-h2">Solana needs a trust layer <span className="hl-green">at launch time</span></h2>
       <div className="how-grid">
         {[
           { n: "01", icon: <Zap size={20} />, t: "No enforcement", d: "Fast launch tools let anyone launch with almost no accountability. Risk appears minutes after listing." },
@@ -79,7 +79,7 @@ export const About = () => (
           { phase: "Live", title: "v2 Protected Launch", status: "done", items: ["Fixed 1B supply", "L/C/Q/R/A vault split", "Initial SOL curve treasury PDA", "Metaplex metadata", "Mint authority revoked"] },
           { phase: "Live", title: "Bonding Curve Trade", status: "done", items: ["Buy and sell on devnet", "1% total fee", "Wallet token picker", "MAX sell amount", "Trading-style chart preview"] },
           { phase: "Live", title: "Launch Certificate NFT", status: "done", items: ["Token-2022 NonTransferable mint", "Certificate PDA record", "Linked token mint", "TrustScore and launch timestamp"] },
-          { phase: "In progress", title: "Auto-Raydium Migration", status: "active", items: ["50 SOL threshold state exists", "Trigger reward hook exists", "Real Raydium/OpenBook CPI pool creation pending", "LP custody verification pending"] },
+          { phase: "In progress", title: "Raydium CPMM Migration", status: "active", items: ["50 SOL threshold state exists", "Trigger reward hook exists", "Real Raydium CPMM CPI pool creation pending", "LP custody verification pending"] },
           { phase: "Next", title: "Global Indexing", status: "active", items: ["Replace browser-cache Discover", "Read program accounts/events", "Real candles and trade feed", "Holders and top traders"] },
           { phase: "Next", title: "Mainnet Readiness", status: "upcoming", items: ["Full v2 tests", "Audit", "Squads multisig", "Production RPC and monitoring"] },
         ].map((p) => {
@@ -117,7 +117,7 @@ export const About = () => (
         {[
           { icon: <Database size={18} />, t: "Chain-indexed Discover", d: "Show all v2 launches globally, not only tokens saved in local browser storage." },
           { icon: <BarChart3 size={18} />, t: "Real chart candles", d: "Use program events and curve trades for candles, volume, transaction list, holders, and top traders." },
-          { icon: <TrendingUp size={18} />, t: "Raydium CPI migration", d: "Complete pool creation, LP lock, leftover burn, and post-migration curve disable flow." },
+          { icon: <TrendingUp size={18} />, t: "Raydium CPMM CPI migration", d: "Complete pool creation, LP lock, leftover burn, and post-migration curve disable flow." },
           { icon: <Users size={18} />, t: "Creator profiles", d: "Expose launch history, clean-launch record, complaints, and reputation effects." },
           { icon: <FileCheck size={18} />, t: "Audit pack", d: "Add tests, threat model, deployment checklist, and audit-ready documentation." },
         ].map((item) => (

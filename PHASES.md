@@ -1,6 +1,6 @@
 # HumbleTrust - Project Phases
 
-HumbleTrust is Trust & Safety infrastructure for Solana. The platform combines protected token creation, bonding-curve liquidity, TrustScore, creator accountability, and future DEX migration into one verifiable launch system.
+HumbleTrust is a Trust & Safety layer + protected launchpad for Solana. The launchpad is the first enforced use case; the wider layer is built from on-chain launch records, PDA custody, TrustScore, creator accountability, indexed events, wallet reputation, and future DEX migration.
 
 **Frontend:** https://humbletrust.vercel.app
 **v1 legacy program:** `Gcz7NMtCqKdvzh53DF1ecoEYe7Hma9kWwdtCmmeBaxRi`
@@ -16,7 +16,7 @@ HumbleTrust is Trust & Safety infrastructure for Solana. The platform combines p
 | v2 bonding curve | Complete on devnet | Buy/sell, anti-bot delay, 1% fee, constant product math |
 | v2 frontend launch | Complete on production Vercel | Launch form uses v2 fields and shows TrustScore breakdown |
 | v2 frontend trade | Complete on production Vercel | Buy/sell, wallet token picker, MAX button, chart preview |
-| Auto-Raydium migration | In progress | Threshold/state/reward hook exists; real CPI pool creation still pending |
+| Raydium CPMM migration | In progress | Threshold/state/reward hook exists; real CPMM CPI pool creation still pending |
 | Creator reputation | In progress | PDA groundwork exists; profile/history integration pending |
 | Launch certificate NFT | Complete on devnet | Token-2022 NonTransferable certificate mint + certificate PDA |
 | Discover indexing | In progress | Current frontend uses browser cache; chain indexing is next |
@@ -109,7 +109,7 @@ Remaining:
 - Better slippage UX.
 - More devnet edge-case testing for very small and very large amounts.
 
-## Phase 4c - Auto-Raydium Migration
+## Phase 4c - Raydium CPMM Migration
 
 **Status:** In progress
 
@@ -124,14 +124,14 @@ Implemented:
 
 Not implemented yet:
 
-- Real Raydium AMM/OpenBook CPI pool creation.
+- Real Raydium CPMM CPI pool creation.
 - Real LP token mint/receipt into `lp_lock_vault`.
 - Burn of leftover curve tokens after actual DEX pool creation.
 - Jupiter/DexScreener indexing verification.
 
 Next decision:
 
-- Continue Raydium AMM v4/OpenBook route, or spike Orca/Meteora if Raydium devnet CPI is too unstable.
+- Continue Raydium CPMM CPI route. Raydium CPMM has an Anchor-compatible IDL; AMM v4/OpenBook should be avoided unless CPMM devnet support blocks the integration.
 
 ## Phase 4.5 - Creator Reputation
 
@@ -198,7 +198,7 @@ Ideas:
 
 1. Replace localStorage Discover with chain-indexed program account discovery.
 2. Replace chart preview with real event-backed candles and transaction history.
-3. Implement and test real Auto-Raydium migration CPI or choose an alternative DEX path.
+3. Implement and test real Raydium CPMM migration CPI or choose an alternative DEX path only if CPMM devnet support blocks the integration.
 4. Finish creator reputation UI.
 5. Add certificate NFT display in Discover/profile.
 6. Add complete v2 Anchor tests.

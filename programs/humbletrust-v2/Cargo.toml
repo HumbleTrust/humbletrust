@@ -9,8 +9,10 @@ crate-type = ["cdylib", "lib"]
 name = "humbletrust_v2"
 
 [features]
-default = []
+default = ["devnet"]
 cpi = ["no-entrypoint"]
+devnet = []
+mainnet = []
 no-entrypoint = []
 no-idl = []
 no-log-ix-name = []

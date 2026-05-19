@@ -4,9 +4,12 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{
     instruction::{AccountMeta, Instruction},
     program::invoke_signed,
+    program_pack::Pack,
 };
 use anchor_lang::system_program;
-use anchor_spl::token::{self, Burn, Mint, MintTo, SetAuthority, Token, TokenAccount, Transfer};
+use anchor_spl::token::{
+    self, Burn, Mint, MintTo, SetAuthority, SyncNative, Token, TokenAccount, Transfer,
+};
 
 declare_id!("FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr");
 
@@ -43,6 +46,22 @@ const LP_FEE_TREASURY_STANDARD_BPS: u64 = 3_500;
 const LP_FEE_TREASURY_PREMIUM_BPS: u64 = 3_000;
 const LP_CLAIM_COOLDOWN: i64 = SECONDS_PER_MONTH;
 const METAPLEX_TOKEN_METADATA_ID: Pubkey = pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+const NATIVE_SOL_MINT: Pubkey = pubkey!("So11111111111111111111111111111111111111112");
+const TOKEN_2022_PROGRAM_ID: Pubkey = pubkey!("TokenzQdBNbLqP5VEhdkAS6EPF5SJEMi4xg92qGZJzk");
+const ASSOCIATED_TOKEN_PROGRAM_ID: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+const RAYDIUM_CPMM_INITIALIZE_DISCM: [u8; 8] = [175, 175, 109, 31, 13, 152, 155, 237];
+const RAYDIUM_CPMM_DEPOSIT_DISCM: [u8; 8] = [242, 35, 198, 137, 82, 225, 242, 182];
+const RAYDIUM_CPMM_DEVNET_PROGRAM: Pubkey = pubkey!("DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb");
+const RAYDIUM_CPMM_MAINNET_PROGRAM: Pubkey =
+    pubkey!("CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C");
+const RAYDIUM_CPMM_DEVNET_AUTHORITY: Pubkey =
+    pubkey!("CXniRufdq5xL8t8jZAPxsPZDpuudwuJSPWnbcD5Y5Nxq");
+const RAYDIUM_CPMM_MAINNET_AUTHORITY: Pubkey =
+    pubkey!("GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL");
+const RAYDIUM_CPMM_DEVNET_CREATE_POOL_FEE: Pubkey =
+    pubkey!("3oE58BKVt8KuYkGxx8zBojugnymWmBiyafWgMrnb6eYy");
+const RAYDIUM_CPMM_MAINNET_CREATE_POOL_FEE: Pubkey =
+    pubkey!("DNXgeM9EiiaAbaWvwjHj9fQQLAX5ZsfHyvmYUNRAdNC8");
 
 #[derive(AnchorSerialize)]
 struct MetaplexCreator {
@@ -994,62 +1013,350 @@ pub mod humbletrust_v2 {
         Ok(())
     }
 
+    pub fn create_instant_raydium_pool_v2(
+        ctx: Context<CreateInstantRaydiumPoolV2>,
+        init_token_amount: u64,
+        init_sol_lamports: u64,
+        payer_buffer_lamports: u64,
+        open_time: u64,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        require!(init_token_amount > 0, HumbleV2Error::InvalidAmount);
+        require!(
+            init_sol_lamports >= MIN_INITIAL_SOL_LAMPORTS,
+            HumbleV2Error::InitialSolTooLow
+        );
+        require_keys_eq!(
+            ctx.accounts.creator.key(),
+            ctx.accounts.token_metadata.creator,
+            HumbleV2Error::Unauthorized
+        );
+        require!(
+            !ctx.accounts.token_metadata.is_migrated,
+            HumbleV2Error::AlreadyMigrated
+        );
+        require!(
+            ctx.accounts.token_metadata.raydium_pool == Pubkey::default(),
+            HumbleV2Error::RaydiumPoolAlreadyCreated
+        );
+
+        validate_raydium_cpmm_common(
+            &ctx.accounts.raydium_program,
+            &ctx.accounts.raydium_authority,
+            &ctx.accounts.raydium_create_pool_fee,
+            &ctx.accounts.token_program_2022,
+            &ctx.accounts.associated_token_program,
+            &ctx.accounts.wsol_mint,
+        )?;
+        validate_migration_token_accounts(
+            ctx.accounts.raydium_migration_authority.key(),
+            ctx.accounts.mint.key(),
+            &ctx.accounts.migration_token_account,
+            &ctx.accounts.migration_wsol_account,
+        )?;
+
+        let total_sol_needed = init_sol_lamports
+            .checked_add(payer_buffer_lamports)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        require!(
+            ctx.accounts.curve_treasury_sol.current_sol_lamports >= total_sol_needed,
+            HumbleV2Error::InsufficientCurveReserve
+        );
+        require!(
+            ctx.accounts.curve_pool_vault.amount >= init_token_amount,
+            HumbleV2Error::InsufficientVaultBalance
+        );
+
+        move_curve_tokens_to_migration_account(
+            &ctx.accounts.token_program,
+            &ctx.accounts.token_metadata.to_account_info(),
+            &ctx.accounts.curve_pool_vault.to_account_info(),
+            &ctx.accounts.migration_token_account.to_account_info(),
+            ctx.accounts.mint.key(),
+            ctx.accounts.token_metadata.bump,
+            init_token_amount,
+        )?;
+        debit_treasury_to_account(
+            &mut ctx.accounts.curve_treasury_sol,
+            &ctx.accounts.raydium_migration_authority.to_account_info(),
+            payer_buffer_lamports,
+        )?;
+        debit_treasury_to_account(
+            &mut ctx.accounts.curve_treasury_sol,
+            &ctx.accounts.migration_wsol_account.to_account_info(),
+            init_sol_lamports,
+        )?;
+        token::sync_native(CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            SyncNative {
+                account: ctx.accounts.migration_wsol_account.to_account_info(),
+            },
+        ))?;
+
+        let migration_bump = [ctx.bumps.raydium_migration_authority];
+        let mint_key = ctx.accounts.mint.key();
+        let migration_seeds: &[&[u8]] = &[
+            b"raydium_migration_authority_v2",
+            mint_key.as_ref(),
+            &migration_bump,
+        ];
+        let signer = &[migration_seeds];
+        let lp_before = token_account_amount(&ctx.accounts.raydium_user_lp_token)?;
+
+        invoke_raydium_cpmm_initialize(
+            RaydiumCpmmInitializeCpi {
+                raydium_program: ctx.accounts.raydium_program.to_account_info(),
+                creator: ctx.accounts.raydium_migration_authority.to_account_info(),
+                amm_config: ctx.accounts.raydium_amm_config.to_account_info(),
+                authority: ctx.accounts.raydium_authority.to_account_info(),
+                pool_state: ctx.accounts.raydium_pool_state.to_account_info(),
+                token_mint: ctx.accounts.mint.to_account_info(),
+                wsol_mint: ctx.accounts.wsol_mint.to_account_info(),
+                lp_mint: ctx.accounts.raydium_lp_mint.to_account_info(),
+                creator_token: ctx.accounts.migration_token_account.to_account_info(),
+                creator_wsol: ctx.accounts.migration_wsol_account.to_account_info(),
+                creator_lp_token: ctx.accounts.raydium_user_lp_token.to_account_info(),
+                token_0_vault: ctx.accounts.raydium_token_0_vault.to_account_info(),
+                token_1_vault: ctx.accounts.raydium_token_1_vault.to_account_info(),
+                create_pool_fee: ctx.accounts.raydium_create_pool_fee.to_account_info(),
+                observation_state: ctx.accounts.raydium_observation_state.to_account_info(),
+                token_program: ctx.accounts.token_program.to_account_info(),
+                associated_token_program: ctx.accounts.associated_token_program.to_account_info(),
+                system_program: ctx.accounts.system_program.to_account_info(),
+                rent: ctx.accounts.rent.to_account_info(),
+            },
+            init_token_amount,
+            init_sol_lamports,
+            open_time,
+            signer,
+        )?;
+
+        let lp_after = token_account_amount(&ctx.accounts.raydium_user_lp_token)?;
+        let minted_lp = lp_after
+            .checked_sub(lp_before)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        require!(minted_lp > 0, HumbleV2Error::InvalidLpAmount);
+
+        let meta = &mut ctx.accounts.token_metadata;
+        meta.raydium_pool = ctx.accounts.raydium_pool_state.key();
+        meta.curve_sol_reserve_lamports = ctx.accounts.curve_treasury_sol.current_sol_lamports;
+        meta.curve_token_reserve_amount = ctx
+            .accounts
+            .curve_pool_vault
+            .amount
+            .checked_sub(init_token_amount)
+            .unwrap_or(ctx.accounts.curve_pool_vault.amount);
+
+        let lp_lock = &mut ctx.accounts.lp_lock_vault;
+        lp_lock.token_mint = meta.mint;
+        lp_lock.lp_mint = ctx.accounts.raydium_lp_mint.key();
+        lp_lock.lp_amount = lp_lock
+            .lp_amount
+            .checked_add(minted_lp)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+
+        emit!(InstantRaydiumPoolCreatedV2 {
+            mint: meta.mint,
+            creator: ctx.accounts.creator.key(),
+            raydium_pool: ctx.accounts.raydium_pool_state.key(),
+            lp_mint: ctx.accounts.raydium_lp_mint.key(),
+            token_amount: init_token_amount,
+            sol_lamports: init_sol_lamports,
+            lp_amount: minted_lp,
+            timestamp: now,
+        });
+
+        Ok(())
+    }
+
     pub fn migrate_to_raydium_v2(
         ctx: Context<MigrateToRaydiumV2>,
         raydium_pool: Pubkey,
         lp_amount: u64,
+        payer_buffer_lamports: u64,
+        open_time: u64,
     ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
-        let meta = &mut ctx.accounts.token_metadata;
-        let treasury = &mut ctx.accounts.curve_treasury_sol;
-
+        let meta = &ctx.accounts.token_metadata;
         require!(!meta.is_migrated, HumbleV2Error::AlreadyMigrated);
+        require!(lp_amount > 0, HumbleV2Error::InvalidLpAmount);
         require!(
-            treasury.current_sol_lamports >= meta.migration_threshold_lamports,
+            ctx.accounts.curve_treasury_sol.current_sol_lamports
+                >= meta.migration_threshold_lamports,
             HumbleV2Error::MigrationThresholdNotMet
         );
-
-        if meta.migration_reward_lamports > 0 {
-            require!(
-                treasury.current_sol_lamports >= meta.migration_reward_lamports,
-                HumbleV2Error::InsufficientCurveReserve
+        validate_raydium_cpmm_common(
+            &ctx.accounts.raydium_program,
+            &ctx.accounts.raydium_authority,
+            &ctx.accounts.raydium_create_pool_fee,
+            &ctx.accounts.token_program_2022,
+            &ctx.accounts.associated_token_program,
+            &ctx.accounts.wsol_mint,
+        )?;
+        validate_migration_token_accounts(
+            ctx.accounts.raydium_migration_authority.key(),
+            ctx.accounts.mint.key(),
+            &ctx.accounts.migration_token_account,
+            &ctx.accounts.migration_wsol_account,
+        )?;
+        if raydium_pool != Pubkey::default() {
+            require_keys_eq!(
+                raydium_pool,
+                ctx.accounts.raydium_pool_state.key(),
+                HumbleV2Error::InvalidRaydiumPool
             );
-            let treasury_ai = treasury.to_account_info();
-            **treasury_ai.try_borrow_mut_lamports()? = treasury_ai
-                .lamports()
-                .checked_sub(meta.migration_reward_lamports)
-                .ok_or(error!(HumbleV2Error::MathOverflow))?;
-            **ctx.accounts.triggerer.try_borrow_mut_lamports()? = ctx
-                .accounts
-                .triggerer
-                .lamports()
-                .checked_add(meta.migration_reward_lamports)
-                .ok_or(error!(HumbleV2Error::MathOverflow))?;
-            treasury.current_sol_lamports = treasury
-                .current_sol_lamports
-                .checked_sub(meta.migration_reward_lamports)
-                .ok_or(error!(HumbleV2Error::MathOverflow))?;
         }
 
+        let reward_lamports = meta.migration_reward_lamports;
+        if reward_lamports > 0 {
+            require!(
+                ctx.accounts.curve_treasury_sol.current_sol_lamports >= reward_lamports,
+                HumbleV2Error::InsufficientCurveReserve
+            );
+            debit_treasury_to_account(
+                &mut ctx.accounts.curve_treasury_sol,
+                &ctx.accounts.triggerer.to_account_info(),
+                reward_lamports,
+            )?;
+        }
+
+        let token_amount = ctx.accounts.curve_pool_vault.amount;
+        let sol_amount = ctx
+            .accounts
+            .curve_treasury_sol
+            .current_sol_lamports
+            .checked_sub(payer_buffer_lamports)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        require!(token_amount > 0, HumbleV2Error::InsufficientVaultBalance);
+        require!(sol_amount > 0, HumbleV2Error::InsufficientCurveReserve);
+
+        move_curve_tokens_to_migration_account(
+            &ctx.accounts.token_program,
+            &ctx.accounts.token_metadata.to_account_info(),
+            &ctx.accounts.curve_pool_vault.to_account_info(),
+            &ctx.accounts.migration_token_account.to_account_info(),
+            ctx.accounts.mint.key(),
+            ctx.accounts.token_metadata.bump,
+            token_amount,
+        )?;
+        debit_treasury_to_account(
+            &mut ctx.accounts.curve_treasury_sol,
+            &ctx.accounts.raydium_migration_authority.to_account_info(),
+            payer_buffer_lamports,
+        )?;
+        debit_treasury_to_account(
+            &mut ctx.accounts.curve_treasury_sol,
+            &ctx.accounts.migration_wsol_account.to_account_info(),
+            sol_amount,
+        )?;
+        token::sync_native(CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            SyncNative {
+                account: ctx.accounts.migration_wsol_account.to_account_info(),
+            },
+        ))?;
+
+        let migration_bump = [ctx.bumps.raydium_migration_authority];
+        let mint_key = ctx.accounts.mint.key();
+        let migration_seeds: &[&[u8]] = &[
+            b"raydium_migration_authority_v2",
+            mint_key.as_ref(),
+            &migration_bump,
+        ];
+        let signer = &[migration_seeds];
+        let lp_before = token_account_amount(&ctx.accounts.raydium_user_lp_token)?;
+
+        if meta.raydium_pool == Pubkey::default() {
+            invoke_raydium_cpmm_initialize(
+                RaydiumCpmmInitializeCpi {
+                    raydium_program: ctx.accounts.raydium_program.to_account_info(),
+                    creator: ctx.accounts.raydium_migration_authority.to_account_info(),
+                    amm_config: ctx.accounts.raydium_amm_config.to_account_info(),
+                    authority: ctx.accounts.raydium_authority.to_account_info(),
+                    pool_state: ctx.accounts.raydium_pool_state.to_account_info(),
+                    token_mint: ctx.accounts.mint.to_account_info(),
+                    wsol_mint: ctx.accounts.wsol_mint.to_account_info(),
+                    lp_mint: ctx.accounts.raydium_lp_mint.to_account_info(),
+                    creator_token: ctx.accounts.migration_token_account.to_account_info(),
+                    creator_wsol: ctx.accounts.migration_wsol_account.to_account_info(),
+                    creator_lp_token: ctx.accounts.raydium_user_lp_token.to_account_info(),
+                    token_0_vault: ctx.accounts.raydium_token_0_vault.to_account_info(),
+                    token_1_vault: ctx.accounts.raydium_token_1_vault.to_account_info(),
+                    create_pool_fee: ctx.accounts.raydium_create_pool_fee.to_account_info(),
+                    observation_state: ctx.accounts.raydium_observation_state.to_account_info(),
+                    token_program: ctx.accounts.token_program.to_account_info(),
+                    associated_token_program: ctx
+                        .accounts
+                        .associated_token_program
+                        .to_account_info(),
+                    system_program: ctx.accounts.system_program.to_account_info(),
+                    rent: ctx.accounts.rent.to_account_info(),
+                },
+                token_amount,
+                sol_amount,
+                open_time,
+                signer,
+            )?;
+        } else {
+            require_keys_eq!(
+                meta.raydium_pool,
+                ctx.accounts.raydium_pool_state.key(),
+                HumbleV2Error::InvalidRaydiumPool
+            );
+            invoke_raydium_cpmm_deposit(
+                RaydiumCpmmDepositCpi {
+                    raydium_program: ctx.accounts.raydium_program.to_account_info(),
+                    owner: ctx.accounts.raydium_migration_authority.to_account_info(),
+                    authority: ctx.accounts.raydium_authority.to_account_info(),
+                    pool_state: ctx.accounts.raydium_pool_state.to_account_info(),
+                    owner_lp_token: ctx.accounts.raydium_user_lp_token.to_account_info(),
+                    token_account: ctx.accounts.migration_token_account.to_account_info(),
+                    wsol_account: ctx.accounts.migration_wsol_account.to_account_info(),
+                    token_0_vault: ctx.accounts.raydium_token_0_vault.to_account_info(),
+                    token_1_vault: ctx.accounts.raydium_token_1_vault.to_account_info(),
+                    token_program: ctx.accounts.token_program.to_account_info(),
+                    token_2022_program: ctx.accounts.token_program_2022.to_account_info(),
+                    token_mint: ctx.accounts.mint.to_account_info(),
+                    wsol_mint: ctx.accounts.wsol_mint.to_account_info(),
+                    lp_mint: ctx.accounts.raydium_lp_mint.to_account_info(),
+                },
+                lp_amount,
+                token_amount,
+                sol_amount,
+                signer,
+            )?;
+        }
+
+        let lp_after = token_account_amount(&ctx.accounts.raydium_user_lp_token)?;
+        let minted_lp = lp_after
+            .checked_sub(lp_before)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        require!(minted_lp > 0, HumbleV2Error::InvalidLpAmount);
+
+        let meta = &mut ctx.accounts.token_metadata;
         meta.is_migrated = true;
-        meta.raydium_pool = raydium_pool;
+        meta.raydium_pool = ctx.accounts.raydium_pool_state.key();
         meta.migration_trigger = ctx.accounts.triggerer.key();
         meta.migrated_at = now;
-        meta.curve_sol_reserve_lamports = treasury.current_sol_lamports;
+        meta.curve_sol_reserve_lamports = ctx.accounts.curve_treasury_sol.current_sol_lamports;
+        meta.curve_token_reserve_amount = 0;
 
         let lp_lock = &mut ctx.accounts.lp_lock_vault;
         lp_lock.token_mint = meta.mint;
-        lp_lock.lp_mint = raydium_pool;
-        lp_lock.lp_amount = lp_amount;
+        lp_lock.lp_mint = ctx.accounts.raydium_lp_mint.key();
+        lp_lock.lp_amount = lp_lock
+            .lp_amount
+            .checked_add(minted_lp)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
 
         emit!(MigratedToRaydiumV2 {
             mint: meta.mint,
-            raydium_pool,
+            raydium_pool: ctx.accounts.raydium_pool_state.key(),
             triggerer: ctx.accounts.triggerer.key(),
-            reward_lamports: meta.migration_reward_lamports,
-            remaining_curve_tokens: ctx.accounts.curve_pool_vault.amount,
-            remaining_curve_sol_lamports: treasury.current_sol_lamports,
-            lp_amount,
+            reward_lamports,
+            remaining_curve_tokens: 0,
+            remaining_curve_sol_lamports: ctx.accounts.curve_treasury_sol.current_sol_lamports,
+            lp_amount: minted_lp,
             timestamp: now,
         });
 
@@ -1799,23 +2106,23 @@ pub struct BuyV2<'info> {
         seeds = [b"token_metadata_v2", mint.key().as_ref()],
         bump = token_metadata.bump
     )]
-    pub token_metadata: Account<'info, TokenMetadataV2>,
+    pub token_metadata: Box<Account<'info, TokenMetadataV2>>,
 
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
     #[account(
         mut,
         seeds = [b"curve_pool_vault_v2", mint.key().as_ref()],
         bump = token_metadata.curve_pool_vault_bump
     )]
-    pub curve_pool_vault: Account<'info, TokenAccount>,
+    pub curve_pool_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
         seeds = [b"curve_treasury_sol_v2", mint.key().as_ref()],
         bump = token_metadata.curve_treasury_sol_bump
     )]
-    pub curve_treasury_sol: Account<'info, CurveTreasurySol>,
+    pub curve_treasury_sol: Box<Account<'info, CurveTreasurySol>>,
 
     #[account(
         mut,
@@ -1846,23 +2153,23 @@ pub struct SellV2<'info> {
         seeds = [b"token_metadata_v2", mint.key().as_ref()],
         bump = token_metadata.bump
     )]
-    pub token_metadata: Account<'info, TokenMetadataV2>,
+    pub token_metadata: Box<Account<'info, TokenMetadataV2>>,
 
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
     #[account(
         mut,
         seeds = [b"curve_pool_vault_v2", mint.key().as_ref()],
         bump = token_metadata.curve_pool_vault_bump
     )]
-    pub curve_pool_vault: Account<'info, TokenAccount>,
+    pub curve_pool_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
         seeds = [b"curve_treasury_sol_v2", mint.key().as_ref()],
         bump = token_metadata.curve_treasury_sol_bump
     )]
-    pub curve_treasury_sol: Account<'info, CurveTreasurySol>,
+    pub curve_treasury_sol: Box<Account<'info, CurveTreasurySol>>,
 
     #[account(
         mut,
@@ -1906,9 +2213,9 @@ pub struct PriceV2<'info> {
 }
 
 #[derive(Accounts)]
-pub struct MigrateToRaydiumV2<'info> {
+pub struct CreateInstantRaydiumPoolV2<'info> {
     #[account(mut)]
-    pub triggerer: Signer<'info>,
+    pub creator: Signer<'info>,
 
     #[account(
         mut,
@@ -1938,7 +2245,153 @@ pub struct MigrateToRaydiumV2<'info> {
         seeds = [b"lp_lock_vault_v2", mint.key().as_ref()],
         bump = token_metadata.lp_lock_vault_bump
     )]
-    pub lp_lock_vault: Account<'info, LpLockVault>,
+    pub lp_lock_vault: Box<Account<'info, LpLockVault>>,
+
+    /// CHECK: PDA signer used only as Raydium CPMM creator/LP custodian.
+    #[account(
+        mut,
+        seeds = [b"raydium_migration_authority_v2", mint.key().as_ref()],
+        bump
+    )]
+    pub raydium_migration_authority: UncheckedAccount<'info>,
+
+    /// CHECK: SPL token account owned by raydium_migration_authority, validated manually.
+    #[account(mut)]
+    pub migration_token_account: UncheckedAccount<'info>,
+
+    /// CHECK: WSOL token account owned by raydium_migration_authority, validated manually.
+    #[account(mut)]
+    pub migration_wsol_account: UncheckedAccount<'info>,
+
+    /// CHECK: verified against native SOL mint.
+    pub wsol_mint: UncheckedAccount<'info>,
+
+    /// CHECK: verified against Raydium CPMM devnet/mainnet config.
+    pub raydium_program: UncheckedAccount<'info>,
+    /// CHECK: Raydium config account is validated by Raydium CPI.
+    pub raydium_amm_config: UncheckedAccount<'info>,
+    /// CHECK: verified against Raydium CPMM authority.
+    pub raydium_authority: UncheckedAccount<'info>,
+    /// CHECK: Raydium pool state, initialized by Raydium CPI.
+    #[account(mut)]
+    pub raydium_pool_state: UncheckedAccount<'info>,
+    /// CHECK: Raydium LP mint, initialized by Raydium CPI.
+    #[account(mut)]
+    pub raydium_lp_mint: UncheckedAccount<'info>,
+    /// CHECK: Raydium creates this ATA for the migration PDA and mints LP here.
+    #[account(mut)]
+    pub raydium_user_lp_token: UncheckedAccount<'info>,
+    /// CHECK: Raydium token 0 vault PDA.
+    #[account(mut)]
+    pub raydium_token_0_vault: UncheckedAccount<'info>,
+    /// CHECK: Raydium token 1 vault PDA.
+    #[account(mut)]
+    pub raydium_token_1_vault: UncheckedAccount<'info>,
+    /// CHECK: verified against Raydium CPMM fee account.
+    #[account(mut)]
+    pub raydium_create_pool_fee: UncheckedAccount<'info>,
+    /// CHECK: Raydium observation account.
+    #[account(mut)]
+    pub raydium_observation_state: UncheckedAccount<'info>,
+
+    pub token_program: Program<'info, Token>,
+    /// CHECK: verified against canonical Token-2022 id for Raydium CPMM account set.
+    pub token_program_2022: UncheckedAccount<'info>,
+    /// CHECK: verified against canonical Associated Token Program id.
+    pub associated_token_program: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct MigrateToRaydiumV2<'info> {
+    #[account(mut)]
+    pub triggerer: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"token_metadata_v2", mint.key().as_ref()],
+        bump = token_metadata.bump
+    )]
+    pub token_metadata: Box<Account<'info, TokenMetadataV2>>,
+
+    pub mint: Box<Account<'info, Mint>>,
+
+    #[account(
+        mut,
+        seeds = [b"curve_pool_vault_v2", mint.key().as_ref()],
+        bump = token_metadata.curve_pool_vault_bump
+    )]
+    pub curve_pool_vault: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        seeds = [b"curve_treasury_sol_v2", mint.key().as_ref()],
+        bump = token_metadata.curve_treasury_sol_bump
+    )]
+    pub curve_treasury_sol: Box<Account<'info, CurveTreasurySol>>,
+
+    #[account(
+        mut,
+        seeds = [b"lp_lock_vault_v2", mint.key().as_ref()],
+        bump = token_metadata.lp_lock_vault_bump
+    )]
+    pub lp_lock_vault: Box<Account<'info, LpLockVault>>,
+
+    /// CHECK: PDA signer used only as Raydium CPMM creator/LP custodian.
+    #[account(
+        mut,
+        seeds = [b"raydium_migration_authority_v2", mint.key().as_ref()],
+        bump
+    )]
+    pub raydium_migration_authority: UncheckedAccount<'info>,
+
+    /// CHECK: SPL token account owned by raydium_migration_authority, validated manually.
+    #[account(mut)]
+    pub migration_token_account: UncheckedAccount<'info>,
+
+    /// CHECK: WSOL token account owned by raydium_migration_authority, validated manually.
+    #[account(mut)]
+    pub migration_wsol_account: UncheckedAccount<'info>,
+
+    /// CHECK: verified against native SOL mint.
+    pub wsol_mint: UncheckedAccount<'info>,
+
+    /// CHECK: verified against Raydium CPMM devnet/mainnet config.
+    pub raydium_program: UncheckedAccount<'info>,
+    /// CHECK: Raydium config account is validated by Raydium CPI.
+    pub raydium_amm_config: UncheckedAccount<'info>,
+    /// CHECK: verified against Raydium CPMM authority.
+    pub raydium_authority: UncheckedAccount<'info>,
+    /// CHECK: Raydium pool state.
+    #[account(mut)]
+    pub raydium_pool_state: UncheckedAccount<'info>,
+    /// CHECK: Raydium LP mint.
+    #[account(mut)]
+    pub raydium_lp_mint: UncheckedAccount<'info>,
+    /// CHECK: Raydium mints/deposits LP into the migration PDA ATA.
+    #[account(mut)]
+    pub raydium_user_lp_token: UncheckedAccount<'info>,
+    /// CHECK: Raydium token 0 vault PDA.
+    #[account(mut)]
+    pub raydium_token_0_vault: UncheckedAccount<'info>,
+    /// CHECK: Raydium token 1 vault PDA.
+    #[account(mut)]
+    pub raydium_token_1_vault: UncheckedAccount<'info>,
+    /// CHECK: verified against Raydium CPMM fee account.
+    #[account(mut)]
+    pub raydium_create_pool_fee: UncheckedAccount<'info>,
+    /// CHECK: Raydium observation account.
+    #[account(mut)]
+    pub raydium_observation_state: UncheckedAccount<'info>,
+
+    pub token_program: Program<'info, Token>,
+    /// CHECK: verified against canonical Token-2022 id for Raydium CPMM account set.
+    pub token_program_2022: UncheckedAccount<'info>,
+    /// CHECK: verified against canonical Associated Token Program id.
+    pub associated_token_program: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
 }
 
 #[derive(Accounts)]
@@ -2537,6 +2990,18 @@ pub struct CurvePriceV2 {
 }
 
 #[event]
+pub struct InstantRaydiumPoolCreatedV2 {
+    pub mint: Pubkey,
+    pub creator: Pubkey,
+    pub raydium_pool: Pubkey,
+    pub lp_mint: Pubkey,
+    pub token_amount: u64,
+    pub sol_lamports: u64,
+    pub lp_amount: u64,
+    pub timestamp: i64,
+}
+
+#[event]
 pub struct MigratedToRaydiumV2 {
     pub mint: Pubkey,
     pub raydium_pool: Pubkey,
@@ -2730,6 +3195,26 @@ pub enum HumbleV2Error {
     InvalidFeeParameters,
     #[msg("Math overflow")]
     MathOverflow,
+    #[msg("Invalid Raydium pool")]
+    InvalidRaydiumPool,
+    #[msg("Raydium pool already exists for this token")]
+    RaydiumPoolAlreadyCreated,
+    #[msg("Invalid Raydium CPMM program")]
+    InvalidRaydiumProgram,
+    #[msg("Invalid Raydium CPMM authority")]
+    InvalidRaydiumAuthority,
+    #[msg("Invalid Raydium CPMM create-pool fee account")]
+    InvalidRaydiumCreatePoolFee,
+    #[msg("Invalid Associated Token Program")]
+    InvalidAssociatedTokenProgram,
+    #[msg("Invalid Token-2022 Program")]
+    InvalidToken2022Program,
+    #[msg("Raydium requires token_0_mint < token_1_mint")]
+    InvalidRaydiumTokenOrder,
+    #[msg("Invalid Raydium LP amount")]
+    InvalidLpAmount,
+    #[msg("Raydium CPI failed")]
+    RaydiumCpiFailed,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2825,6 +3310,409 @@ fn mint_to_vault<'info>(
         ),
         amount,
     )
+}
+
+fn raydium_cpmm_program_id() -> Pubkey {
+    if cfg!(feature = "mainnet") {
+        RAYDIUM_CPMM_MAINNET_PROGRAM
+    } else {
+        RAYDIUM_CPMM_DEVNET_PROGRAM
+    }
+}
+
+fn raydium_cpmm_authority() -> Pubkey {
+    if cfg!(feature = "mainnet") {
+        RAYDIUM_CPMM_MAINNET_AUTHORITY
+    } else {
+        RAYDIUM_CPMM_DEVNET_AUTHORITY
+    }
+}
+
+fn raydium_cpmm_create_pool_fee() -> Pubkey {
+    if cfg!(feature = "mainnet") {
+        RAYDIUM_CPMM_MAINNET_CREATE_POOL_FEE
+    } else {
+        RAYDIUM_CPMM_DEVNET_CREATE_POOL_FEE
+    }
+}
+
+fn validate_raydium_cpmm_common(
+    raydium_program: &UncheckedAccount,
+    raydium_authority: &UncheckedAccount,
+    raydium_create_pool_fee: &UncheckedAccount,
+    token_program_2022: &UncheckedAccount,
+    associated_token_program: &UncheckedAccount,
+    wsol_mint: &UncheckedAccount,
+) -> Result<()> {
+    require_keys_eq!(
+        raydium_program.key(),
+        raydium_cpmm_program_id(),
+        HumbleV2Error::InvalidRaydiumProgram
+    );
+    require_keys_eq!(
+        raydium_authority.key(),
+        raydium_cpmm_authority(),
+        HumbleV2Error::InvalidRaydiumAuthority
+    );
+    require_keys_eq!(
+        raydium_create_pool_fee.key(),
+        raydium_cpmm_create_pool_fee(),
+        HumbleV2Error::InvalidRaydiumCreatePoolFee
+    );
+    require_keys_eq!(
+        token_program_2022.key(),
+        TOKEN_2022_PROGRAM_ID,
+        HumbleV2Error::InvalidToken2022Program
+    );
+    require_keys_eq!(
+        associated_token_program.key(),
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+        HumbleV2Error::InvalidAssociatedTokenProgram
+    );
+    require_keys_eq!(
+        wsol_mint.key(),
+        NATIVE_SOL_MINT,
+        HumbleV2Error::InvalidMintForTokenAccount
+    );
+    Ok(())
+}
+
+fn validate_migration_token_accounts(
+    migration_authority: Pubkey,
+    mint: Pubkey,
+    migration_token_account: &UncheckedAccount,
+    migration_wsol_account: &UncheckedAccount,
+) -> Result<()> {
+    let token_account = unpack_spl_token_account(&migration_token_account.to_account_info())?;
+    let wsol_account = unpack_spl_token_account(&migration_wsol_account.to_account_info())?;
+    require_keys_eq!(
+        token_account.owner,
+        migration_authority,
+        HumbleV2Error::InvalidTokenAccountOwner
+    );
+    require_keys_eq!(
+        token_account.mint,
+        mint,
+        HumbleV2Error::InvalidMintForTokenAccount
+    );
+    require_keys_eq!(
+        wsol_account.owner,
+        migration_authority,
+        HumbleV2Error::InvalidTokenAccountOwner
+    );
+    require_keys_eq!(
+        wsol_account.mint,
+        NATIVE_SOL_MINT,
+        HumbleV2Error::InvalidMintForTokenAccount
+    );
+    Ok(())
+}
+
+fn move_curve_tokens_to_migration_account<'info>(
+    token_program: &Program<'info, Token>,
+    token_metadata_ai: &AccountInfo<'info>,
+    curve_pool_vault: &AccountInfo<'info>,
+    migration_token_account: &AccountInfo<'info>,
+    mint_key: Pubkey,
+    bump: u8,
+    amount: u64,
+) -> Result<()> {
+    if amount == 0 {
+        return Ok(());
+    }
+    let bump_seed = [bump];
+    let signer_seeds: &[&[u8]] = &[b"token_metadata_v2", mint_key.as_ref(), &bump_seed];
+    let signer = &[signer_seeds];
+    token::transfer(
+        CpiContext::new_with_signer(
+            token_program.to_account_info(),
+            Transfer {
+                from: curve_pool_vault.clone(),
+                to: migration_token_account.clone(),
+                authority: token_metadata_ai.clone(),
+            },
+            signer,
+        ),
+        amount,
+    )?;
+    Ok(())
+}
+
+fn debit_treasury_to_account<'info>(
+    treasury: &mut Account<'info, CurveTreasurySol>,
+    recipient: &AccountInfo<'info>,
+    amount: u64,
+) -> Result<()> {
+    if amount == 0 {
+        return Ok(());
+    }
+    require!(
+        treasury.current_sol_lamports >= amount,
+        HumbleV2Error::InsufficientCurveReserve
+    );
+    let treasury_ai = treasury.to_account_info();
+    **treasury_ai.try_borrow_mut_lamports()? = treasury_ai
+        .lamports()
+        .checked_sub(amount)
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+    **recipient.try_borrow_mut_lamports()? = recipient
+        .lamports()
+        .checked_add(amount)
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+    treasury.current_sol_lamports = treasury
+        .current_sol_lamports
+        .checked_sub(amount)
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+    Ok(())
+}
+
+fn token_account_amount(account: &UncheckedAccount) -> Result<u64> {
+    Ok(unpack_spl_token_account(&account.to_account_info())?.amount)
+}
+
+fn unpack_spl_token_account(
+    account_info: &AccountInfo,
+) -> Result<anchor_spl::token::spl_token::state::Account> {
+    if account_info.data_is_empty() {
+        return err!(HumbleV2Error::InvalidTokenAccountOwner);
+    }
+    let data = account_info.try_borrow_data()?;
+    if data.len() < anchor_spl::token::spl_token::state::Account::LEN {
+        return err!(HumbleV2Error::InvalidTokenAccountOwner);
+    }
+    let token_account = anchor_spl::token::spl_token::state::Account::unpack(&data)
+        .map_err(|_| error!(HumbleV2Error::InvalidTokenAccountOwner))?;
+    Ok(token_account)
+}
+
+struct RaydiumCpmmInitializeCpi<'info> {
+    raydium_program: AccountInfo<'info>,
+    creator: AccountInfo<'info>,
+    amm_config: AccountInfo<'info>,
+    authority: AccountInfo<'info>,
+    pool_state: AccountInfo<'info>,
+    token_mint: AccountInfo<'info>,
+    wsol_mint: AccountInfo<'info>,
+    lp_mint: AccountInfo<'info>,
+    creator_token: AccountInfo<'info>,
+    creator_wsol: AccountInfo<'info>,
+    creator_lp_token: AccountInfo<'info>,
+    token_0_vault: AccountInfo<'info>,
+    token_1_vault: AccountInfo<'info>,
+    create_pool_fee: AccountInfo<'info>,
+    observation_state: AccountInfo<'info>,
+    token_program: AccountInfo<'info>,
+    associated_token_program: AccountInfo<'info>,
+    system_program: AccountInfo<'info>,
+    rent: AccountInfo<'info>,
+}
+
+struct RaydiumCpmmDepositCpi<'info> {
+    raydium_program: AccountInfo<'info>,
+    owner: AccountInfo<'info>,
+    authority: AccountInfo<'info>,
+    pool_state: AccountInfo<'info>,
+    owner_lp_token: AccountInfo<'info>,
+    token_account: AccountInfo<'info>,
+    wsol_account: AccountInfo<'info>,
+    token_0_vault: AccountInfo<'info>,
+    token_1_vault: AccountInfo<'info>,
+    token_program: AccountInfo<'info>,
+    token_2022_program: AccountInfo<'info>,
+    token_mint: AccountInfo<'info>,
+    wsol_mint: AccountInfo<'info>,
+    lp_mint: AccountInfo<'info>,
+}
+
+fn append_u64(data: &mut Vec<u8>, value: u64) {
+    data.extend_from_slice(&value.to_le_bytes());
+}
+
+fn humble_token_is_token_0(mint_key: Pubkey) -> Result<bool> {
+    require_keys_neq!(
+        mint_key,
+        NATIVE_SOL_MINT,
+        HumbleV2Error::InvalidRaydiumTokenOrder
+    );
+    Ok(mint_key < NATIVE_SOL_MINT)
+}
+
+fn invoke_raydium_cpmm_initialize<'info>(
+    accounts: RaydiumCpmmInitializeCpi<'info>,
+    token_amount: u64,
+    sol_lamports: u64,
+    open_time: u64,
+    signer: &[&[&[u8]]],
+) -> Result<()> {
+    let token_is_0 = humble_token_is_token_0(*accounts.token_mint.key)?;
+    let (
+        token_0_mint,
+        token_1_mint,
+        creator_token_0,
+        creator_token_1,
+        amount_0,
+        amount_1,
+        token_0_program,
+        token_1_program,
+    ) = if token_is_0 {
+        (
+            accounts.token_mint.clone(),
+            accounts.wsol_mint.clone(),
+            accounts.creator_token.clone(),
+            accounts.creator_wsol.clone(),
+            token_amount,
+            sol_lamports,
+            accounts.token_program.clone(),
+            accounts.token_program.clone(),
+        )
+    } else {
+        (
+            accounts.wsol_mint.clone(),
+            accounts.token_mint.clone(),
+            accounts.creator_wsol.clone(),
+            accounts.creator_token.clone(),
+            sol_lamports,
+            token_amount,
+            accounts.token_program.clone(),
+            accounts.token_program.clone(),
+        )
+    };
+    let mut data = RAYDIUM_CPMM_INITIALIZE_DISCM.to_vec();
+    append_u64(&mut data, amount_0);
+    append_u64(&mut data, amount_1);
+    append_u64(&mut data, open_time);
+
+    let ix = Instruction {
+        program_id: *accounts.raydium_program.key,
+        accounts: vec![
+            AccountMeta::new(*accounts.creator.key, true),
+            AccountMeta::new_readonly(*accounts.amm_config.key, false),
+            AccountMeta::new_readonly(*accounts.authority.key, false),
+            AccountMeta::new(*accounts.pool_state.key, false),
+            AccountMeta::new_readonly(*token_0_mint.key, false),
+            AccountMeta::new_readonly(*token_1_mint.key, false),
+            AccountMeta::new(*accounts.lp_mint.key, false),
+            AccountMeta::new(*creator_token_0.key, false),
+            AccountMeta::new(*creator_token_1.key, false),
+            AccountMeta::new(*accounts.creator_lp_token.key, false),
+            AccountMeta::new(*accounts.token_0_vault.key, false),
+            AccountMeta::new(*accounts.token_1_vault.key, false),
+            AccountMeta::new(*accounts.create_pool_fee.key, false),
+            AccountMeta::new(*accounts.observation_state.key, false),
+            AccountMeta::new_readonly(*accounts.token_program.key, false),
+            AccountMeta::new_readonly(*token_0_program.key, false),
+            AccountMeta::new_readonly(*token_1_program.key, false),
+            AccountMeta::new_readonly(*accounts.associated_token_program.key, false),
+            AccountMeta::new_readonly(*accounts.system_program.key, false),
+            AccountMeta::new_readonly(*accounts.rent.key, false),
+        ],
+        data,
+    };
+
+    invoke_signed(
+        &ix,
+        &[
+            accounts.creator,
+            accounts.amm_config,
+            accounts.authority,
+            accounts.pool_state,
+            token_0_mint,
+            token_1_mint,
+            accounts.lp_mint,
+            creator_token_0,
+            creator_token_1,
+            accounts.creator_lp_token,
+            accounts.token_0_vault,
+            accounts.token_1_vault,
+            accounts.create_pool_fee,
+            accounts.observation_state,
+            accounts.token_program,
+            token_0_program,
+            token_1_program,
+            accounts.associated_token_program,
+            accounts.system_program,
+            accounts.rent,
+        ],
+        signer,
+    )
+    .map_err(|_| error!(HumbleV2Error::RaydiumCpiFailed))?;
+    Ok(())
+}
+
+fn invoke_raydium_cpmm_deposit<'info>(
+    accounts: RaydiumCpmmDepositCpi<'info>,
+    lp_token_amount: u64,
+    maximum_token_amount: u64,
+    maximum_sol_lamports: u64,
+    signer: &[&[&[u8]]],
+) -> Result<()> {
+    let token_is_0 = humble_token_is_token_0(*accounts.token_mint.key)?;
+    let (token_0_account, token_1_account, vault_0_mint, vault_1_mint, max_0, max_1) = if token_is_0
+    {
+        (
+            accounts.token_account.clone(),
+            accounts.wsol_account.clone(),
+            accounts.token_mint.clone(),
+            accounts.wsol_mint.clone(),
+            maximum_token_amount,
+            maximum_sol_lamports,
+        )
+    } else {
+        (
+            accounts.wsol_account.clone(),
+            accounts.token_account.clone(),
+            accounts.wsol_mint.clone(),
+            accounts.token_mint.clone(),
+            maximum_sol_lamports,
+            maximum_token_amount,
+        )
+    };
+    let mut data = RAYDIUM_CPMM_DEPOSIT_DISCM.to_vec();
+    append_u64(&mut data, lp_token_amount);
+    append_u64(&mut data, max_0);
+    append_u64(&mut data, max_1);
+
+    let ix = Instruction {
+        program_id: *accounts.raydium_program.key,
+        accounts: vec![
+            AccountMeta::new_readonly(*accounts.owner.key, true),
+            AccountMeta::new_readonly(*accounts.authority.key, false),
+            AccountMeta::new(*accounts.pool_state.key, false),
+            AccountMeta::new(*accounts.owner_lp_token.key, false),
+            AccountMeta::new(*token_0_account.key, false),
+            AccountMeta::new(*token_1_account.key, false),
+            AccountMeta::new(*accounts.token_0_vault.key, false),
+            AccountMeta::new(*accounts.token_1_vault.key, false),
+            AccountMeta::new_readonly(*accounts.token_program.key, false),
+            AccountMeta::new_readonly(*accounts.token_2022_program.key, false),
+            AccountMeta::new_readonly(*vault_0_mint.key, false),
+            AccountMeta::new_readonly(*vault_1_mint.key, false),
+            AccountMeta::new(*accounts.lp_mint.key, false),
+        ],
+        data,
+    };
+
+    invoke_signed(
+        &ix,
+        &[
+            accounts.owner,
+            accounts.authority,
+            accounts.pool_state,
+            accounts.owner_lp_token,
+            token_0_account,
+            token_1_account,
+            accounts.token_0_vault,
+            accounts.token_1_vault,
+            accounts.token_program,
+            accounts.token_2022_program,
+            vault_0_mint,
+            vault_1_mint,
+            accounts.lp_mint,
+        ],
+        signer,
+    )
+    .map_err(|_| error!(HumbleV2Error::RaydiumCpiFailed))?;
+    Ok(())
 }
 
 fn percent_of(amount: u64, percent: u64) -> Result<u64> {
