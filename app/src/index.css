@@ -627,6 +627,90 @@ footer { background: var(--bg2); border-top: 1px solid var(--border); padding: 6
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .spin { animation: spin 1s linear infinite; }
 
+/* ── PROFILE BUTTON ── */
+.profile-btn {
+  display: flex; align-items: center; gap: .4rem;
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1);
+  color: var(--muted2); border-radius: 8px; padding: .38rem .75rem;
+  font-family: var(--font-mono); font-size: .7rem; letter-spacing: .06em;
+  cursor: pointer; transition: all .2s; white-space: nowrap;
+}
+.profile-btn:hover { border-color: var(--green-neon); color: var(--green-neon); background: rgba(0,255,148,.06); }
+@media (max-width: 768px) { .profile-btn span { display: none; } .profile-btn { padding: .38rem .5rem; } }
+
+/* ── BADGE MODAL ── */
+.badge-modal-backdrop {
+  position: fixed; inset: 0; z-index: 2000;
+  background: rgba(5,7,15,.85);
+  backdrop-filter: blur(12px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 1rem;
+  animation: fadeIn .18s ease;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.badge-modal {
+  background: #090D1A;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 20px;
+  width: 100%; max-width: 360px;
+  overflow: hidden;
+  box-shadow: 0 0 60px rgba(0,0,0,.6);
+  animation: slideUp .22s ease;
+}
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+.badge-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.25rem .75rem;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.badge-modal-title { font-family: var(--font-head); font-weight: 700; font-size: .85rem; letter-spacing: .08em; color: var(--text); }
+.badge-modal-close { background: none; border: none; color: var(--muted2); font-size: 1rem; cursor: pointer; padding: .2rem .4rem; border-radius: 6px; transition: color .15s; }
+.badge-modal-close:hover { color: var(--text); }
+
+.badge-modal-loading { display: flex; align-items: center; justify-content: center; padding: 3rem; }
+.badge-spinner { width: 32px; height: 32px; border: 2px solid rgba(255,255,255,.1); border-top-color: var(--green-neon); border-radius: 50%; animation: spin 1s linear infinite; }
+
+.badge-modal-card {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 1.5rem 1rem 1rem;
+  background: radial-gradient(ellipse at 50% 0%, rgba(var(--aura-rgb,.12)) 0%, transparent 70%);
+}
+.badge-modal-info { text-align: center; margin-top: .5rem; }
+.badge-modal-name { font-family: var(--font-head); font-weight: 800; font-size: 1.1rem; letter-spacing: .1em; color: var(--text); text-transform: uppercase; }
+.badge-modal-element { font-family: var(--font-mono); font-size: .7rem; letter-spacing: .18em; text-transform: uppercase; margin-top: .2rem; }
+.badge-modal-edition { font-family: var(--font-mono); font-size: .6rem; color: var(--muted2); margin-top: .3rem; letter-spacing: .1em; }
+
+.badge-modal-action { padding: 1rem 1.25rem 1.5rem; display: flex; flex-direction: column; gap: .75rem; }
+
+.badge-modal-price-row { display: flex; justify-content: space-between; align-items: center; padding: .6rem .9rem; background: rgba(255,255,255,.04); border-radius: 10px; border: 1px solid rgba(255,255,255,.07); }
+.badge-modal-price-label { font-family: var(--font-mono); font-size: .72rem; color: var(--muted2); }
+.badge-modal-price-value { font-family: var(--font-head); font-weight: 800; font-size: .95rem; color: var(--text); }
+
+.badge-modal-mint-btn {
+  width: 100%; padding: .8rem; border-radius: 10px;
+  background: rgba(0,0,0,.2); border: 1.5px solid;
+  font-family: var(--font-head); font-weight: 700; font-size: .85rem;
+  letter-spacing: .06em; cursor: pointer; transition: all .2s;
+}
+.badge-modal-mint-btn:hover:not(:disabled) { filter: brightness(1.15); background: rgba(255,255,255,.05); }
+.badge-modal-mint-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.badge-modal-hint { font-family: var(--font-mono); font-size: .65rem; color: var(--muted2); text-align: center; line-height: 1.6; }
+.badge-modal-hint b { color: var(--text); }
+
+.badge-modal-owned { text-align: center; font-family: var(--font-mono); font-size: .78rem; color: var(--muted2); padding: .5rem 0; }
+.badge-modal-since { font-size: .62rem; margin-top: .3rem; color: var(--muted); }
+
+.badge-modal-cooldown { text-align: center; padding: .75rem; background: rgba(255,59,48,.06); border: 1px solid rgba(255,59,48,.15); border-radius: 10px; }
+.badge-modal-cooldown-title { font-family: var(--font-head); font-weight: 700; font-size: .78rem; color: #ff6b6b; }
+.badge-modal-cooldown-days { font-family: var(--font-mono); font-size: .72rem; color: var(--muted2); margin-top: .3rem; }
+.badge-modal-cooldown-date { font-size: .62rem; color: var(--muted); margin-top: .2rem; font-family: var(--font-mono); }
+
+.badge-modal-success { text-align: center; font-family: var(--font-mono); font-size: .75rem; color: var(--green-neon); padding: .5rem; background: rgba(0,255,148,.06); border-radius: 8px; border: 1px solid rgba(0,255,148,.15); }
+.badge-modal-error { font-family: var(--font-mono); font-size: .68rem; color: var(--red); text-align: center; }
+
 /* HEX FRAME */
 .hex-frame { position: relative; display: inline-block; flex-shrink: 0; }
 .hex-frame-border { position: absolute; inset: 0; clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
