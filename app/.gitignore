@@ -12,9 +12,10 @@ wallet.json
 keypair.json
 upgrade-authority.json
 authority.json
-# Allow public static assets
+# Allow public static assets and api config
 !public/*.json
 !public/*.svg
+!api/package.json
 
 # Node / Vite
 node_modules/
