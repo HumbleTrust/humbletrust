@@ -23,7 +23,7 @@ import {
   sellOnCurveV2,
 } from "../lib/program";
 import { listTokens } from "../lib/image";
-import { LiveMarketChart } from "../components/LiveMarketChart";
+import { LiveMarketChart, ChartIndicators } from "../components/LiveMarketChart";
 
 const PREVIEW_TOKEN_RESERVE = 350_000_000;
 const PREVIEW_SOL_RESERVE = 0.5;
@@ -141,6 +141,9 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
   const [showVolume, setShowVolume] = useState(true);
   const [showIndicators, setShowIndicators] = useState(false);
   const [fullChart, setFullChart] = useState(false);
+  const [indicators, setIndicators] = useState<ChartIndicators>({ sma20: false, sma50: false, ema20: false, rsi: false });
+  const toggleIndicator = (key: keyof ChartIndicators) =>
+    setIndicators(prev => ({ ...prev, [key]: !prev[key] }));
 
   useEffect(() => {
     let mounted = true;
@@ -555,6 +558,10 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
             {showIndicators && (
               <div className="indicator-menu">
                 <label><input type="checkbox" checked={showVolume} onChange={(e) => setShowVolume(e.target.checked)} /> Volume</label>
+                <label><input type="checkbox" checked={indicators.sma20} onChange={() => toggleIndicator("sma20")} /><span style={{ color: "#f7ca4d" }}>SMA 20</span></label>
+                <label><input type="checkbox" checked={indicators.sma50} onChange={() => toggleIndicator("sma50")} /><span style={{ color: "#b98cff" }}>SMA 50</span></label>
+                <label><input type="checkbox" checked={indicators.ema20} onChange={() => toggleIndicator("ema20")} /><span style={{ color: "#00D4FF" }}>EMA 20</span></label>
+                <label><input type="checkbox" checked={indicators.rsi} onChange={() => toggleIndicator("rsi")} /><span style={{ color: "#f7ca4d" }}>RSI (14)</span></label>
               </div>
             )}
 
@@ -568,6 +575,7 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
                 timeframe={timeframe}
                 mode={chartMode}
                 showVolume={showVolume}
+                indicators={indicators}
               />
             </div>
           </div>

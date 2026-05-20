@@ -39,7 +39,9 @@ export const TokenDetail = ({ mint, back }: { mint: string; back: () => void }) 
             <span className="chart-divider" />
             <span className="chart-menu-btn active">Real OHLCV</span>
           </div>
-          <LiveMarketChart mint={mint} timeframe="1m" mode="candles" showVolume />
+          <LiveMarketChart mint={mint} timeframe="1m" mode="candles" showVolume
+            indicators={{ sma20: false, sma50: false, ema20: false, rsi: false }}
+          />
         </div>
 
         <div className="score-detail-card">

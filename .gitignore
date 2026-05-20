@@ -13,6 +13,8 @@ test-ledger/
 !*/package.json
 !*/package-lock.json
 !*/tsconfig.json
+!app/public/*.json
+!app/public/*.svg
 id.json
 wallet.json
 keypair.json

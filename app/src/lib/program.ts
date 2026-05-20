@@ -4,15 +4,22 @@ import {
   AuthorityType,
   createAssociatedTokenAccountInstruction,
   createInitializeMint2Instruction,
+  createInitializeMetadataPointerInstruction,
   createInitializeNonTransferableMintInstruction,
   createMintToInstruction,
   createSetAuthorityInstruction,
   ExtensionType,
   getAssociatedTokenAddressSync,
   getMintLen,
+  LENGTH_SIZE,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  TYPE_SIZE,
 } from "@solana/spl-token";
+import {
+  createInitializeInstruction as createTokenMetadataInstruction,
+  pack as packTokenMetadata,
+} from "@solana/spl-token-metadata";
 import idlJson from "./idl.json";
 import idlV2Json from "./idl_v2.json";
 import { PROGRAM_ID, PROGRAM_ID_V2, FEE_WALLET, HUMBLETRUST_METRICS_AUTHORITY } from "./constants";
@@ -351,9 +358,27 @@ export const mintLaunchCertificateV2 = async (
     false,
     TOKEN_2022_PROGRAM_ID
   );
-  void tokenName;
-  const mintLen = getMintLen([ExtensionType.NonTransferable]);
-  const mintRent = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+  // Build Token-2022 metadata (on-chain, no external hosting needed)
+  const certName = tokenName ? `${tokenName} Certificate` : "HumbleTrust Launch Certificate";
+  const certSymbol = "CERT";
+  const certUri = "https://humbletrust.vercel.app/cert-meta.json";
+  const certMetadata = {
+    mint: certificateMint.publicKey,
+    name: certName,
+    symbol: certSymbol,
+    uri: certUri,
+    additionalMetadata: [
+      ["type", "LaunchCertificate"],
+      ["token", tokenMint.toBase58()],
+      ["protocol", "HumbleTrustV2"],
+    ] as [string, string][],
+  };
+
+  // Allocate space for: NonTransferable + MetadataPointer (fixed) + TokenMetadata (variable)
+  const mintLen = getMintLen([ExtensionType.NonTransferable, ExtensionType.MetadataPointer]);
+  const metadataLen = TYPE_SIZE + LENGTH_SIZE + packTokenMetadata(certMetadata).length;
+  const mintRent = await connection.getMinimumBalanceForRentExemption(mintLen + metadataLen);
 
   const certificateIx = await program.methods
     .mintLaunchCertificateV2(certificateMint.publicKey)
@@ -371,12 +396,30 @@ export const mintLaunchCertificateV2 = async (
     SystemProgram.createAccount({
       fromPubkey: creator,
       newAccountPubkey: certificateMint.publicKey,
-      space: mintLen,
+      space: mintLen + metadataLen,
       lamports: mintRent,
       programId: TOKEN_2022_PROGRAM_ID,
     }),
+    // Order matters: extensions before InitializeMint2
     createInitializeNonTransferableMintInstruction(certificateMint.publicKey, TOKEN_2022_PROGRAM_ID),
+    createInitializeMetadataPointerInstruction(
+      certificateMint.publicKey,
+      creator,           // update authority
+      certificateMint.publicKey, // metadata lives on the mint itself
+      TOKEN_2022_PROGRAM_ID
+    ),
     createInitializeMint2Instruction(certificateMint.publicKey, 0, creator, null, TOKEN_2022_PROGRAM_ID),
+    // Write token metadata to the mint account
+    createTokenMetadataInstruction({
+      programId: TOKEN_2022_PROGRAM_ID,
+      metadata: certificateMint.publicKey,
+      updateAuthority: creator,
+      mint: certificateMint.publicKey,
+      mintAuthority: creator,
+      name: certName,
+      symbol: certSymbol,
+      uri: certUri,
+    }),
     createAssociatedTokenAccountInstruction(
       creator,
       certificateTokenAccount,
