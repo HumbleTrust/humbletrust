@@ -1,8 +1,7 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { query } from "../_lib/db";
-import { initSchema } from "../_lib/schema";
+const { query } = require("../_lib/db");
+const { initSchema } = require("../_lib/schema");
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -16,7 +15,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === "GET") {
       const limit = Math.min(Number(req.query.limit) || 100, 200);
       const { rows } = await query(
-        `SELECT * FROM tokens ORDER BY created_at DESC LIMIT $1`,
+        "SELECT * FROM tokens ORDER BY created_at DESC LIMIT $1",
         [limit]
       );
       return res.json({ tokens: rows });
@@ -24,9 +23,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (req.method === "POST") {
       await initSchema();
-      const body = req.body as Record<string, unknown>;
-      const { mint, creator, name, symbol, signature, launchScore, lockPercent, burnOption, certificateMint } = body;
-      if (!mint || !creator) return res.status(400).json({ error: "mint and creator required" });
+      const { mint, creator, name, symbol, signature, launchScore, lockPercent, burnOption, certificateMint } = req.body || {};
+      if (!mint || !creator) {
+        return res.status(400).json({ error: "mint and creator required" });
+      }
 
       const score = Math.min(100, Math.max(0, Number(launchScore) || 0));
       const trustLevel = score >= 85 ? "ELITE" : score >= 70 ? "STRONG" : score >= 40 ? "OK" : "WEAK";
@@ -45,9 +45,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     return res.status(405).json({ error: "Method not allowed" });
-  } catch (e: unknown) {
+  } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[api/tokens]", msg);
     return res.status(500).json({ error: msg });
   }
-}
+};
