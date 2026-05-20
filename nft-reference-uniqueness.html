@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HumbleTrust — Same Sign, Different Wallets</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #05070F;
+    font-family: 'Courier New', monospace;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 3rem 2rem; gap: 2.5rem; min-height: 100vh;
+  }
+  h1 { color: #00FF94; font-size: .95rem; letter-spacing: .3em; text-transform: uppercase; text-shadow: 0 0 20px rgba(0,255,148,.5); }
+  .sub { color: rgba(255,255,255,.22); font-size: .6rem; letter-spacing: .18em; text-align: center; line-height: 1.9; }
+  .sub span { color: rgba(255,219,43,.6); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 210px);
+    gap: 1.6rem;
+  }
+  @media(max-width:700px){ .grid{ grid-template-columns: repeat(2,160px); gap:1rem; } }
+
+  /* ── CARD ── */
+  .card {
+    position: relative; width: 210px; height: 310px; border-radius: 18px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: .4rem; overflow: hidden; cursor: pointer;
+    transition: transform .35s, box-shadow .35s;
+  }
+  .card:hover { transform: translateY(-8px) scale(1.03); }
+
+  /* aura glow border */
+  .card::before {
+    content: ''; position: absolute; inset: 0; border-radius: 18px; padding: 1.5px;
+    background: var(--aura);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+  }
+  .card::after {
+    content: ''; position: absolute; inset: -1px; border-radius: 19px;
+    box-shadow: 0 0 40px var(--g1), 0 0 80px var(--g2), inset 0 0 28px var(--gi);
+    pointer-events: none;
+  }
+  .noise { position:absolute;inset:0;border-radius:18px;opacity:.03;pointer-events:none;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  .stars { position:absolute;inset:0;pointer-events:none; }
+  .star { position:absolute;border-radius:50%;background:#fff;animation:tw var(--d,3s) ease-in-out infinite alternate; }
+  @keyframes tw{ from{opacity:.06}to{opacity:.55} }
+
+  /* labels */
+  .card-badge   { position:absolute;top:11px;left:13px;font-size:.45rem;letter-spacing:.12em;color:rgba(255,255,255,.28);z-index:3;text-transform:uppercase; }
+  .card-edition { position:absolute;bottom:11px;right:13px;font-size:.48rem;letter-spacing:.1em;color:rgba(255,255,255,.25);z-index:3; }
+  .wallet-snippet { position:absolute;bottom:11px;left:13px;font-size:.42rem;letter-spacing:.06em;color:rgba(255,255,255,.18);z-index:3;font-family:monospace; }
+  .card-name    { position:relative;z-index:3;color:#fff;font-size:.7rem;letter-spacing:.22em;text-transform:uppercase;text-shadow:0 0 10px rgba(255,255,255,.3);margin-top:.2rem; }
+  .card-element { position:relative;z-index:3;font-size:.54rem;letter-spacing:.16em;text-transform:uppercase;color:var(--col);text-shadow:0 0 8px var(--g1); }
+  .divider      { position:relative;z-index:3;width:34px;height:1px;background:linear-gradient(90deg,transparent,var(--col),transparent);margin:.05rem 0; }
+
+  /* shield wrapper */
+  .shield-wrap  { position:relative;z-index:3;filter:drop-shadow(0 0 12px var(--g1)) drop-shadow(0 0 24px var(--g1)); }
+  .sigil-wrap   { position:relative;z-index:3;filter:drop-shadow(0 0 7px var(--g1)); }
+
+  /* ── WALLET THEMES  (aura colour driven by wallet hash) ── */
+  /* #1  5xK7...mQ2r  → electric violet */
+  .w1{--aura:linear-gradient(135deg,#9945FF,#6610cc,#9945FF);--g1:rgba(153,69,255,.65);--g2:rgba(153,69,255,.18);--gi:rgba(153,69,255,.06);--col:#c77dff;
+      background:radial-gradient(ellipse at 40% 25%,#1a0a2e 0%,#05070F 68%);}
+  /* #2  9fBz...pL8w  → hot coral */
+  .w2{--aura:linear-gradient(135deg,#FF3C6B,#aa1040,#FF3C6B);--g1:rgba(255,60,107,.65);--g2:rgba(255,60,107,.18);--gi:rgba(255,60,107,.06);--col:#ff88a8;
+      background:radial-gradient(ellipse at 60% 30%,#200013 0%,#05070F 68%);}
+  /* #3  2aRt...vN4k  → cyan ice */
+  .w3{--aura:linear-gradient(135deg,#00D4FF,#006fa8,#00D4FF);--g1:rgba(0,212,255,.65);--g2:rgba(0,212,255,.18);--gi:rgba(0,212,255,.06);--col:#66e8ff;
+      background:radial-gradient(ellipse at 50% 20%,#001a25 0%,#05070F 68%);}
+  /* #4  7hJq...cX1m  → solar gold */
+  .w4{--aura:linear-gradient(135deg,#FFDB2B,#cc9900,#FFDB2B);--g1:rgba(255,219,43,.65);--g2:rgba(255,219,43,.18);--gi:rgba(255,219,43,.06);--col:#ffe97a;
+      background:radial-gradient(ellipse at 45% 28%,#1a1400 0%,#05070F 68%);}
+  /* #5  3pWe...uF5s  → toxic lime */
+  .w5{--aura:linear-gradient(135deg,#39FF14,#1a8c00,#39FF14);--g1:rgba(57,255,20,.65);--g2:rgba(57,255,20,.18);--gi:rgba(57,255,20,.06);--col:#80ff5a;
+      background:radial-gradient(ellipse at 55% 25%,#001a00 0%,#05070F 68%);}
+  /* #6  6dMn...xR9y  → magenta pulse */
+  .w6{--aura:linear-gradient(135deg,#DC1FFF,#7800a8,#DC1FFF);--g1:rgba(220,31,255,.65);--g2:rgba(220,31,255,.18);--gi:rgba(220,31,255,.06);--col:#f088ff;
+      background:radial-gradient(ellipse at 50% 30%,#1a0020 0%,#05070F 68%);}
+</style>
+</head>
+<body>
+
+<h1>♉ Taurus · 6 Different Wallets</h1>
+<p class="sub">
+  Один и тот же знак зодиака — <span>6 разных создателей</span><br>
+  Цвет ауры, фон и свечение генерируются из адреса кошелька · Знак верификации всегда зелёный
+</p>
+
+<div class="grid" id="cards"></div>
+
+<script>
+const wallets = [
+  { cls:'w1', snippet:'5xK7...mQ2r', edition:'#001', col:'#9945FF' },
+  { cls:'w2', snippet:'9fBz...pL8w', edition:'#012', col:'#FF3C6B' },
+  { cls:'w3', snippet:'2aRt...vN4k', edition:'#027', col:'#00D4FF' },
+  { cls:'w4', snippet:'7hJq...cX1m', edition:'#041', col:'#FFDB2B' },
+  { cls:'w5', snippet:'3pWe...uF5s', edition:'#058', col:'#39FF14' },
+  { cls:'w6', snippet:'6dMn...xR9y', edition:'#073', col:'#DC1FFF' },
+];
+
+// Taurus glyph SVG (same for all)
+function taurusGlyph(c) {
+  return `<svg width="52" height="52" viewBox="0 0 80 80" fill="none">
+    <circle cx="40" cy="55" r="18" stroke="${c}" stroke-width="2" fill="none"/>
+    <path d="M24,44 C18,34 12,20 16,10" stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <path d="M56,44 C62,34 68,20 64,10" stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <line x1="14" y1="8" x2="18" y2="12" stroke="${c}" stroke-width="1.5" stroke-linecap="round" opacity=".7"/>
+    <line x1="66" y1="8" x2="62" y2="12" stroke="${c}" stroke-width="1.5" stroke-linecap="round" opacity=".7"/>
+    <circle cx="16" cy="10" r="3" fill="${c}"/>
+    <circle cx="64" cy="10" r="3" fill="${c}"/>
+    <circle cx="40" cy="37" r="2" fill="${c}" opacity=".5"/>
+  </svg>`;
+}
+
+// Earth sigil SVG
+function earthSigil(c) {
+  return `<svg width="30" height="30" viewBox="0 0 80 80" fill="none">
+    <rect x="22" y="22" width="36" height="36" transform="rotate(45 40 40)" stroke="${c}" stroke-width="2" fill="none" opacity=".8"/>
+    <polygon points="40,62 14,18 66,18" stroke="${c}" stroke-width="2" fill="none" opacity=".85"/>
+    <line x1="22" y1="36" x2="58" y2="36" stroke="${c}" stroke-width="1.8" stroke-linecap="round" opacity=".8"/>
+    <circle cx="40" cy="40" r="3" fill="${c}"/>
+  </svg>`;
+}
+
+// Verification badge
+function verifyBadge() {
+  return `<circle cx="78" cy="12" r="11" fill="#05070F" stroke="#00FF94" stroke-width="1.5"/>
+          <circle cx="78" cy="12" r="8" stroke="#00FF94" stroke-width=".8" fill="rgba(0,255,148,.08)" opacity=".5"/>
+          <polyline points="72,12 77,18 86,6" stroke="#00FF94" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="86" cy="6" r="1.8" fill="#00FF94"/>`;
+}
+
+// Shield SVG (zodiac inside + verify)
+function shield(c, zodiacInner) {
+  return `<svg width="106" height="126" viewBox="0 0 90 108" fill="none">
+    <path d="M45,3 L85,18 L85,58 C85,80 45,105 45,105 C45,105 5,80 5,58 L5,18 Z"
+          stroke="${c}" stroke-width="2" fill="rgba(0,0,0,.18)"/>
+    <path d="M45,13 L75,26 L75,58 C75,75 45,95 45,95 C45,95 15,75 15,58 L15,26 Z"
+          stroke="${c}" stroke-width="1.2" fill="none" opacity=".5"/>
+    <line x1="16" y1="48" x2="74" y2="48" stroke="${c}" stroke-width="1" opacity=".25"/>
+    ${zodiacInner}
+    <circle cx="45" cy="3"   r="3"   fill="${c}"/>
+    <circle cx="85" cy="18"  r="2.5" fill="${c}" opacity=".8"/>
+    <circle cx="85" cy="58"  r="2"   fill="${c}" opacity=".6"/>
+    <circle cx="45" cy="105" r="3"   fill="${c}"/>
+    <circle cx="5"  cy="58"  r="2"   fill="${c}" opacity=".6"/>
+    <circle cx="5"  cy="18"  r="2.5" fill="${c}" opacity=".8"/>
+    ${verifyBadge()}
+  </svg>`;
+}
+
+// Taurus glyph drawn inside shield at the right coordinates
+function taurusInShield(c) {
+  return `
+    <circle cx="45" cy="62" r="16" stroke="${c}" stroke-width="1.8" fill="none"/>
+    <path d="M31,52 C25,43 18,30 22,20" stroke="${c}" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    <path d="M59,52 C65,43 72,30 68,20" stroke="${c}" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    <line x1="20" y1="18" x2="24" y2="22" stroke="${c}" stroke-width="1.4" stroke-linecap="round" opacity=".7"/>
+    <line x1="70" y1="18" x2="66" y2="22" stroke="${c}" stroke-width="1.4" stroke-linecap="round" opacity=".7"/>
+    <circle cx="22" cy="20" r="2.5" fill="${c}"/>
+    <circle cx="68" cy="20" r="2.5" fill="${c}"/>
+    <circle cx="45" cy="46" r="2"   fill="${c}" opacity=".5"/>`;
+}
+
+// constellation background
+function constellation() {
+  return `<svg style="position:absolute;inset:0;z-index:1;opacity:.1;pointer-events:none" viewBox="0 0 210 310">
+    <circle cx="105" cy="68" r="2"   fill="white" opacity=".6"/>
+    <circle cx="140" cy="54" r="1.5" fill="white" opacity=".5"/>
+    <circle cx="158" cy="76" r="1.5" fill="white" opacity=".5"/>
+    <circle cx="80"  cy="86" r="1.5" fill="white" opacity=".4"/>
+    <circle cx="63"  cy="70" r="1"   fill="white" opacity=".4"/>
+    <circle cx="128" cy="104" r="1.5" fill="white" opacity=".4"/>
+    <line x1="105" y1="68" x2="140" y2="54" stroke="white" stroke-width=".4" opacity=".2"/>
+    <line x1="140" y1="54" x2="158" y2="76" stroke="white" stroke-width=".4" opacity=".2"/>
+    <line x1="105" y1="68" x2="80"  y2="86" stroke="white" stroke-width=".4" opacity=".2"/>
+    <line x1="80"  y1="86" x2="63"  y2="70" stroke="white" stroke-width=".4" opacity=".2"/>
+    <line x1="105" y1="68" x2="128" y2="104" stroke="white" stroke-width=".4" opacity=".2"/>
+  </svg>`;
+}
+
+const container = document.getElementById('cards');
+
+wallets.forEach((w, i) => {
+  const card = document.createElement('div');
+  card.className = `card ${w.cls}`;
+  card.innerHTML = `
+    <div class="noise"></div>
+    <div class="stars" id="st${i}"></div>
+    ${constellation()}
+    <div class="card-badge">HumbleTrust</div>
+
+    <div class="shield-wrap">
+      ${shield(w.col, taurusInShield(w.col))}
+    </div>
+
+    <div class="sigil-wrap">
+      ${earthSigil(w.col)}
+    </div>
+
+    <div class="card-name">Taurus</div>
+    <div class="divider"></div>
+    <div class="card-element">Earth · Apr 20 – May 20</div>
+
+    <div class="wallet-snippet">${w.snippet}</div>
+    <div class="card-edition">${w.edition}</div>
+  `;
+  container.appendChild(card);
+
+  // stars
+  const stEl = card.querySelector(`#st${i}`);
+  for (let j = 0; j < 38; j++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const sz = Math.random()*1.6+.3;
+    s.style.cssText = `width:${sz}px;height:${sz}px;top:${Math.random()*100}%;left:${Math.random()*100}%;--d:${(Math.random()*4+2).toFixed(1)}s;animation-delay:${(Math.random()*5).toFixed(1)}s;`;
+    stEl.appendChild(s);
+  }
+});
+</script>
+
+</body>
+</html>
