@@ -1,19 +1,14 @@
-const { Pool } = require("pg");
+const { createClient } = require("@supabase/supabase-js");
 
-let pool;
-const getPool = () => {
-  if (!pool) {
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-      max: 3,
-      idleTimeoutMillis: 20000,
-      connectionTimeoutMillis: 10000,
-    });
+let client;
+const getClient = () => {
+  if (!client) {
+    client = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_KEY
+    );
   }
-  return pool;
+  return client;
 };
 
-module.exports = {
-  query: (text, params) => getPool().query(text, params),
-};
+module.exports = { getClient };
