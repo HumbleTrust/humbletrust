@@ -47,6 +47,9 @@ export interface ApiCandle {
 }
 
 const request = async <T>(path: string): Promise<T> => {
+  if (!API_BASE_URL) {
+    throw new Error("VITE_API_BASE_URL is not configured");
+  }
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 6_000);
   try {
@@ -78,6 +81,9 @@ export const getTokenOhlcv = (mint: string, timeframe: string, limit = 500) =>
   );
 
 export const chartWsUrl = (mint: string, timeframe: string) => {
+  if (!API_BASE_URL) {
+    throw new Error("VITE_API_BASE_URL is not configured");
+  }
   const base = new URL(API_BASE_URL);
   base.protocol = base.protocol === "https:" ? "wss:" : "ws:";
   base.pathname = `/chart/${mint}`;
