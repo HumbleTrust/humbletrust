@@ -64,8 +64,16 @@ nav.topbar {
 .brand-humble { color: var(--green-neon); text-shadow: 0 0 8px rgba(0,255,148,.8), 0 0 20px rgba(0,255,148,.4); }
 .brand-trust { background: var(--solana-gradient); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 8px rgba(153,69,255,.6)); }
 .nav-links { display: flex; gap: 2rem; list-style: none; }
-.nav-links button { background: none; border: none; color: var(--muted2); font-size: .82rem; font-family: var(--font-mono); cursor: pointer; transition: color .2s; letter-spacing: .02em; }
-.nav-links button:hover, .nav-links button.active { color: var(--green-neon); }
+.nav-links button { background: none; border: none; color: var(--muted2); font-size: .82rem; font-family: var(--font-mono); cursor: pointer; transition: color .2s, text-shadow .2s; letter-spacing: .02em; }
+
+/* Per-tab colors — desktop hover/active */
+.nav-links button[data-page="home"]:hover,    .nav-links button[data-page="home"].active    { color: #00FF94; text-shadow: 0 0 12px rgba(0,255,148,.7); }
+.nav-links button[data-page="launch"]:hover,  .nav-links button[data-page="launch"].active  { color: #9945FF; text-shadow: 0 0 12px rgba(153,69,255,.7); }
+.nav-links button[data-page="discover"]:hover,.nav-links button[data-page="discover"].active { color: #14F195; text-shadow: 0 0 12px rgba(20,241,149,.7); }
+.nav-links button[data-page="trade"]:hover,   .nav-links button[data-page="trade"].active   { color: #1466FF; text-shadow: 0 0 12px rgba(20,102,255,.7); }
+.nav-links button[data-page="market"]:hover,  .nav-links button[data-page="market"].active  { color: #FF7A2F; text-shadow: 0 0 12px rgba(255,122,47,.7); }
+.nav-links button[data-page="status"]:hover,  .nav-links button[data-page="status"].active  { color: #FFDB2B; text-shadow: 0 0 12px rgba(255,219,43,.7); }
+.nav-links button[data-page="about"]:hover,   .nav-links button[data-page="about"].active   { color: #DC1FFF; text-shadow: 0 0 12px rgba(220,31,255,.7); }
 
 /* TICKER */
 .ticker-bar { position: relative; z-index: 1; margin-top: 64px; background: var(--bg2); border-bottom: 1px solid var(--border); padding: .6rem 0; overflow: hidden; }
@@ -568,11 +576,26 @@ footer { background: var(--bg2); border-top: 1px solid var(--border); padding: 6
   background: none; border: none; color: var(--muted2);
   font-size: .88rem; font-family: var(--font-mono); cursor: pointer;
   padding: .9rem 6%; text-align: left; width: 100%;
-  letter-spacing: .05em; transition: all .15s;
+  letter-spacing: .08em; transition: all .15s;
   border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: .75rem;
 }
 .mobile-nav-menu button:last-child { border-bottom: none; }
-.mobile-nav-menu button:hover, .mobile-nav-menu button.active { color: var(--green-neon); background: rgba(0,255,148,.04); }
+.mobile-nav-menu button::before { content: ""; display: block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .5; flex-shrink: 0; transition: opacity .15s; }
+.mobile-nav-menu button:hover::before, .mobile-nav-menu button.active::before { opacity: 1; }
+
+/* Per-tab colors — mobile menu */
+.mobile-nav-menu button[data-page="home"]    { --tab-color: #00FF94; }
+.mobile-nav-menu button[data-page="launch"]  { --tab-color: #9945FF; }
+.mobile-nav-menu button[data-page="discover"]{ --tab-color: #14F195; }
+.mobile-nav-menu button[data-page="trade"]   { --tab-color: #1466FF; }
+.mobile-nav-menu button[data-page="market"]  { --tab-color: #FF7A2F; }
+.mobile-nav-menu button[data-page="status"]  { --tab-color: #FFDB2B; }
+.mobile-nav-menu button[data-page="about"]   { --tab-color: #DC1FFF; }
+.mobile-nav-menu button:hover, .mobile-nav-menu button.active {
+  color: var(--tab-color, var(--green-neon));
+  background: color-mix(in srgb, var(--tab-color, var(--green-neon)) 6%, transparent);
+}
 
 @media (max-width: 768px) {
   .nav-links { display: none; }

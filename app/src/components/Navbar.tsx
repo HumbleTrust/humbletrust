@@ -35,7 +35,7 @@ export const Navbar = ({ page, setPage }: { page: Page; setPage: (p: Page) => vo
         <ul className="nav-links">
           {NAV.map(({ label, page: p }) => (
             <li key={p}>
-              <button className={page === p ? "active" : ""} onClick={() => navigate(p)}>{label}</button>
+              <button data-page={p} className={page === p ? "active" : ""} onClick={() => navigate(p)}>{label}</button>
             </li>
           ))}
         </ul>
@@ -52,7 +52,7 @@ export const Navbar = ({ page, setPage }: { page: Page; setPage: (p: Page) => vo
       </nav>
       <div className={`mobile-nav-menu${open ? " open" : ""}`}>
         {NAV.map(({ label, page: p }) => (
-          <button key={p} className={page === p ? "active" : ""} onClick={() => navigate(p)}>
+          <button key={p} data-page={p} className={page === p ? "active" : ""} onClick={() => navigate(p)}>
             {label}
           </button>
         ))}
