@@ -22,6 +22,7 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
+import type React from "react";
 import type { ReactNode } from "react";
 import { API_BASE_URL, NETWORK_STAGE } from "../lib/constants";
 
@@ -58,7 +59,7 @@ const productModules = [
   ["TrustScore", "Explainable 0-100 score from LaunchScore, CreatorReputation, MarketHealth and CommunityRisk.", Gauge],
   ["Wallet Reputation", "Creator behavior across launches, complaints, migration history and indexed market outcomes.", Wallet],
   ["Market Intelligence", "Trades, OHLCV, liquidity, price impact, migration state and risk-aware token detail pages.", BarChart3],
-  ["Launch Certificate NFT", "Token-2022 non-transferable certificate recording launch parameters and accountability.", Award],
+  ["Zodiac Badge NFT", "Premium on-chain badge unique to each wallet. Zodiac sign and element determined by token creation date. Tradeable with 30-day resell cooldown.", Award],
   ["Raydium CPMM Readiness", "Bonding curve reserves are designed to migrate with LP custody locked in a PDA after threshold.", Network],
 ] as const;
 
@@ -68,6 +69,97 @@ const trustRows = [
   ["MarketHealth", 74, "Volume, liquidity, price impact, dump behavior, trade quality", "purple"],
   ["CommunityRisk", 81, "Reports, votes, abuse signals and future moderation inputs", "amber"],
 ] as const;
+
+const ELEMENT_PATHS: Record<string, string> = {
+  Fire:  "M45,37 L60,64 L30,64 Z",
+  Water: "M45,67 L60,40 L30,40 Z",
+  Earth: "M45,37 L60,52 L45,67 L30,52 Z",
+};
+
+const MiniShieldBadge = ({
+  zodiac, element, aura, edition,
+}: {
+  zodiac: string; element: string; aura: string; edition: number;
+}) => (
+  <div className="badge-mini-card">
+    <svg viewBox="0 0 90 110" fill="none" className="badge-mini-svg" aria-hidden="true">
+      <path d="M45,5 L83,19 L83,57 C83,79 45,103 45,103 C45,103 7,79 7,57 L7,19 Z"
+        fill={`${aura}18`} stroke={aura} strokeWidth="2"
+        style={{ filter: `drop-shadow(0 0 10px ${aura}80)` }}
+      />
+      <path d="M45,12 L76,23 L76,56 C76,74 45,95 45,95 C45,95 14,74 14,56 L14,23 Z"
+        fill="rgba(5,7,15,0.65)" stroke={`${aura}50`} strokeWidth="1"
+      />
+      {element === "Air" ? (
+        <>
+          <circle cx="45" cy="52" r="13" fill="none" stroke={aura} strokeWidth="2" opacity="0.9" />
+          <circle cx="45" cy="52" r="7"  fill="none" stroke={aura} strokeWidth="2" opacity="0.65" />
+        </>
+      ) : (
+        <path d={ELEMENT_PATHS[element]} fill={`${aura}40`} stroke={aura} strokeWidth="2"
+          strokeLinejoin="round" opacity="0.9" />
+      )}
+      <text x="45" y="83" textAnchor="middle" fill={aura} fontSize="7"
+        fontFamily="monospace" letterSpacing="2" opacity="0.8">
+        {zodiac.slice(0, 3).toUpperCase()}
+      </text>
+      <circle cx="76" cy="13" r="9" fill="#05070F" stroke="#00FF94" strokeWidth="4.5" />
+      <polyline points="70,13 75,19 84,7" stroke="#00FF94" strokeWidth="3.5"
+        fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <text x="14" y="14" fill="rgba(255,255,255,0.22)" fontSize="5.5" fontFamily="monospace">
+        #{String(edition).padStart(3, "0")}
+      </text>
+    </svg>
+    <div className="badge-mini-meta">
+      <strong style={{ color: aura }}>{zodiac}</strong>
+      <span>{element}</span>
+    </div>
+  </div>
+);
+
+const BadgeNFTSection = () => (
+  <section id="badge-nft" className="landing-section soft-band">
+    <div className="sec-eyebrow">Zodiac Badge NFT</div>
+    <div className="badge-nft-split">
+      <div className="badge-nft-copy">
+        <h2 className="sec-h2">Your on-chain identity, written in the stars</h2>
+        <p className="sec-sub">
+          Every HumbleTrust wallet earns a unique Zodiac Badge — a tradeable NFT with
+          attributes derived entirely from the blockchain. Zodiac sign flows from the
+          token creation date. Aura color is hashed from your wallet address. No two
+          badges are ever the same, even for the same zodiac sign.
+        </p>
+        <ul className="badge-trait-list">
+          {([
+            ["#00FF94", "12 Zodiac signs", "Aries through Pisces, determined by mint date."],
+            ["#9945FF", "4 Elements",      "Fire · Water · Earth · Air — linked to each sign."],
+            ["#00D4FF", "32 Unique auras", "Aura color derived deterministically from your wallet."],
+            ["#FFD600", "Tradeable",       "Sell freely — re-mint requires a 30-day cooldown."],
+          ] as const).map(([color, title, body]) => (
+            <li key={title} style={{ "--tc": color } as React.CSSProperties}>
+              <span />
+              <div>
+                <strong>{title}</strong>
+                <p>{body}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <div className="badge-price-row">
+          <div><strong>0.2 SOL</strong><span>Standard mint</span></div>
+          <div><strong>0.5 SOL</strong><span>Genesis (first 100/sign)</span></div>
+          <div><strong>30 days</strong><span>Resell cooldown</span></div>
+        </div>
+      </div>
+      <div className="badge-nft-grid">
+        <MiniShieldBadge zodiac="Leo"      element="Fire"  aura="#FF3C6B" edition={7}  />
+        <MiniShieldBadge zodiac="Aquarius" element="Air"   aura="#00D4FF" edition={14} />
+        <MiniShieldBadge zodiac="Taurus"   element="Earth" aura="#9945FF" edition={3}  />
+        <MiniShieldBadge zodiac="Scorpio"  element="Water" aura="#39FF14" edition={21} />
+      </div>
+    </div>
+  </section>
+);
 
 const roadmap = [
   ["Phase 1", "Devnet MVP polish", "Launch, Discover and Trade surfaces refined around the trust layer."],
@@ -197,7 +289,7 @@ const HeroDashboard = () => (
         <div className="chip-row">
           <span>Curve Active</span>
           <span>PDA Custody</span>
-          <span>Certificate NFT</span>
+          <span>Zodiac Badge NFT</span>
           <span>Mainnet Prep</span>
         </div>
         <div className="chart-widget">
@@ -445,8 +537,8 @@ export const Landing = ({
           The <span>Trust & Safety</span> Layer for Solana launches.
         </h1>
         <p>
-          Protected token launches, PDA custody, TrustScore, wallet reputation, market health,
-          and launch certificates - starting with a devnet launchpad MVP.
+          Protected token launches, PDA custody, TrustScore, wallet reputation, market health
+          and Zodiac Badge NFTs — starting with a devnet launchpad MVP.
         </p>
         <div className="hero-btns left">
           <button className="btn-p" onClick={goLaunch}>
@@ -496,6 +588,7 @@ export const Landing = ({
     <DiscoverSurface goDiscover={goDiscover} />
     <TradeSurface goTrade={goTrade} />
     <TrustScoreSection />
+    <BadgeNFTSection />
     <ArchitectureSection />
 
     <section id="roadmap" className="landing-section soft-band">
