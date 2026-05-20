@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Navbar } from "./components/Navbar";
 import { Ticker } from "./components/Ticker";
 import { Footer } from "./components/Footer";
@@ -16,26 +16,44 @@ export type Page = "home" | "launch" | "discover" | "token" | "trade" | "status"
 export const App = () => {
   const [page, setPage] = useState<Page>("home");
   const [selectedMint, setSelectedMint] = useState("");
+  const isLanding = page === "home";
   const openToken = (mint: string) => {
     setSelectedMint(mint);
     setPage("token");
   };
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+  }, [page]);
   return (
     <>
-      <div className="orb orb1" />
-      <div className="orb orb2" />
-      <div className="orb orb3" />
-      <Navbar page={page} setPage={setPage} />
-      <Ticker />
-      <StatusBanner />
-      {page === "home" && <Landing goLaunch={() => setPage("launch")} goDiscover={() => setPage("discover")} />}
+      {!isLanding && (
+        <>
+          <div className="orb orb1" />
+          <div className="orb orb2" />
+          <div className="orb orb3" />
+        </>
+      )}
+      {!isLanding && (
+        <>
+          <Navbar page={page} setPage={setPage} />
+          <Ticker />
+          <StatusBanner />
+        </>
+      )}
+      {isLanding && (
+        <Landing
+          goLaunch={() => setPage("launch")}
+          goDiscover={() => setPage("discover")}
+          goTrade={() => setPage("trade")}
+        />
+      )}
       {page === "launch" && <Launch />}
       {page === "discover" && <Discover openToken={openToken} />}
       {page === "token" && <TokenDetail mint={selectedMint} back={() => setPage("discover")} />}
       {page === "trade" && <Trade goDiscover={() => setPage("discover")} />}
       {page === "status" && <Status />}
       {page === "about" && <About />}
-      <Footer setPage={setPage} />
+      {!isLanding && <Footer setPage={setPage} />}
     </>
   );
 };
