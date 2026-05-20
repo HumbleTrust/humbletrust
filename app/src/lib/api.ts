@@ -76,6 +76,7 @@ export const registerToken = (data: {
   lockPercent: number;
   burnOption: number;
   certificateMint?: string | null;
+  tier?: number;
 }) =>
   fetch(`${API_BASE}/tokens`, {
     method: "POST",

@@ -25,7 +25,7 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === "POST") {
-      const { mint, creator, name, symbol, signature, launchScore, lockPercent, burnOption, certificateMint } = req.body || {};
+      const { mint, creator, name, symbol, signature, launchScore, lockPercent, burnOption, certificateMint, tier } = req.body || {};
       if (!mint || !creator) {
         return res.status(400).json({ error: "mint and creator required" });
       }
@@ -45,6 +45,7 @@ module.exports = async (req, res) => {
         lock_percent: lockPercent || null,
         burn_option: burnOption || null,
         certificate_mint: certificateMint || null,
+        tier: tier === 1 ? 'premium' : 'standard',
         updated_at: new Date().toISOString(),
       }, { onConflict: "mint", ignoreDuplicates: false });
 

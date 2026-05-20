@@ -199,6 +199,7 @@ const LandingNav = ({
       <button type="button" onClick={goDiscover}>Discover</button>
       <button type="button" onClick={goTrade}>Trade</button>
       <a href="#trustscore">TrustScore</a>
+      <a href="#badge-nft">Badge NFT</a>
       <a href="#architecture">Architecture</a>
       <a href="#devnet">Devnet Status</a>
       <a href="#roadmap">Roadmap</a>
@@ -369,9 +370,9 @@ const DiscoverSurface = ({ goDiscover }: { goDiscover: () => void }) => {
       <div className="discover-mock">
         <div className="discover-toolbar-mock">
           <div>
-            <button className="active">New</button>
-            <button>TrustScore</button>
-            <button>Volume</button>
+            <button type="button" className="active" onClick={goDiscover}>New</button>
+            <button type="button" onClick={goDiscover}>TrustScore</button>
+            <button type="button" onClick={goDiscover}>Volume</button>
           </div>
           <div>
             <span>Strong</span>
@@ -381,7 +382,7 @@ const DiscoverSurface = ({ goDiscover }: { goDiscover: () => void }) => {
         </div>
         <div className="discover-token-grid">
           {tokens.map(([name, symbol, score, status, volume, liquidity]) => (
-            <div className="discover-token-card" key={String(symbol)}>
+            <div className="discover-token-card" key={String(symbol)} onClick={goDiscover} style={{cursor:"pointer"}}>
               <div className="token-avatar">{String(symbol).slice(0, 2)}</div>
               <div className="token-main">
                 <strong>{name}</strong>
@@ -434,8 +435,8 @@ const TradeSurface = ({ goTrade }: { goTrade: () => void }) => (
             <strong>7Hx2k...Q9pL - $HUMBLE</strong>
           </div>
           <div className="trade-tabs-mini">
-            <button className="active">Buy</button>
-            <button>Sell</button>
+            <button type="button" className="active" onClick={goTrade}>Buy</button>
+            <button type="button" onClick={goTrade}>Sell</button>
           </div>
           <div className="swap-box">
             <span>From</span>
@@ -450,7 +451,7 @@ const TradeSurface = ({ goTrade }: { goTrade: () => void }) => (
             <span>Slippage <b>1%</b></span>
             <span>Impact <b>1.42%</b></span>
           </div>
-          <button className="swap-preview-btn" type="button">Preview buy on Devnet</button>
+          <button className="swap-preview-btn" type="button" onClick={goTrade}>Preview buy on Devnet</button>
           <div className="devnet-warning-mini">
             <AlertTriangle size={14} /> Devnet preview only. No real-value assets.
           </div>

@@ -11,6 +11,7 @@ const NAV: { label: string; page: Page }[] = [
   { label: "DISCOVER", page: "discover" },
   { label: "TRADE",    page: "trade"    },
   { label: "MARKET",   page: "market"   },
+  { label: "NFT",      page: "nft"      },
   { label: "STATUS",   page: "status"   },
   { label: "ABOUT",    page: "about"    },
 ];
@@ -90,7 +91,12 @@ export const Navbar = ({ page, setPage }: { page: Page; setPage: (p: Page) => vo
       </div>
 
       {/* Badge modal */}
-      {badgeOpen && <BadgeModal onClose={() => setBadgeOpen(false)} />}
+      {badgeOpen && (
+        <BadgeModal
+          onClose={() => setBadgeOpen(false)}
+          goLaunch={() => { setBadgeOpen(false); navigate("launch"); }}
+        />
+      )}
     </>
   );
 };

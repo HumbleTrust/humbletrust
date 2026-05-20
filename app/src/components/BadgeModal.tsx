@@ -269,10 +269,11 @@ type BadgeData = {
 type Eligibility =
   | { can_mint: true; reason: null | "cooldown_expired"; badge: BadgeData | null }
   | { can_mint: false; reason: "already_owns"; badge: BadgeData }
-  | { can_mint: false; reason: "cooldown"; days_left: number; cooldown_until: string; badge: BadgeData };
+  | { can_mint: false; reason: "cooldown"; days_left: number; cooldown_until: string; badge: BadgeData }
+  | { can_mint: false; reason: "not_premium_creator"; badge: BadgeData | null };
 
 // ── Main modal ─────────────────────────────────────────────────────────────
-export function BadgeModal({ onClose }: { onClose: () => void }) {
+export function BadgeModal({ onClose, goLaunch }: { onClose: () => void; goLaunch?: () => void }) {
   const { publicKey } = useWallet();
   const wallet = publicKey?.toBase58() ?? "";
 
@@ -388,6 +389,22 @@ export function BadgeModal({ onClose }: { onClose: () => void }) {
                   <div className="badge-modal-cooldown-date">
                     Available {new Date((eligibility as any).cooldown_until).toLocaleDateString()}
                   </div>
+                </div>
+              )}
+
+              {!mintDone && eligibility?.reason === "not_premium_creator" && (
+                <div className="badge-modal-cooldown">
+                  <div className="badge-modal-cooldown-title">Premium Required</div>
+                  <div className="badge-modal-cooldown-days">
+                    Zodiac Badge NFTs are exclusively available to Premium token launchers. Launch a Premium token first to unlock your badge.
+                  </div>
+                  <button
+                    className="badge-modal-mint-btn"
+                    onClick={() => { onClose(); goLaunch?.(); }}
+                    style={{ borderColor: badgeColor, color: badgeColor }}
+                  >
+                    Launch Premium Token
+                  </button>
                 </div>
               )}
 

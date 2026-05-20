@@ -24,6 +24,18 @@ module.exports = async (req, res) => {
 
     // Never had a badge
     if (!badge) {
+      const { data: premiumToken } = await db
+        .from('tokens')
+        .select('mint')
+        .eq('creator', wallet)
+        .eq('tier', 'premium')
+        .limit(1)
+        .maybeSingle();
+
+      if (!premiumToken) {
+        return res.json({ can_mint: false, reason: 'not_premium_creator', badge: null });
+      }
+
       return res.json({ can_mint: true, reason: null, badge: null });
     }
 
@@ -52,12 +64,36 @@ module.exports = async (req, res) => {
         });
       }
 
-      // Cooldown expired — can mint again
+      // Cooldown expired — check premium before allowing re-mint
+      const { data: premiumToken } = await db
+        .from('tokens')
+        .select('mint')
+        .eq('creator', wallet)
+        .eq('tier', 'premium')
+        .limit(1)
+        .maybeSingle();
+
+      if (!premiumToken) {
+        return res.json({ can_mint: false, reason: 'not_premium_creator', badge });
+      }
+
       return res.json({
         can_mint: true,
         reason: 'cooldown_expired',
         badge,
       });
+    }
+
+    const { data: premiumToken } = await db
+      .from('tokens')
+      .select('mint')
+      .eq('creator', wallet)
+      .eq('tier', 'premium')
+      .limit(1)
+      .maybeSingle();
+
+    if (!premiumToken) {
+      return res.json({ can_mint: false, reason: 'not_premium_creator', badge });
     }
 
     return res.json({ can_mint: true, reason: null, badge });

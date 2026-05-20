@@ -11,8 +11,9 @@ import { About } from "./pages/About";
 import { Status } from "./pages/Status";
 import { TokenDetail } from "./pages/TokenDetail";
 import { Market } from "./pages/Market";
+import { NFT } from "./pages/NFT";
 
-export type Page = "home" | "launch" | "discover" | "token" | "trade" | "status" | "about" | "market";
+export type Page = "home" | "launch" | "discover" | "token" | "trade" | "status" | "about" | "market" | "nft";
 
 export const App = () => {
   const [page, setPage] = useState<Page>("home");
@@ -53,6 +54,7 @@ export const App = () => {
       {page === "token" && <TokenDetail mint={selectedMint} back={() => setPage("discover")} />}
       {page === "trade" && <Trade goDiscover={() => setPage("discover")} />}
       {page === "market" && <Market />}
+      {page === "nft" && <NFT goLaunch={() => setPage("launch")} />}
       {page === "status" && <Status />}
       {page === "about" && <About />}
       {!isLanding && <Footer setPage={setPage} />}
