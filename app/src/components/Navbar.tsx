@@ -17,6 +17,7 @@ export const Navbar = ({ page, setPage }: { page: Page; setPage: (p: Page) => vo
       <li><button className={page === "launch" ? "active" : ""} onClick={() => setPage("launch")}>LAUNCH</button></li>
       <li><button className={page === "discover" ? "active" : ""} onClick={() => setPage("discover")}>DISCOVER</button></li>
       <li><button className={page === "trade" ? "active" : ""} onClick={() => setPage("trade")}>TRADE</button></li>
+      <li><button className={page === "market" ? "active" : ""} onClick={() => setPage("market")}>MARKET</button></li>
       <li><button className={page === "status" ? "active" : ""} onClick={() => setPage("status")}>STATUS</button></li>
       <li><button className={page === "about" ? "active" : ""} onClick={() => setPage("about")}>ABOUT</button></li>
     </ul>

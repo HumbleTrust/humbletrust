@@ -10,8 +10,9 @@ import { Trade } from "./pages/Trade";
 import { About } from "./pages/About";
 import { Status } from "./pages/Status";
 import { TokenDetail } from "./pages/TokenDetail";
+import { Market } from "./pages/Market";
 
-export type Page = "home" | "launch" | "discover" | "token" | "trade" | "status" | "about";
+export type Page = "home" | "launch" | "discover" | "token" | "trade" | "status" | "about" | "market";
 
 export const App = () => {
   const [page, setPage] = useState<Page>("home");
@@ -51,6 +52,7 @@ export const App = () => {
       {page === "discover" && <Discover openToken={openToken} />}
       {page === "token" && <TokenDetail mint={selectedMint} back={() => setPage("discover")} />}
       {page === "trade" && <Trade goDiscover={() => setPage("discover")} />}
+      {page === "market" && <Market />}
       {page === "status" && <Status />}
       {page === "about" && <About />}
       {!isLanding && <Footer setPage={setPage} />}

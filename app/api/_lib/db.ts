@@ -1,20 +1,20 @@
-import { Pool } from "pg";
+import postgres from "postgres";
 
-let pool: Pool | undefined;
+let sql: ReturnType<typeof postgres> | undefined;
 
-export const getPool = (): Pool => {
-  if (!pool) {
-    const url = process.env.DATABASE_URL;
-    pool = new Pool({
-      connectionString: url,
-      ssl: url && !url.includes("localhost") && !url.includes("127.0.0.1")
-        ? { rejectUnauthorized: false }
-        : false,
-      max: 5,
+const getSql = () => {
+  if (!sql) {
+    sql = postgres(process.env.DATABASE_URL!, {
+      ssl: "require",
+      max: 3,
+      idle_timeout: 20,
+      connect_timeout: 10,
     });
   }
-  return pool;
+  return sql;
 };
 
-export const query = (text: string, params?: unknown[]) =>
-  getPool().query(text, params as unknown[]);
+export const query = async (text: string, params?: unknown[]) => {
+  const rows = await getSql().unsafe(text, (params ?? []) as never[]);
+  return { rows: rows as unknown[] };
+};
