@@ -546,8 +546,37 @@ footer { background: var(--bg2); border-top: 1px solid var(--border); padding: 6
   .chart-ohlc { display: none; }
   .terminal-full { inset: 64px 10px 10px; }
 }
+/* HAMBURGER MENU */
+.hamburger { display: none; flex-direction: column; justify-content: center; gap: 5px; width: 36px; height: 36px; background: none; border: none; cursor: pointer; padding: 4px; }
+.hamburger span { display: block; width: 22px; height: 2px; background: var(--text); border-radius: 2px; transition: all .25s; }
+.hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.hamburger.open span:nth-child(2) { opacity: 0; }
+.hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+.mobile-nav-menu {
+  display: none;
+  position: fixed;
+  top: 64px; left: 0; right: 0;
+  z-index: 999;
+  background: rgba(5,7,15,.97);
+  backdrop-filter: blur(24px);
+  border-bottom: 1px solid var(--border);
+  flex-direction: column;
+  padding: .5rem 0;
+}
+.mobile-nav-menu.open { display: flex; }
+.mobile-nav-menu button {
+  background: none; border: none; color: var(--muted2);
+  font-size: .88rem; font-family: var(--font-mono); cursor: pointer;
+  padding: .9rem 6%; text-align: left; width: 100%;
+  letter-spacing: .05em; transition: all .15s;
+  border-bottom: 1px solid var(--border);
+}
+.mobile-nav-menu button:last-child { border-bottom: none; }
+.mobile-nav-menu button:hover, .mobile-nav-menu button.active { color: var(--green-neon); background: rgba(0,255,148,.04); }
+
 @media (max-width: 768px) {
   .nav-links { display: none; }
+  .hamburger { display: flex; }
   .how-grid, .feat-grid { grid-template-columns: 1fr; }
   .form-row, .burn-row, .tier-row { grid-template-columns: 1fr; }
   .hero-stats { flex-direction: column; }
@@ -564,6 +593,7 @@ footer { background: var(--bg2); border-top: 1px solid var(--border); padding: 6
   .chart-title { font-size: .72rem; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .chart-bottom-tabs, .chart-topbar { scrollbar-width: thin; }
   .chart-status { margin-left: 0; }
+  .terminal-full { inset: 64px 10px 10px; }
   .terminal-full .market-chart { min-height: 430px; }
   .terminal-full .live-chart-shell { min-height: 430px; }
   .token-detail-grid { grid-template-columns: 1fr; }
