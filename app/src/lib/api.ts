@@ -1,5 +1,8 @@
 import { API_BASE_URL } from "./constants";
 
+// When VITE_API_BASE_URL is not set, use relative /api path (Vercel serverless functions)
+const API_BASE = API_BASE_URL || "/api";
+
 export interface ApiToken {
   mint: string;
   creator: string;
@@ -47,13 +50,10 @@ export interface ApiCandle {
 }
 
 const request = async <T>(path: string): Promise<T> => {
-  if (!API_BASE_URL) {
-    throw new Error("VITE_API_BASE_URL is not configured");
-  }
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 6_000);
+  const timeout = window.setTimeout(() => controller.abort(), 8_000);
   try {
-    const response = await fetch(`${API_BASE_URL}${path}`, { signal: controller.signal });
+    const response = await fetch(`${API_BASE}${path}`, { signal: controller.signal });
     if (!response.ok) throw new Error(await response.text());
     return response.json() as Promise<T>;
   } catch (error: any) {
@@ -65,6 +65,23 @@ const request = async <T>(path: string): Promise<T> => {
     window.clearTimeout(timeout);
   }
 };
+
+export const registerToken = (data: {
+  mint: string;
+  creator: string;
+  name: string;
+  symbol: string;
+  signature: string;
+  launchScore: number;
+  lockPercent: number;
+  burnOption: number;
+  certificateMint?: string | null;
+}) =>
+  fetch(`${API_BASE}/tokens`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  }).then((r) => r.json());
 
 export const getTokens = (limit = 100) =>
   request<{ tokens: ApiToken[] }>(`/tokens?limit=${limit}`);
@@ -81,12 +98,15 @@ export const getTokenOhlcv = (mint: string, timeframe: string, limit = 500) =>
   );
 
 export const chartWsUrl = (mint: string, timeframe: string) => {
-  if (!API_BASE_URL) {
-    throw new Error("VITE_API_BASE_URL is not configured");
+  if (API_BASE_URL) {
+    const base = new URL(API_BASE_URL);
+    base.protocol = base.protocol === "https:" ? "wss:" : "ws:";
+    base.pathname = `/chart/${mint}`;
+    base.searchParams.set("tf", timeframe);
+    return base.toString();
   }
-  const base = new URL(API_BASE_URL);
-  base.protocol = base.protocol === "https:" ? "wss:" : "ws:";
-  base.pathname = `/chart/${mint}`;
-  base.searchParams.set("tf", timeframe);
-  return base.toString();
+  // Vercel doesn't support WebSockets — return a URL that fails gracefully
+  const proto = typeof window !== "undefined" && window.location.protocol === "https:" ? "wss:" : "ws:";
+  const host = typeof window !== "undefined" ? window.location.host : "localhost";
+  return `${proto}//${host}/chart/${mint}?tf=${encodeURIComponent(timeframe)}`;
 };

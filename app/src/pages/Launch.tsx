@@ -15,6 +15,7 @@ import {
   mintLaunchCertificateV2,
 } from "../lib/program";
 import { fileToHexLogo, MAX_LOGO_BYTES, saveToken } from "../lib/image";
+import { registerToken } from "../lib/api";
 import { HexLogo } from "../components/HexLogo";
 
 interface LaunchResult { signature: string; mint: string; certificateSignature?: string; certificateMint?: string; }
@@ -253,6 +254,16 @@ export const Launch = () => {
       saveToken(savedToken);
       setResult({ signature, mint: mintStr });
 
+      // Register token in API (fire-and-forget — don't block UI on failure)
+      registerToken({
+        mint: mintStr,
+        creator: anchorWallet.publicKey.toBase58(),
+        name, symbol, signature,
+        launchScore: trustScore,
+        lockPercent,
+        burnOption: burn,
+      }).catch(() => { /* API might not be configured yet */ });
+
       if (useV2) {
         const cert = await mintCertificateForMint(mintStr, name);
         if (cert && !cert.alreadyMinted) {
@@ -265,6 +276,16 @@ export const Launch = () => {
             certificateSignature,
           });
           setResult({ signature, mint: mintStr, certificateMint, certificateSignature });
+          // Update API record with certificate mint
+          registerToken({
+            mint: mintStr,
+            creator: anchorWallet.publicKey.toBase58(),
+            name, symbol, signature,
+            launchScore: trustScore,
+            lockPercent,
+            burnOption: burn,
+            certificateMint,
+          }).catch(() => {});
         }
       }
     } catch (e: any) {

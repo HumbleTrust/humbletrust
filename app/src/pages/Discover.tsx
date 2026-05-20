@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, Award, Lock, RefreshCw } from "lucide-react";
+import { ExternalLink, Award, Lock, RefreshCw, HardDrive } from "lucide-react";
 import { HexLogo } from "../components/HexLogo";
 import { ApiToken, getTokens } from "../lib/api";
+import { listTokens, SavedToken } from "../lib/image";
 
 const scoreColor = (score: number) =>
   score >= 85 ? "var(--green-neon)" : score >= 70 ? "var(--solana-blue)" : score >= 40 ? "var(--yellow)" : "var(--orange)";
@@ -12,26 +13,56 @@ const scoreLabel = (score: number) =>
 const compact = (value: string | number) =>
   Number(value || 0).toLocaleString("en-US", { notation: "compact", maximumFractionDigits: 2 });
 
+const savedToApi = (t: SavedToken): ApiToken => ({
+  mint: t.mint,
+  creator: "",
+  name: t.name || null,
+  symbol: t.symbol || null,
+  status: "curve",
+  trust_score: t.trustScore ?? 0,
+  launch_score: t.trustScore ?? 0,
+  creator_reputation: 0,
+  market_health: 0,
+  community_risk: 0,
+  volume_sol: 0,
+  liquidity_sol: 0,
+  trades_count: 0,
+  created_at: new Date(t.createdAt).toISOString(),
+  certificate_mint: t.certificateMint ?? null,
+});
+
 export const Discover = ({ openToken }: { openToken: (mint: string) => void }) => {
   const [tokens, setTokens] = useState<ApiToken[]>([]);
-  const [busy, setBusy] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [apiOk, setApiOk] = useState<boolean | null>(null); // null = not tried yet
   const [sort, setSort] = useState<"trust" | "volume" | "new">("new");
+
+  // Load localStorage tokens immediately (synchronous)
+  const localTokens = useMemo(() => listTokens().map(savedToApi), []);
 
   const load = async () => {
     setBusy(true);
-    setError(null);
     try {
       const result = await getTokens(150);
-      setTokens(result.tokens);
-    } catch (e: any) {
-      setError(e.message || String(e));
+      // Merge: API data wins for existing mints, local fills in the rest
+      const apiMints = new Set(result.tokens.map(t => t.mint));
+      const localOnly = localTokens.filter(t => !apiMints.has(t.mint));
+      setTokens([...result.tokens, ...localOnly]);
+      setApiOk(true);
+    } catch {
+      // Backend not available — use local data only
+      setTokens(localTokens);
+      setApiOk(false);
     } finally {
       setBusy(false);
     }
   };
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    // Show local tokens instantly while we attempt API fetch
+    setTokens(localTokens);
+    void load();
+  }, []);
 
   const sorted = useMemo(() => {
     return [...tokens].sort((a, b) => {
@@ -41,12 +72,16 @@ export const Discover = ({ openToken }: { openToken: (mint: string) => void }) =
     });
   }, [tokens, sort]);
 
+  const isLocalOnly = apiOk === false;
+
   return (
     <section>
       <div className="sec-eyebrow">Discover</div>
       <h2 className="sec-h2">Trust Layer <span className="hl-green">registry</span></h2>
       <p className="sec-sub">
-        Tokens indexed from the HumbleTrust backend on devnet. This page uses Postgres/indexer data, not browser localStorage.
+        {isLocalOnly
+          ? "Showing your locally launched tokens. Indexer backend not connected — token data is from this browser."
+          : "Tokens indexed from the HumbleTrust backend on devnet."}
       </p>
 
       <div className="discover-toolbar">
@@ -55,28 +90,39 @@ export const Discover = ({ openToken }: { openToken: (mint: string) => void }) =
           <button className={sort === "trust" ? "active" : ""} onClick={() => setSort("trust")} type="button">TrustScore</button>
           <button className={sort === "volume" ? "active" : ""} onClick={() => setSort("volume")} type="button">Volume</button>
         </div>
-        <button className="reserve-refresh" onClick={load} disabled={busy} type="button">
-          <RefreshCw size={13} className={busy ? "spin" : undefined} /> Refresh
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+          {isLocalOnly && (
+            <span className="mini-chip" style={{ background: "rgba(255,122,47,.1)", color: "var(--orange)", border: "1px solid rgba(255,122,47,.2)" }}>
+              <HardDrive size={10} /> Local only
+            </span>
+          )}
+          {apiOk && (
+            <span className="mini-chip green">
+              Indexed
+            </span>
+          )}
+          <button className="reserve-refresh" onClick={load} disabled={busy} type="button">
+            <RefreshCw size={13} className={busy ? "spin" : undefined} /> Refresh
+          </button>
+        </div>
       </div>
 
-      {error && !busy && (
+      {sorted.length === 0 && !busy && (
         <div className="coming-soon">
-          <h3>Indexer is spinning up</h3>
-          <p>The token registry will be available shortly. Be the first to launch on devnet.</p>
+          <h3>No launches yet</h3>
+          <p>Launch a token on devnet — it will appear here immediately.</p>
         </div>
       )}
-
-      {!error && sorted.length === 0 && (
+      {sorted.length === 0 && busy && (
         <div className="coming-soon">
-          <h3>{busy ? "Loading indexed launches..." : "No launches indexed yet"}</h3>
-          {!busy && <p>Launch a token on devnet — it will appear here once the indexer picks it up.</p>}
+          <h3>Loading...</h3>
         </div>
       )}
 
       <div className="tok-grid-real">
         {sorted.map((t) => {
           const color = scoreColor(Number(t.trust_score));
+          const isLocal = !apiOk && localTokens.some(l => l.mint === t.mint);
           const url = "https://solscan.io/token/" + t.mint + "?cluster=devnet";
           return (
             <div key={t.mint} className="tok-card-real token-card-click" onClick={() => openToken(t.mint)}>
@@ -84,8 +130,11 @@ export const Discover = ({ openToken }: { openToken: (mint: string) => void }) =
                 <HexLogo label={t.symbol || t.mint.slice(0, 3)} size={56} variant={Number(t.trust_score) >= 85 ? "gradient" : "green"} />
                 <div className="tok-card-meta">
                   <div className="tok-card-name">
-                    {t.name || "Indexed token"}
+                    {t.name || "Token"}
                     <span className={"tok-card-tier " + (t.status === "migrated" ? "premium" : "standard")}>{t.status}</span>
+                    {isLocal && (
+                      <span style={{ fontSize: ".6rem", color: "var(--muted)", fontFamily: "var(--font-mono)", marginLeft: 4 }}>local</span>
+                    )}
                   </div>
                   <div className="tok-card-symbol">${t.symbol || t.mint.slice(0, 4)}</div>
                 </div>
