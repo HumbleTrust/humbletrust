@@ -8,8 +8,7 @@ create table if not exists badges (
   edition          integer not null,           -- sequential per zodiac
   minted_at        timestamptz not null default now(),
   sold_at          timestamptz,                -- set when NFT leaves wallet
-  cooldown_until   timestamptz                 -- sold_at + 30 days
-    generated always as (sold_at + interval '30 days') stored,
+  cooldown_until   timestamptz,               -- sold_at + 30 days, set in API
   tx_signature     text,                       -- mint transaction
   price_sol        numeric(10,4),              -- price paid in SOL
   status           text not null default 'active'

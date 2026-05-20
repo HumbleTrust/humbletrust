@@ -22,13 +22,15 @@ module.exports = async (req, res) => {
   const db = getClient();
 
   try {
-    const now = new Date().toISOString();
+    const now = new Date();
+    const cooldownUntil = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
     const { error } = await db
       .from('badges')
       .update({
         status: 'sold',
-        sold_at: now,
+        sold_at: now.toISOString(),
+        cooldown_until: cooldownUntil.toISOString(),
       })
       .eq('wallet', wallet)
       .eq('status', 'active');
