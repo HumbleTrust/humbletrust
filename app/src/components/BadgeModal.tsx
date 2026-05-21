@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 
 // ── Palette & zodiac (mirrors backend _zodiac.js) ──────────────────────────
@@ -282,25 +282,33 @@ export function BadgeModal({ onClose, goLaunch }: { onClose: () => void; goLaunc
   const [minting, setMinting] = useState(false);
   const [mintDone, setMintDone] = useState(false);
   const [error, setError] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
 
   const preview = getZodiacToday();
   const previewColor = wallet ? getAuraColor(wallet) : "#9945FF";
 
   const fetchEligibility = useCallback(async () => {
     if (!wallet) return;
+    // Cancel any in-flight request before starting a new one
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     setLoading(true);
     try {
-      const res = await fetch(`/api/badges/eligibility?wallet=${wallet}`);
+      const res = await fetch(`/api/badges/eligibility?wallet=${wallet}`, { signal: ctrl.signal });
       const data = await res.json();
       setEligibility(data);
-    } catch {
-      setError("Failed to load badge data");
+    } catch (e: any) {
+      if (e.name !== "AbortError") setError("Failed to load badge data");
     } finally {
-      setLoading(false);
+      if (!ctrl.signal.aborted) setLoading(false);
     }
   }, [wallet]);
 
-  useEffect(() => { fetchEligibility(); }, [fetchEligibility]);
+  useEffect(() => {
+    void fetchEligibility();
+    return () => { abortRef.current?.abort(); };
+  }, [fetchEligibility]);
 
   const handleMint = async () => {
     setMinting(true);

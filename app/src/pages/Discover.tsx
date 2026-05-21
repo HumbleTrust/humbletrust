@@ -111,6 +111,13 @@ export const Discover = ({ openToken }: { openToken: (mint: string) => void }) =
         <div className="coming-soon">
           <h3>No launches yet</h3>
           <p>Launch a token on devnet — it will appear here immediately.</p>
+          <button
+            className="btn-p"
+            style={{ marginTop: "1.2rem" }}
+            onClick={() => window.dispatchEvent(new CustomEvent("ht:navigate", { detail: "launch" }))}
+          >
+            Launch your first token →
+          </button>
         </div>
       )}
       {sorted.length === 0 && busy && (

@@ -74,6 +74,19 @@ const formatTokenAmount = (value: number, decimals = 9) => {
 const normalizeAmountInput = (value: string) => value.replace(",", ".").trim();
 const isAmountInput = (value: string) => value === "" || /^\d*(\.\d*)?$/.test(value);
 
+const friendlyError = (msg: string): string => {
+  if (!msg) return "Unknown error";
+  if (msg.includes("insufficient funds") || msg.includes("Insufficient funds")) return "Insufficient SOL balance for this trade";
+  if (msg.includes("slippage") || msg.includes("Slippage")) return "Slippage exceeded — try increasing slippage tolerance";
+  if (msg.includes("not deployed") || msg.includes("not executable")) return "Trading program is not deployed yet";
+  if (msg.includes("User rejected") || msg.includes("rejected the request")) return "Transaction cancelled by user";
+  if (msg.includes("blockhash") || msg.includes("BlockhashNotFound")) return "Transaction expired — please try again";
+  if (msg.includes("0x1")) return "Insufficient token balance";
+  if (msg.includes("AccountNotFound") || msg.includes("account not found")) return "Token account not found — make sure the mint address is correct";
+  if (msg.includes("network") || msg.includes("fetch")) return "Network error — check your connection and try again";
+  return msg.length > 120 ? msg.slice(0, 120) + "…" : msg;
+};
+
 const formatPrice = (value: number) => {
   if (!Number.isFinite(value) || value <= 0) return "0";
   if (value < 0.000001) return value.toExponential(2);
@@ -153,15 +166,15 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
     return () => { mounted = false; };
   }, [connection]);
 
-  const solIn = parsePositive(solAmount, 0);
-  const previewSolReserve = parsePositive(reserveSol, PREVIEW_SOL_RESERVE);
-  const previewTokenReserve = parsePositive(reserveTokens, PREVIEW_TOKEN_RESERVE);
-  const estimatedTokens = estimateTokensOut(solIn, previewSolReserve, previewTokenReserve);
-  const tokensIn = parsePositive(tokensAmount, 0);
-  const estimatedSol = estimateSolOut(tokensIn, previewSolReserve, previewTokenReserve);
-  const currentPrice = previewSolReserve / previewTokenReserve;
-  const nextPrice = estimatePriceAfter(solIn, previewSolReserve, previewTokenReserve);
-  const priceImpact = currentPrice > 0 ? ((nextPrice - currentPrice) / currentPrice) * 100 : 0;
+  const solIn = useMemo(() => parsePositive(solAmount, 0), [solAmount]);
+  const tokensIn = useMemo(() => parsePositive(tokensAmount, 0), [tokensAmount]);
+  const previewSolReserve = useMemo(() => parsePositive(reserveSol, PREVIEW_SOL_RESERVE), [reserveSol]);
+  const previewTokenReserve = useMemo(() => parsePositive(reserveTokens, PREVIEW_TOKEN_RESERVE), [reserveTokens]);
+  const estimatedTokens = useMemo(() => estimateTokensOut(solIn, previewSolReserve, previewTokenReserve), [solIn, previewSolReserve, previewTokenReserve]);
+  const estimatedSol = useMemo(() => estimateSolOut(tokensIn, previewSolReserve, previewTokenReserve), [tokensIn, previewSolReserve, previewTokenReserve]);
+  const currentPrice = useMemo(() => previewSolReserve / previewTokenReserve, [previewSolReserve, previewTokenReserve]);
+  const nextPrice = useMemo(() => estimatePriceAfter(solIn, previewSolReserve, previewTokenReserve), [solIn, previewSolReserve, previewTokenReserve]);
+  const priceImpact = useMemo(() => currentPrice > 0 ? ((nextPrice - currentPrice) / currentPrice) * 100 : 0, [currentPrice, nextPrice]);
 
   const validMint = mintInput.trim().length > 30;
   const selectedMint = mintInput.trim();
@@ -280,7 +293,7 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
       setTxSig(signature);
       await Promise.all([refreshReserves(), loadWalletTokens()]);
     } catch (e: any) {
-      setTradeError(e.message || String(e));
+      setTradeError(friendlyError(e.message || String(e)));
     } finally {
       setBusy(null);
     }
@@ -305,7 +318,7 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
       setTxSig(signature);
       await Promise.all([refreshReserves(), loadWalletTokens()]);
     } catch (e: any) {
-      setTradeError(e.message || String(e));
+      setTradeError(friendlyError(e.message || String(e)));
     } finally {
       setBusy(null);
     }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Search, ExternalLink, X, RefreshCw, BarChart2, TrendingUp, Zap } from "lucide-react";
 
 const POPULAR_ADDRESSES = [
@@ -54,6 +54,13 @@ const dedupe = (pairs: DexPair[]) => {
   return [...best.values()].sort((a, b) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0));
 };
 
+const FETCH_TIMEOUT_MS = 9000;
+
+function fetchWithTimeout(url: string, signal: AbortSignal): Promise<Response> {
+  const timer = setTimeout(() => (signal as any)._controller?.abort(), FETCH_TIMEOUT_MS);
+  return fetch(url, { signal }).finally(() => clearTimeout(timer));
+}
+
 export const Market = () => {
   const [pairs, setPairs] = useState<DexPair[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -61,34 +68,65 @@ export const Market = () => {
   const [selected, setSelected] = useState<DexPair | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"popular" | "search">("popular");
+  const abortRef = useRef<AbortController | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelPending = () => {
+    abortRef.current?.abort();
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  };
 
   const fetchPopular = useCallback(async () => {
+    cancelPending();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     setBusy(true); setError(null); setMode("popular");
     try {
-      const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${POPULAR_ADDRESSES}`);
+      const res = await fetchWithTimeout(
+        `https://api.dexscreener.com/latest/dex/tokens/${POPULAR_ADDRESSES}`,
+        ctrl.signal,
+      );
       const data = await res.json();
       const sol = (data.pairs ?? []).filter((p: DexPair) => p.chainId === "solana");
       setPairs(dedupe(sol).slice(0, 24));
-    } catch {
-      setError("DexScreener недоступен. Попробуй позже.");
-    } finally { setBusy(false); }
+    } catch (e: any) {
+      if (e.name !== "AbortError") setError("DexScreener недоступен. Попробуй позже.");
+    } finally { if (!ctrl.signal.aborted) setBusy(false); }
   }, []);
 
   const fetchSearch = useCallback(async (q: string) => {
     if (!q.trim()) return;
+    cancelPending();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     setBusy(true); setError(null); setMode("search");
     try {
-      const res = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(q)}`);
+      const res = await fetchWithTimeout(
+        `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(q)}`,
+        ctrl.signal,
+      );
       const data = await res.json();
       const sol = (data.pairs ?? []).filter((p: DexPair) => p.chainId === "solana");
       setPairs(dedupe(sol).slice(0, 24));
       if (sol.length === 0) setError(`Ничего не найдено для "${q}" на Solana`);
-    } catch {
-      setError("Ошибка поиска. Попробуй позже.");
-    } finally { setBusy(false); }
+    } catch (e: any) {
+      if (e.name !== "AbortError") setError("Ошибка поиска. Попробуй позже.");
+    } finally { if (!ctrl.signal.aborted) setBusy(false); }
   }, []);
 
-  useEffect(() => { void fetchPopular(); }, []);
+  // Debounced search: fires 500ms after user stops typing
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (val.trim().length >= 2) {
+      debounceRef.current = setTimeout(() => void fetchSearch(val), 500);
+    }
+  };
+
+  useEffect(() => {
+    void fetchPopular();
+    return cancelPending;
+  }, []);
 
   return (
     <section>
@@ -107,7 +145,7 @@ export const Market = () => {
             className="form-input market-search-input"
             placeholder="Имя токена, символ или адрес..."
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={e => handleSearchChange(e.target.value)}
           />
         </div>
         <button className="reserve-refresh market-search-btn" type="submit" disabled={busy}>

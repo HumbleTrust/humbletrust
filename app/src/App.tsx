@@ -26,6 +26,16 @@ export const App = () => {
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
   }, [page]);
+
+  // Global navigation bus — lets deeply nested components navigate without prop drilling
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const page = (e as CustomEvent<Page>).detail;
+      if (page) setPage(page);
+    };
+    window.addEventListener("ht:navigate", handler);
+    return () => window.removeEventListener("ht:navigate", handler);
+  }, []);
   return (
     <>
       {!isLanding && (
