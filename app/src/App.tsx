@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState, Component, ReactNode } from "react";
 import { Navbar } from "./components/Navbar";
 import { Ticker } from "./components/Ticker";
 import { Footer } from "./components/Footer";
@@ -16,6 +16,25 @@ const Market      = lazy(() => import("./pages/Market").then(m => ({ default: m.
 const NFT         = lazy(() => import("./pages/NFT").then(m => ({ default: m.NFT })));
 
 export type Page = "home" | "launch" | "discover" | "token" | "trade" | "status" | "about" | "market" | "nft";
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: "1rem", padding: "2rem", textAlign: "center" }}>
+          <div style={{ fontSize: "2rem", fontFamily: "var(--font-head)", fontWeight: 700 }}>Something went wrong</div>
+          <div style={{ color: "var(--muted2)", fontSize: ".85rem", maxWidth: 420, lineHeight: 1.6 }}>{this.state.error.message}</div>
+          <button onClick={() => this.setState({ error: null })} style={{ background: "var(--bg3)", border: "1px solid rgba(255,255,255,.1)", color: "var(--text)", borderRadius: 8, padding: ".5rem 1.5rem", cursor: "pointer", fontSize: ".85rem" }}>
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const PageLoader = () => (
   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
@@ -62,6 +81,7 @@ export const App = () => {
           <StatusBanner />
         </>
       )}
+      <ErrorBoundary>
       <Suspense fallback={<PageLoader />}>
         {isLanding && (
           <Landing
@@ -79,6 +99,7 @@ export const App = () => {
         {page === "status"   && <Status />}
         {page === "about"    && <About />}
       </Suspense>
+      </ErrorBoundary>
       {!isLanding && <Footer setPage={setPage} />}
     </>
   );

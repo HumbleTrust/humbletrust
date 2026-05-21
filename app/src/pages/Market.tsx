@@ -57,8 +57,10 @@ const dedupe = (pairs: DexPair[]) => {
 const FETCH_TIMEOUT_MS = 9000;
 
 function fetchWithTimeout(url: string, signal: AbortSignal): Promise<Response> {
-  const timer = setTimeout(() => (signal as any)._controller?.abort(), FETCH_TIMEOUT_MS);
-  return fetch(url, { signal }).finally(() => clearTimeout(timer));
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  signal.addEventListener("abort", () => ctrl.abort(), { once: true });
+  return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(timer));
 }
 
 export const Market = () => {
@@ -90,7 +92,7 @@ export const Market = () => {
       const sol = (data.pairs ?? []).filter((p: DexPair) => p.chainId === "solana");
       setPairs(dedupe(sol).slice(0, 24));
     } catch (e: any) {
-      if (e.name !== "AbortError") setError("DexScreener недоступен. Попробуй позже.");
+      if (e.name !== "AbortError") setError("DexScreener unavailable. Try again later.");
     } finally { if (!ctrl.signal.aborted) setBusy(false); }
   }, []);
 
@@ -108,9 +110,9 @@ export const Market = () => {
       const data = await res.json();
       const sol = (data.pairs ?? []).filter((p: DexPair) => p.chainId === "solana");
       setPairs(dedupe(sol).slice(0, 24));
-      if (sol.length === 0) setError(`Ничего не найдено для "${q}" на Solana`);
+      if (sol.length === 0) setError(`No results for "${q}" on Solana`);
     } catch (e: any) {
-      if (e.name !== "AbortError") setError("Ошибка поиска. Попробуй позже.");
+      if (e.name !== "AbortError") setError("Search error. Try again later.");
     } finally { if (!ctrl.signal.aborted) setBusy(false); }
   }, []);
 
@@ -132,7 +134,7 @@ export const Market = () => {
     <section>
       <div className="sec-eyebrow">Market Watch · Mainnet</div>
       <h2 className="sec-h2">Solana <span className="hl-green">live market</span></h2>
-      <p className="sec-sub">Реальные токены · Данные DexScreener · Live чарты. Только мониторинг — твои токены на devnet.</p>
+      <p className="sec-sub">Real tokens · DexScreener data · Live charts. Monitor only — your tokens are on devnet.</p>
 
       {/* Search bar */}
       <form
@@ -143,20 +145,20 @@ export const Market = () => {
           <Search size={14} className="market-search-icon" />
           <input
             className="form-input market-search-input"
-            placeholder="Имя токена, символ или адрес..."
+            placeholder="Token name, symbol or address..."
             value={searchQuery}
             onChange={e => handleSearchChange(e.target.value)}
           />
         </div>
         <button className="reserve-refresh market-search-btn" type="submit" disabled={busy}>
-          <Search size={13} /> Найти
+          <Search size={13} /> Search
         </button>
         <button
           className={`reserve-refresh market-search-btn${mode === "popular" ? " active-btn" : ""}`}
           type="button" disabled={busy}
           onClick={() => { setSearchQuery(""); void fetchPopular(); }}
         >
-          <TrendingUp size={13} /> Популярные
+          <TrendingUp size={13} /> Popular
         </button>
         <button className="reserve-refresh" type="button" disabled={busy} onClick={() => mode === "popular" ? fetchPopular() : fetchSearch(searchQuery)}>
           <RefreshCw size={13} className={busy ? "spin" : undefined} />
@@ -218,10 +220,10 @@ export const Market = () => {
 
       {/* States */}
       {pairs.length === 0 && busy && (
-        <div className="coming-soon"><h3>Загрузка рыночных данных...</h3></div>
+        <div className="coming-soon"><h3>Loading market data...</h3></div>
       )}
       {pairs.length === 0 && !busy && !error && (
-        <div className="coming-soon"><h3>Нет результатов</h3><p>Попробуй другой запрос.</p></div>
+        <div className="coming-soon"><h3>No results</h3><p>Try a different query.</p></div>
       )}
 
       {/* Grid */}
@@ -261,7 +263,7 @@ export const Market = () => {
                   <strong>{fmtUsd(pair.volume?.h24 ?? 0)}</strong>
                 </div>
                 <div className="mwc-stat">
-                  <span>Ликвидность</span>
+                  <span>Liquidity</span>
                   <strong>{fmtUsd(pair.liquidity?.usd ?? 0)}</strong>
                 </div>
                 <div className="mwc-stat">

@@ -109,21 +109,27 @@ export const recordTrade = async (trade: IndexedTrade) => {
 };
 
 export const refreshWallet = async (address: string) => {
-  const { rows } = await query(
-    `
-    select
-      (select count(*) from tokens where creator = $1)::int as launches_count,
-      coalesce((select sum(complaints_count) from tokens where creator = $1),0)::int as complaints_count,
-      coalesce((select sum(volume_sol) from trades where trader = $1),0)::numeric as volume_sol,
-      (select count(*) from trades where trader = $1)::int as trades_count
-    `,
-    [address]
-  );
+  const [{ rows }, { rows: walletRows }] = await Promise.all([
+    query(
+      `
+      select
+        (select count(*) from tokens where creator = $1)::int as launches_count,
+        coalesce((select sum(complaints_count) from tokens where creator = $1),0)::int as complaints_count,
+        coalesce((select sum(volume_sol) from trades where trader = $1),0)::numeric as volume_sol,
+        (select count(*) from trades where trader = $1)::int as trades_count
+      `,
+      [address]
+    ),
+    query<{ rugs_count: number }>(
+      `select coalesce(rugs_count,0)::int as rugs_count from wallets where address = $1`,
+      [address]
+    ),
+  ]);
   const row = rows[0];
   if (!row) return;
   const reputation = computeCreatorReputation({
     launchesCount: Number(row.launches_count),
-    rugsCount: 0,
+    rugsCount: Number(walletRows[0]?.rugs_count ?? 0),
     complaintsCount: Number(row.complaints_count),
   });
   await query(

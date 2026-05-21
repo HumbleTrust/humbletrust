@@ -397,6 +397,10 @@ footer { background: var(--bg2); border-top: 1px solid var(--border); padding: 6
 .swap-max-btn { flex: 0 0 auto; border: 1px solid rgba(0,255,148,.28); background: rgba(0,255,148,.1); color: var(--green-neon); border-radius: 7px; padding: .42rem .62rem; font-family: var(--font-head); font-size: .72rem; font-weight: 900; cursor: pointer; }
 .swap-max-btn:hover { background: rgba(0,255,148,.18); }
 .swap-max-btn:disabled { opacity: .38; cursor: not-allowed; }
+.swap-quick-btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: .3rem; margin-top: .45rem; }
+.swap-quick-btn { border: 1px solid rgba(255,255,255,.08); background: rgba(5,9,18,.78); color: var(--muted2); border-radius: 6px; padding: .3rem 0; font-family: var(--font-head); font-size: .7rem; font-weight: 800; cursor: pointer; }
+.swap-quick-btn:hover:not(:disabled) { background: rgba(0,255,148,.08); border-color: rgba(0,255,148,.25); color: var(--green-neon); }
+.swap-quick-btn:disabled { opacity: .35; cursor: not-allowed; }
 .swap-balance-line { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-top: .45rem; color: var(--muted); font-family: var(--font-mono); font-size: .68rem; }
 .swap-balance-line strong { color: var(--green-neon); font-size: .68rem; overflow-wrap: anywhere; text-align: right; }
 .swap-output { min-height: 2.45rem; display: flex; align-items: center; color: var(--green-neon); font-family: var(--font-head); font-size: 1.7rem; font-weight: 800; word-break: break-word; }

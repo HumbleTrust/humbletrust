@@ -20,3 +20,11 @@ const { server } = createServer();
 server.listen(config.port, () => {
   console.log(`HumbleTrust backend listening on :${config.port} (${config.network})`);
 });
+
+const shutdown = () => {
+  console.log("Shutting down...");
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(1), 10_000).unref();
+};
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
