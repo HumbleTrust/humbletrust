@@ -1,7 +1,8 @@
 const { getClient } = require("../_lib/db");
+const { isValidWallet, setCors } = require("../_lib/validate");
 
 module.exports = async (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  setCors(req, res);
   if (req.method === "OPTIONS") return res.status(204).end();
 
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
@@ -10,6 +11,7 @@ module.exports = async (req, res) => {
 
   const { mint } = req.query;
   if (!mint) return res.status(400).json({ error: "mint required" });
+  if (!isValidWallet(mint)) return res.status(400).json({ error: "invalid mint address" });
 
   try {
     const { data, error } = await getClient()
@@ -20,6 +22,7 @@ module.exports = async (req, res) => {
     if (error) return res.status(404).json({ error: "not found" });
     return res.json({ token: data });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    console.error("[api/tokens/[mint]]", e.message);
+    return res.status(500).json({ error: "Internal server error" });
   }
 };

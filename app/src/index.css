@@ -709,6 +709,9 @@ footer { background: var(--bg2); border-top: 1px solid var(--border); padding: 6
 .badge-modal-cooldown-title { font-family: var(--font-head); font-weight: 700; font-size: .78rem; color: #ff6b6b; }
 .badge-modal-cooldown-days { font-family: var(--font-mono); font-size: .72rem; color: var(--muted2); margin-top: .3rem; }
 .badge-modal-cooldown-date { font-size: .62rem; color: var(--muted); margin-top: .2rem; font-family: var(--font-mono); }
+.badge-modal-confirm { padding: .85rem; background: rgba(153,69,255,.06); border: 1px solid rgba(153,69,255,.2); border-radius: 10px; }
+.badge-modal-confirm-title { font-family: var(--font-head); font-weight: 700; font-size: .82rem; color: #9945FF; margin-bottom: .55rem; }
+.badge-modal-confirm-body { display: flex; flex-direction: column; gap: .28rem; font-size: .82rem; color: var(--muted2); font-family: var(--font-mono); }
 
 .badge-modal-success { text-align: center; font-family: var(--font-mono); font-size: .75rem; color: var(--green-neon); padding: .5rem; background: rgba(0,255,148,.06); border-radius: 8px; border: 1px solid rgba(0,255,148,.15); }
 .badge-modal-error { font-family: var(--font-mono); font-size: .68rem; color: var(--red); text-align: center; }

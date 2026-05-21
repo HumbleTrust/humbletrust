@@ -279,6 +279,7 @@ export function BadgeModal({ onClose, goLaunch }: { onClose: () => void; goLaunc
 
   const [eligibility, setEligibility] = useState<Eligibility | null>(null);
   const [loading, setLoading] = useState(true);
+  const [confirming, setConfirming] = useState(false);
   const [minting, setMinting] = useState(false);
   const [mintDone, setMintDone] = useState(false);
   const [error, setError] = useState("");
@@ -416,7 +417,7 @@ export function BadgeModal({ onClose, goLaunch }: { onClose: () => void; goLaunc
                 </div>
               )}
 
-              {!mintDone && eligibility?.can_mint && (
+              {!mintDone && eligibility?.can_mint && !confirming && (
                 <>
                   <div className="badge-modal-price-row">
                     <span className="badge-modal-price-label">Mint price</span>
@@ -432,13 +433,44 @@ export function BadgeModal({ onClose, goLaunch }: { onClose: () => void; goLaunc
                   )}
                   <button
                     className="badge-modal-mint-btn"
-                    onClick={handleMint}
-                    disabled={minting}
+                    onClick={() => setConfirming(true)}
                     style={{ borderColor: badgeColor, color: badgeColor }}
                   >
-                    {minting ? "Minting…" : "Mint Badge · 0.2 SOL"}
+                    Mint Badge · 0.2 SOL
                   </button>
                 </>
+              )}
+
+              {!mintDone && eligibility?.can_mint && confirming && (
+                <div className="badge-modal-confirm">
+                  <div className="badge-modal-confirm-title">Confirm mint</div>
+                  <div className="badge-modal-confirm-body">
+                    <div>Zodiac: <b style={{ color: badgeColor }}>{preview.name}</b></div>
+                    <div>Element: <b>{preview.element}</b></div>
+                    <div>Price: <b style={{ color: "var(--green-neon)" }}>0.2 SOL</b></div>
+                    <div style={{ fontSize: ".8rem", color: "var(--muted)", marginTop: ".4rem" }}>
+                      This action is irreversible. A 30-day cooldown applies if you sell the badge.
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: ".6rem", marginTop: ".8rem" }}>
+                    <button
+                      className="badge-modal-mint-btn"
+                      onClick={handleMint}
+                      disabled={minting}
+                      style={{ borderColor: badgeColor, color: badgeColor, flex: 1 }}
+                    >
+                      {minting ? "Minting…" : "Confirm & Mint"}
+                    </button>
+                    <button
+                      className="badge-modal-mint-btn"
+                      onClick={() => setConfirming(false)}
+                      disabled={minting}
+                      style={{ borderColor: "var(--muted)", color: "var(--muted)", flex: "0 0 auto" }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
               )}
 
               {error && <div className="badge-modal-error">{error}</div>}

@@ -1,9 +1,11 @@
 const { getClient } = require('../_lib/db');
+const { isValidWallet, setCors } = require('../_lib/validate');
 
 // GET /api/badges?wallet=<address>  — get badge for wallet
 // GET /api/badges                   — list recent badges
 module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  setCors(req, res);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -12,6 +14,7 @@ module.exports = async (req, res) => {
 
   const db = getClient();
   const { wallet } = req.query;
+  if (wallet && !isValidWallet(wallet)) return res.status(400).json({ error: 'invalid wallet address' });
 
   try {
     if (wallet) {
@@ -35,6 +38,7 @@ module.exports = async (req, res) => {
     if (error) throw error;
     return res.json({ badges: data });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    console.error('[api/badges]', e.message);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
