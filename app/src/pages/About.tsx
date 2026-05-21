@@ -37,12 +37,13 @@ export const About = () => (
       <p className="sec-sub">The live v2 launch form calculates the same allocation-based score that the program stores on-chain.</p>
       <div className="feat-grid">
         {[
-          { icon: <Lock size={18} />, t: "Lock Score", pts: "0/10/20/15", d: "Best range is 40-60%. 61-80% is still protected but leaves less liquid supply." },
-          { icon: <Shield size={18} />, t: "Creator Score", pts: "max 20", d: "Creator allocation is capped at 5%. Lower creator % earns a stronger score." },
-          { icon: <TrendingUp size={18} />, t: "Curve Liquidity", pts: "max 25", d: "Curve liquidity must be 25-50% and feeds the bonding curve token vault." },
-          { icon: <Database size={18} />, t: "Circulation", pts: "max 20", d: "Circulation must be 15-40%. Q + R must be at least 50%." },
-          { icon: <Users size={18} />, t: "Airdrop", pts: "max 15", d: "Airdrop is capped at 5%; smaller airdrops score higher in v2." },
-          { icon: <Flame size={18} />, t: "Burn Bonus", pts: "+5/+10", d: "25% or 50% burn applies to the Locked Vault and improves the score." },
+          { icon: <Lock size={18} />, t: "Lock Duration", pts: "max 25 pts", d: "360d = 25 · 270d = 22 · 180d = 18 · 90d = 12 · 60d = 8 · 30d = 4 · <30d = 0" },
+          { icon: <Lock size={18} />, t: "Lock Percent", pts: "max 20 pts", d: "≥70% = 20 · ≥60% = 17 · ≥50% = 14 · ≥40% = 10 · ≥30% = 6 · <30% = 0" },
+          { icon: <Shield size={18} />, t: "Creator Alloc", pts: "max 15 pts", d: "0% = 15 · ≤3% = 12 · ≤5% = 9 · ≤8% = 6 · ≤10% = 3 · >10% = 0" },
+          { icon: <TrendingUp size={18} />, t: "Curve Liquidity", pts: "max 10 pts", d: "≥50% = 10 · ≥40% = 8 · ≥30% = 6 · ≥20% = 3 · <20% = 0. Feeds the bonding curve vault." },
+          { icon: <Database size={18} />, t: "Circulation", pts: "max 8 pts", d: "15–40% = 8 · 10–14% or 41–60% = 4 · >60% = 2 · <10% = 0. Curve + Circ must be ≥50%." },
+          { icon: <Users size={18} />, t: "Airdrop", pts: "max 10 pts", d: "≥10% = 10 · ≥5% = 8 · ≥1% = 5 · 0% = 0. Having an airdrop signals community intent." },
+          { icon: <Flame size={18} />, t: "Burn Bonus", pts: "+6 / +12", d: "25% burn of locked vault = +6 pts · 50% burn = +12 pts." },
         ].map((item) => (
           <div key={item.t} className="feat-card">
             <div className="feat-icon">{item.icon}</div>

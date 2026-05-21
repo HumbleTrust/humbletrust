@@ -25,7 +25,9 @@ const AURA_PALETTE = [
 ];
 
 function getZodiac(date) {
+  if (date == null) return ZODIACS[0];
   const d = new Date(date);
+  if (isNaN(d.getTime())) return ZODIACS[0];
   const m = d.getMonth() + 1;
   const day = d.getDate();
   for (const z of ZODIACS) {
@@ -41,10 +43,12 @@ function getZodiac(date) {
   return ZODIACS[0];
 }
 
-// Deterministic color from wallet address
+// Deterministic aura color from wallet address
 function getAuraColor(wallet) {
+  if (!wallet || typeof wallet !== 'string') return AURA_PALETTE[0];
   let hash = 0;
-  for (let i = 0; i < wallet.length; i++) {
+  const len = Math.min(wallet.length, 44); // Solana pubkeys are max 44 chars
+  for (let i = 0; i < len; i++) {
     hash = ((hash << 5) - hash) + wallet.charCodeAt(i);
     hash |= 0;
   }

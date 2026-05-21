@@ -40,8 +40,8 @@ export const Footer = ({ setPage }: { setPage: (p: Page) => void }) => (
         <ul className="foot-list">
           <li><a href="https://github.com/HumbleTrust/humbletrust" target="_blank" rel="noreferrer">GitHub</a></li>
           <li><a href="https://solscan.io/account/FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr?cluster=devnet" target="_blank" rel="noreferrer">v2 Program on Solscan</a></li>
-          <li><a href="#" onClick={(e) => { e.preventDefault(); setPage("about"); }}>Whitepaper</a></li>
-          <li><a href="#" onClick={(e) => { e.preventDefault(); setPage("about"); }}>Roadmap</a></li>
+          <li><a href="#" onClick={(e) => { e.preventDefault(); setPage("about"); }}>How it works</a></li>
+          <li><a href="#" onClick={(e) => { e.preventDefault(); setPage("status"); }}>Roadmap &amp; Status</a></li>
         </ul>
       </div>
     </div>

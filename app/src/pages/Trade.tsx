@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAnchorWallet, useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { AnchorProvider } from "@coral-xyz/anchor";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
@@ -176,7 +176,11 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
   const nextPrice = useMemo(() => estimatePriceAfter(solIn, previewSolReserve, previewTokenReserve), [solIn, previewSolReserve, previewTokenReserve]);
   const priceImpact = useMemo(() => currentPrice > 0 ? ((nextPrice - currentPrice) / currentPrice) * 100 : 0, [currentPrice, nextPrice]);
 
-  const validMint = mintInput.trim().length > 30;
+  const validMint = useMemo(() => {
+    const s = mintInput.trim();
+    if (s.length < 32 || s.length > 44) return false;
+    try { new PublicKey(s); return true; } catch { return false; }
+  }, [mintInput]);
   const selectedMint = mintInput.trim();
   const canUseCurve = v2Available === true;
   const canTrade = canUseCurve && wallet.connected && busy === null && validMint;
@@ -197,7 +201,7 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
     ? solIn > 0
     : tokensIn > 0 && !!selectedWalletToken && !sellBalanceExceeded);
 
-  const loadWalletTokens = async () => {
+  const loadWalletTokens = useCallback(async () => {
     if (!wallet.publicKey) { setWalletTokens([]); return; }
     setTokenPickerBusy(true);
     setTokenPickerError(null);
@@ -213,16 +217,8 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
         if (!Number.isFinite(balance) || balance <= 0) return;
         const saved = savedTokenMap.get(mint);
         const existing = byMint.get(mint);
-        if (existing) {
-          existing.balance += balance;
-        } else {
-          byMint.set(mint, {
-            mint, balance, decimals: amountInfo.decimals ?? 9,
-            symbol: saved?.symbol || shortAddress(mint),
-            name: saved?.name || "Wallet token",
-            logo: saved?.logo,
-          });
-        }
+        if (existing) { existing.balance += balance; }
+        else { byMint.set(mint, { mint, balance, decimals: amountInfo.decimals ?? 9, symbol: saved?.symbol || shortAddress(mint), name: saved?.name || "Wallet token", logo: saved?.logo }); }
       });
       setWalletTokens([...byMint.values()].sort((a, b) => b.balance - a.balance));
     } catch (e: any) {
@@ -230,16 +226,16 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
     } finally {
       setTokenPickerBusy(false);
     }
-  };
+  }, [wallet.publicKey, connection, savedTokenMap]);
 
   useEffect(() => {
     if (!wallet.connected || !wallet.publicKey) { setWalletTokens([]); return; }
     void loadWalletTokens();
-  }, [walletAddress, wallet.connected, connection]);
+  }, [walletAddress, wallet.connected, loadWalletTokens]);
 
   const refreshReserves = async (mintOverride?: string) => {
     const mintValue = (mintOverride ?? mintInput).trim();
-    if (mintValue.length <= 30) return;
+    try { new PublicKey(mintValue); } catch { return; }
     if (!canUseCurve) { setReserveError("V2 curve program is not deployed on devnet yet."); return; }
     setReservesBusy(true);
     setReserveError(null);

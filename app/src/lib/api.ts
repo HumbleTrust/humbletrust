@@ -51,14 +51,15 @@ export interface ApiCandle {
 
 const request = async <T>(path: string): Promise<T> => {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 8_000);
+  const ms = path.includes("/ohlcv") ? 12_000 : 8_000;
+  const timeout = window.setTimeout(() => controller.abort(), ms);
   try {
     const response = await fetch(`${API_BASE}${path}`, { signal: controller.signal });
     if (!response.ok) throw new Error(await response.text());
     return response.json() as Promise<T>;
   } catch (error: any) {
     if (error?.name === "AbortError") {
-      throw new Error("backend request timed out");
+      throw new Error(`Request timed out after ${ms / 1000}s — backend may be starting up`);
     }
     throw error;
   } finally {

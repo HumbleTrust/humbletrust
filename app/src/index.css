@@ -626,6 +626,17 @@ footer { background: var(--bg2); border-top: 1px solid var(--border); padding: 6
   .token-picker-menu { max-height: 260px; }
 }
 
+@media (max-width: 480px) {
+  .swap-panel, .curve-panel, .sell-panel { padding: .85rem; }
+  .swap-amount-input, .swap-output { font-size: 1.2rem; }
+  .trade-row { grid-template-columns: 1fr; gap: .5rem; }
+  .tok-grid-real, .score-breakdown-grid { grid-template-columns: 1fr; }
+  section { padding: 60px 5%; }
+  .sec-h2 { font-size: clamp(1.6rem, 8vw, 2.2rem); }
+  .badge-modal { padding: 1rem; }
+  .badge-modal-card { flex-direction: column; align-items: center; }
+}
+
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .spin { animation: spin 1s linear infinite; }
 
