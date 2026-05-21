@@ -39,8 +39,9 @@ const fmtPrice = (p?: string) => {
   if (!p) return "—";
   const n = Number(p);
   if (n >= 1000) return `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
-  if (n >= 1) return `$${n.toFixed(4)}`;
-  if (n >= 0.01) return `$${n.toFixed(6)}`;
+  if (n >= 1)    return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (n >= 0.01) return `$${n.toFixed(4)}`;
+  if (n >= 0.0001) return `$${n.toFixed(6)}`;
   return `$${n.toExponential(3)}`;
 };
 
@@ -196,9 +197,14 @@ export const Market = () => {
             <div key={pair.pairAddress} className="market-watch-card" onClick={() => setSelected(pair)}>
               <div className="mwc-header">
                 <div className="mwc-icon">
-                  {pair.info?.imageUrl
-                    ? <img src={pair.info.imageUrl} alt="" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                    : <span>{initials}</span>}
+                  <span>{initials}</span>
+                  {pair.info?.imageUrl && (
+                    <img
+                      src={pair.info.imageUrl}
+                      alt=""
+                      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                  )}
                 </div>
                 <div className="mwc-identity">
                   <div className="mwc-name">{pair.baseToken.symbol}</div>
