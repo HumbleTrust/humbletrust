@@ -79,6 +79,8 @@ create table if not exists wallets (
 );
 
 create index if not exists idx_tokens_created_at on tokens(created_at desc);
+create index if not exists idx_tokens_creator on tokens(creator);
 create index if not exists idx_trades_mint_time on trades(mint, block_time desc);
+create index if not exists idx_trades_trader on trades(trader);
 create index if not exists idx_ohlcv_mint_tf_bucket on ohlcv(mint, timeframe, bucket desc);
 `;
