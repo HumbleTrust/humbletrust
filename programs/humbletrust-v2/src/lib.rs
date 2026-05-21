@@ -128,6 +128,10 @@ pub mod humbletrust_v2 {
         tier: u8,
         anti_bot_seconds: u16,
     ) -> Result<()> {
+        require!(
+            !ctx.accounts.global_state.is_launches_paused,
+            HumbleV2Error::LaunchesPaused
+        );
         validate_launch_inputs(
             &name,
             &symbol,
@@ -1897,6 +1901,12 @@ pub struct CreateTokenWithLockV2<'info> {
     #[account(mut)]
     pub creator: Signer<'info>,
 
+    #[account(
+        seeds = [b"global_state_v2"],
+        bump = global_state.bump
+    )]
+    pub global_state: Account<'info, GlobalStateV2>,
+
     /// CHECK: verified against FEE_WALLET
     #[account(mut)]
     pub fee_wallet: UncheckedAccount<'info>,
@@ -3190,6 +3200,8 @@ pub enum HumbleV2Error {
     AirdropNotEligible,
     #[msg("Airdrop too early")]
     AirdropTooEarly,
+    #[msg("Token launches are currently paused by admin")]
+    LaunchesPaused,
     #[msg("Operation requires HumbleTrust admin authority")]
     AdminRequired,
     #[msg("Invalid fee parameters")]

@@ -213,6 +213,8 @@ export const Market = () => {
               src={`${selected.url}?embed=1&theme=dark&info=0&trades=1`}
               className="market-modal-iframe"
               title={`${selected.baseToken.symbol} chart`}
+              sandbox="allow-scripts allow-same-origin allow-popups"
+              referrerPolicy="no-referrer"
             />
           </div>
         </div>

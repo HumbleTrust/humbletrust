@@ -249,7 +249,8 @@ export const LiveMarketChart = ({
 
         ws = new WebSocket(chartWsUrl(mint, timeframe));
         ws.onmessage = (ev) => {
-          const msg = JSON.parse(ev.data);
+          let msg: any;
+          try { msg = JSON.parse(ev.data as string); } catch { return; }
           if (msg.type === "snapshot") {
             applyCandles(msg.candles ?? []);
           } else if (msg.type === "candle" && priceSeriesRef.current) {
