@@ -1553,3 +1553,99 @@ footer { background: var(--bg2); border-top: 1px solid var(--border); padding: 6
   .market-watch-grid { grid-template-columns: 1fr; }
   .mwc-stats { grid-template-columns: repeat(3, 1fr); }
 }
+
+/* ── NFT BADGE CARDS ─────────────────────────────────────────────────────── */
+@keyframes nft-twinkle { from { opacity: .07 } to { opacity: .6 } }
+
+.nft-card {
+  position: relative;
+  width: 220px;
+  height: 330px;
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform .3s;
+  justify-self: center;
+  flex-shrink: 0;
+}
+.nft-card:hover { transform: translateY(-8px) scale(1.025); }
+.nft-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  padding: 1.5px;
+  background: var(--aura);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: .85;
+  z-index: 2;
+  pointer-events: none;
+}
+.nft-card::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 21px;
+  box-shadow: 0 0 45px var(--aura-glow), 0 0 90px var(--aura-glow2), inset 0 0 30px var(--aura-inner);
+  pointer-events: none;
+  z-index: 0;
+}
+.nft-bg-void  { background: radial-gradient(ellipse at 50% 28%, #1a0a2e 0%, #05070F 68%); }
+.nft-bg-abyss { background: radial-gradient(ellipse at 50% 28%, #001a1f 0%, #05070F 68%); }
+.nft-bg-ember { background: radial-gradient(ellipse at 50% 28%, #200900 0%, #05070F 68%); }
+.nft-bg-storm { background: radial-gradient(ellipse at 50% 28%, #00102a 0%, #05070F 68%); }
+
+.nft-noise {
+  position: absolute; inset: 0; border-radius: 20px;
+  opacity: .03; pointer-events: none; z-index: 1;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.nft-star {
+  position: absolute; border-radius: 50%; background: #fff;
+  animation: nft-twinkle var(--d, 3s) ease-in-out infinite alternate;
+}
+.nft-constellation { position: absolute; inset: 0; z-index: 1; opacity: .1; }
+
+.nft-card-badge {
+  position: absolute; top: 12px; left: 14px;
+  font-size: .46rem; letter-spacing: .13em;
+  color: rgba(255,255,255,.28); z-index: 3;
+  text-transform: uppercase; font-family: var(--font-mono);
+}
+.nft-card-edition {
+  position: absolute; bottom: 12px; right: 14px;
+  font-size: .49rem; letter-spacing: .1em;
+  color: rgba(255,255,255,.22); z-index: 3; font-family: var(--font-mono);
+}
+.nft-card-name {
+  position: relative; z-index: 3; color: #fff;
+  font-size: .72rem; letter-spacing: .22em; text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(255,255,255,.3); margin-top: .2rem;
+  font-family: var(--font-mono);
+}
+.nft-card-element {
+  position: relative; z-index: 3;
+  font-size: .56rem; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--aura-text); text-shadow: 0 0 8px var(--aura-glow);
+  font-family: var(--font-mono);
+}
+.nft-divider {
+  position: relative; z-index: 3; width: 36px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--aura-text), transparent);
+  margin: .1rem 0;
+}
+.nft-shield-wrap {
+  position: relative; z-index: 3;
+  filter: drop-shadow(0 0 14px var(--aura-glow)) drop-shadow(0 0 28px var(--aura-glow));
+}
+.nft-sigil-wrap {
+  position: relative; z-index: 3;
+  filter: drop-shadow(0 0 8px var(--aura-glow));
+}
