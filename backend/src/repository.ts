@@ -120,6 +120,7 @@ export const refreshWallet = async (address: string) => {
     [address]
   );
   const row = rows[0];
+  if (!row) return;
   const reputation = computeCreatorReputation({
     launchesCount: Number(row.launches_count),
     rugsCount: 0,

@@ -13,7 +13,9 @@ export const attachClient = async (ws: WebSocket, mint: string, timeframe: Timef
   clients.get(key)!.add(ws);
   ws.on("close", () => clients.get(key)?.delete(ws));
   const candles = await getCandles(mint, timeframe, 300);
-  ws.send(JSON.stringify({ type: "snapshot", mint, timeframe, candles }));
+  if (ws.readyState === WebSocket.OPEN) {
+    try { ws.send(JSON.stringify({ type: "snapshot", mint, timeframe, candles })); } catch { /* closed */ }
+  }
 };
 
 export const broadcastMintUpdate = async (mint: string) => {
@@ -45,7 +47,9 @@ export const broadcastMintUpdate = async (mint: string) => {
       volumeSol: Number(row.volume_sol),
     });
     for (const socket of sockets) {
-      if (socket.readyState === WebSocket.OPEN) socket.send(message);
+      if (socket.readyState === WebSocket.OPEN) {
+        try { socket.send(message); } catch { /* closed */ }
+      }
     }
   }
 };

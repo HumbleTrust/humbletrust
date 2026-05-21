@@ -18,6 +18,7 @@ const blockTime = async (connection: Connection, slot?: number) => {
 export const startHumbleTrustIndexer = (connection: Connection) => {
   console.log(`Indexing HumbleTrust v2 ${config.programId.toBase58()} on ${config.network}`);
   return connection.onLogs(config.programId, async (logs: Logs, ctx) => {
+    try {
     const events = parseAnchorEvents(logs.logs);
     if (events.length === 0) return;
     const time = await blockTime(connection, ctx.slot);
@@ -81,12 +82,14 @@ export const startHumbleTrustIndexer = (connection: Connection) => {
         });
       }
     }
+    } catch (err) { console.error("[indexer:humbletrust]", err); }
   }, "confirmed");
 };
 
 export const startRaydiumIndexer = (connection: Connection) => {
   console.log(`Watching Raydium CPMM ${config.raydiumCpmmProgramId.toBase58()} for known HumbleTrust pools`);
   return connection.onLogs(config.raydiumCpmmProgramId, async (logs, ctx) => {
+    try {
     const { rows } = await import("./db.js").then(({ query }) =>
       query<{ mint: string; raydium_pool: string }>(
         "select mint, raydium_pool from tokens where raydium_pool is not null"
@@ -122,5 +125,6 @@ export const startRaydiumIndexer = (connection: Connection) => {
       blockTime: new Date(),
     });
     await broadcastMintUpdate(mint);
+    } catch (err) { console.error("[indexer:raydium]", err); }
   }, "confirmed");
 };

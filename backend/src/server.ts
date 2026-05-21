@@ -32,7 +32,7 @@ export const createServer = () => {
 
   app.get("/tokens", async (req, res, next) => {
     try {
-      const limit = Math.min(Number(req.query.limit ?? 100), 250);
+      const limit = Math.min(parseInt(String(req.query.limit ?? 100), 10) || 100, 250);
       const { rows } = await query(
         `
         select mint, creator, name, symbol, status, raydium_pool, trust_score, launch_score,

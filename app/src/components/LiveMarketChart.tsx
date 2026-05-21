@@ -112,7 +112,7 @@ export const LiveMarketChart = ({
   useEffect(() => {
     const host = priceHostRef.current;
     if (!host) return;
-    host.innerHTML = "";
+    host.replaceChildren();
 
     const chart = createChart(host, priceChartOptions(tfSeconds));
     priceChartRef.current = chart;
@@ -155,7 +155,7 @@ export const LiveMarketChart = ({
       rsiChartRef.current = null;
       return;
     }
-    host.innerHTML = "";
+    host.replaceChildren();
 
     const chart = createChart(host, rsiChartOptions(tfSeconds));
     rsiChartRef.current = chart;
