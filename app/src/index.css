@@ -1396,6 +1396,13 @@ footer { background: var(--bg2); border-top: 1px solid var(--border); padding: 6
 .badge-mini-meta strong { font-family: var(--font-head); font-weight: 800; font-size: .82rem; letter-spacing: .06em; }
 .badge-mini-meta span { font-family: var(--font-mono); font-size: .65rem; color: var(--muted2); letter-spacing: .1em; text-transform: uppercase; }
 
+/* NFT badge preview grid (6 cards) */
+.nft-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.4rem;
+}
+
 @media (max-width: 1160px) {
   .badge-nft-split { grid-template-columns: 1fr; }
   .badge-nft-grid { max-width: 440px; }
@@ -1404,6 +1411,7 @@ footer { background: var(--bg2); border-top: 1px solid var(--border); padding: 6
   .badge-nft-grid { grid-template-columns: repeat(2, 1fr); max-width: 100%; }
   .badge-price-row { flex-wrap: wrap; }
   .badge-price-row > div { min-width: 140px; }
+  .nft-preview-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* ─── Market Watch ────────────────────────────────────────────────────── */

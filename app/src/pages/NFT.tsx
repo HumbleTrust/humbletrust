@@ -17,11 +17,13 @@ const MiniShieldBadge = ({
   element,
   aura,
   edition,
+  season,
 }: {
   zodiac: string;
   element: string;
   aura: string;
   edition: number;
+  season?: string;
 }) => (
   <div className="badge-mini-card">
     <svg viewBox="0 0 90 110" fill="none" className="badge-mini-svg" aria-hidden="true">
@@ -73,6 +75,11 @@ const MiniShieldBadge = ({
     <div className="badge-mini-meta">
       <strong style={{ color: aura }}>{zodiac}</strong>
       <span>{element}</span>
+      {season && (
+        <span style={{ color: "var(--muted)", fontSize: ".68rem", marginTop: ".1rem" }}>
+          {season}
+        </span>
+      )}
     </div>
   </div>
 );
@@ -206,11 +213,12 @@ export const NFT = ({ goLaunch }: { goLaunch?: () => void } = {}) => {
             fontWeight: 800,
             lineHeight: 1.1,
             marginBottom: "1.2rem",
-            color: "var(--text)",
+            color: "#9945FF",
+            textShadow: "0 0 40px rgba(153,69,255,.45)",
           }}
         >
           Your on-chain identity,{" "}
-          <span style={{ color: "var(--green-neon)" }}>written in the stars</span>
+          <span style={{ color: "var(--green-neon)", textShadow: "0 0 30px rgba(0,255,148,.4)" }}>written in the stars</span>
         </h1>
         <p
           className="sec-sub"
@@ -485,62 +493,19 @@ export const NFT = ({ goLaunch }: { goLaunch?: () => void } = {}) => {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gap: "1px",
-            background: "var(--border)",
-            border: "1px solid var(--border)",
-            borderRadius: 12,
-            overflow: "hidden",
+            gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+            gap: "1.2rem",
           }}
         >
-          {ZODIACS.map((z) => (
-            <div
+          {ZODIACS.map((z, i) => (
+            <MiniShieldBadge
               key={z.name}
-              style={{
-                background: "var(--bg2)",
-                padding: "1.1rem 1.3rem",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.9rem",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "1.5rem",
-                  lineHeight: 1,
-                  flexShrink: 0,
-                }}
-              >
-                {z.symbol}
-              </span>
-              <div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-head)",
-                    fontWeight: 600,
-                    fontSize: ".95rem",
-                    color: "var(--text)",
-                  }}
-                >
-                  {z.name}
-                </div>
-                <div style={{ display: "flex", gap: ".5rem", alignItems: "center", marginTop: ".2rem" }}>
-                  <span
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: ".68rem",
-                      color: ELEMENT_COLOR[z.element],
-                      letterSpacing: ".06em",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {z.element}
-                  </span>
-                  <span style={{ color: "var(--muted)", fontSize: ".68rem" }}>·</span>
-                  <span style={{ color: "var(--muted2)", fontSize: ".72rem" }}>{z.season}</span>
-                </div>
-              </div>
-            </div>
+              zodiac={z.name}
+              element={z.element}
+              aura={ELEMENT_COLOR[z.element]}
+              edition={i + 1}
+              season={z.season}
+            />
           ))}
         </div>
       </section>
@@ -562,13 +527,7 @@ export const NFT = ({ goLaunch }: { goLaunch?: () => void } = {}) => {
           look completely different. Below are six example badges from real sign and element
           combinations.
         </p>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-            gap: "1.2rem",
-          }}
-        >
+        <div className="nft-preview-grid">
           {PREVIEW_BADGES.map((b) => (
             <MiniShieldBadge
               key={b.zodiac}
@@ -633,7 +592,8 @@ export const NFT = ({ goLaunch }: { goLaunch?: () => void } = {}) => {
             fontSize: "clamp(1.6rem, 4vw, 2.6rem)",
             fontWeight: 800,
             marginBottom: "1rem",
-            color: "var(--text)",
+            color: "#9945FF",
+            textShadow: "0 0 40px rgba(153,69,255,.45)",
           }}
         >
           Claim your Zodiac Badge
