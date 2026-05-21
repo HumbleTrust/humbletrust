@@ -187,7 +187,29 @@ const PREVIEW_BADGES = [
   { zodiac: "Pisces",    element: "Water", aura: "#00FFD1", edition: 42 },
 ];
 
-// ── Main NFT page ─────────────────────────────────────────────────────────────
+// ── Same-sign aura comparison rows ───────────────────────────────────────────
+const SAME_SIGN_ROWS: Array<{ sign: string; element: string; badges: { aura: string; edition: number; label: string }[] }> = [
+  {
+    sign: "Scorpio", element: "Water",
+    badges: [
+      { aura: "#00D4FF", edition: 1,  label: "Wallet A" },
+      { aura: "#FF3C6B", edition: 8,  label: "Wallet B" },
+      { aura: "#39FF14", edition: 15, label: "Wallet C" },
+      { aura: "#FFDB2B", edition: 27, label: "Wallet D" },
+      { aura: "#DC1FFF", edition: 33, label: "Wallet E" },
+    ],
+  },
+  {
+    sign: "Leo", element: "Fire",
+    badges: [
+      { aura: "#9945FF", edition: 2,  label: "Wallet A" },
+      { aura: "#FF7A2F", edition: 11, label: "Wallet B" },
+      { aura: "#00FFD1", edition: 19, label: "Wallet C" },
+      { aura: "#1466FF", edition: 44, label: "Wallet D" },
+      { aura: "#FF4DCB", edition: 56, label: "Wallet E" },
+    ],
+  },
+];
 export const NFT = ({ goLaunch }: { goLaunch?: () => void } = {}) => {
   const { connected } = useWallet();
   const [badgeOpen, setBadgeOpen] = useState(false);
@@ -538,6 +560,62 @@ export const NFT = ({ goLaunch }: { goLaunch?: () => void } = {}) => {
             />
           ))}
         </div>
+      </section>
+
+      {/* ── Same sign, different wallets ── */}
+      <section style={{ padding: "80px 6%", borderBottom: "1px solid var(--border)" }}>
+        <div className="sec-eyebrow">Aura Uniqueness</div>
+        <h2 className="sec-h2" style={{ marginBottom: ".8rem" }}>
+          Same zodiac, different wallet — different badge
+        </h2>
+        <p className="sec-sub" style={{ maxWidth: 560, marginBottom: "2.8rem" }}>
+          Two people born under the same sign still get completely different badges.
+          The aura color is derived deterministically from your wallet address — it's yours alone.
+        </p>
+        {SAME_SIGN_ROWS.map(row => (
+          <div key={row.sign} style={{ marginBottom: "3rem" }}>
+            <div style={{
+              display: "flex", alignItems: "center", gap: ".75rem",
+              marginBottom: "1.4rem",
+            }}>
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: ".72rem",
+                color: ELEMENT_COLOR[row.element], letterSpacing: ".12em", textTransform: "uppercase",
+              }}>
+                {row.element}
+              </span>
+              <span style={{ color: "var(--muted)", fontSize: ".72rem" }}>·</span>
+              <span style={{
+                fontFamily: "var(--font-head)", fontWeight: 700, fontSize: "1rem",
+                color: "var(--text)",
+              }}>
+                {row.sign}
+              </span>
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: ".65rem",
+                color: "var(--muted)", background: "var(--bg3)",
+                border: "1px solid var(--border)", borderRadius: 6, padding: ".2rem .55rem",
+              }}>
+                {row.badges.length} different wallets
+              </span>
+            </div>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+              gap: "1rem",
+            }}>
+              {row.badges.map(b => (
+                <MiniShieldBadge
+                  key={b.label}
+                  zodiac={row.sign}
+                  element={row.element}
+                  aura={b.aura}
+                  edition={b.edition}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
       </section>
 
       {/* ── FAQ ── */}
