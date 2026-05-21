@@ -147,6 +147,7 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
   const [tokenPickerBusy, setTokenPickerBusy] = useState(false);
   const [tokenPickerError, setTokenPickerError] = useState<string | null>(null);
   const [slippageBps, setSlippageBps] = useState(100);
+  const [walletSolBalance, setWalletSolBalance] = useState<number | null>(null);
 
   // chart controls
   const [timeframe, setTimeframe] = useState<Timeframe>("1m");
@@ -166,6 +167,15 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
     return () => { mounted = false; };
   }, [connection]);
 
+  useEffect(() => {
+    if (!wallet.publicKey) { setWalletSolBalance(null); return; }
+    let mounted = true;
+    connection.getBalance(wallet.publicKey)
+      .then(l => { if (mounted) setWalletSolBalance(l / LAMPORTS_PER_SOL); })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, [wallet.publicKey, connection, txSig]);
+
   const solIn = useMemo(() => parsePositive(solAmount, 0), [solAmount]);
   const tokensIn = useMemo(() => parsePositive(tokensAmount, 0), [tokensAmount]);
   const previewSolReserve = useMemo(() => parsePositive(reserveSol, PREVIEW_SOL_RESERVE), [reserveSol]);
@@ -175,6 +185,16 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
   const currentPrice = useMemo(() => previewSolReserve / previewTokenReserve, [previewSolReserve, previewTokenReserve]);
   const nextPrice = useMemo(() => estimatePriceAfter(solIn, previewSolReserve, previewTokenReserve), [solIn, previewSolReserve, previewTokenReserve]);
   const priceImpact = useMemo(() => currentPrice > 0 ? ((nextPrice - currentPrice) / currentPrice) * 100 : 0, [currentPrice, nextPrice]);
+  const priceAfterSell = useMemo(() => {
+    if (tokensIn <= 0 || previewSolReserve <= 0 || previewTokenReserve <= 0) return currentPrice;
+    const k = previewSolReserve * previewTokenReserve;
+    const nextToken = previewTokenReserve + tokensIn;
+    return (k / nextToken) / nextToken;
+  }, [tokensIn, previewSolReserve, previewTokenReserve, currentPrice]);
+  const sellPriceImpact = useMemo(() =>
+    currentPrice > 0 ? Math.abs((priceAfterSell - currentPrice) / currentPrice) * 100 : 0,
+    [currentPrice, priceAfterSell]
+  );
 
   const validMint = useMemo(() => {
     const s = mintInput.trim();
@@ -195,7 +215,7 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
   const selectedWalletToken = walletTokens.find((t) => t.mint === selectedMint);
   const selectedDecimals = selectedWalletToken?.decimals ?? 9;
   const selectedSymbol = selectedWalletToken?.symbol || savedTokenMap.get(selectedMint)?.symbol || "TOKEN";
-  const sellBalanceExceeded = side === "sell" && !!selectedWalletToken && tokensIn > selectedWalletToken.balance + 10 ** -selectedDecimals;
+  const sellBalanceExceeded = side === "sell" && !!selectedWalletToken && tokensIn > selectedWalletToken.balance;
   const sellBalanceMissing = side === "sell" && wallet.connected && validMint && !tokenPickerBusy && !selectedWalletToken;
   const canSubmitTrade = canTrade && (side === "buy"
     ? solIn > 0
@@ -271,6 +291,11 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
   const setMaxSellAmount = () => {
     if (!selectedWalletToken) return;
     setTokensAmount(formatTokenAmount(selectedWalletToken.balance, selectedDecimals));
+  };
+
+  const setFractionSol = (frac: number) => {
+    const available = Math.max(0, (walletSolBalance ?? 0) - 0.005);
+    setSolAmount(String(+(available * frac).toFixed(6)));
   };
 
   const runBuy = async () => {
@@ -436,6 +461,21 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
                 </button>
               )}
             </div>
+            {side === "buy" && (
+              <div className="swap-quick-btns">
+                {([0.25, 0.5, 0.75, 1] as const).map(f => (
+                  <button key={f} type="button" className="swap-quick-btn" disabled={!walletSolBalance} onClick={() => setFractionSol(f)}>
+                    {f === 1 ? "MAX" : `${f * 100}%`}
+                  </button>
+                ))}
+              </div>
+            )}
+            {side === "buy" && walletSolBalance != null && (
+              <div className="swap-balance-line">
+                <span>Wallet balance</span>
+                <strong>{formatCompact(walletSolBalance, 4)} SOL</strong>
+              </div>
+            )}
             {side === "sell" && (
               <div className="swap-balance-line">
                 <span>Wallet balance</span>
@@ -490,13 +530,23 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
           )}
 
           <div className="swap-meta-row">
-            <span>{side === "buy" ? "Price impact" : "Sell amount"}</span>
-            <strong>
-              {side === "buy"
-                ? `${formatCompact(priceImpact, 2)}%`
-                : `${formatTokenAmount(tokensIn, selectedDecimals)} ${selectedSymbol}`}
+            <span>Price impact</span>
+            <strong style={{ color: (side === "buy" ? priceImpact : sellPriceImpact) > 5 ? "#ff3b5c" : (side === "buy" ? priceImpact : sellPriceImpact) > 2 ? "var(--yellow)" : "inherit" }}>
+              {formatCompact(Math.abs(side === "buy" ? priceImpact : sellPriceImpact), 2)}%
             </strong>
           </div>
+          <div className="swap-meta-row">
+            <span>Min. received</span>
+            <strong>
+              {side === "buy"
+                ? `${formatCompact(estimatedTokens * (1 - slippageBps / 10_000), 4)} ${selectedSymbol}`
+                : `${formatCompact(estimatedSol * (1 - slippageBps / 10_000), 6)} SOL`}
+            </strong>
+          </div>
+
+          {(side === "buy" ? priceImpact : sellPriceImpact) > 5 && (
+            <div className="trade-error">High price impact ({formatCompact(Math.abs(side === "buy" ? priceImpact : sellPriceImpact), 1)}%). Consider reducing your trade size.</div>
+          )}
 
           {sellBalanceExceeded && (
             <div className="trade-error">Sell amount exceeds wallet balance. Use MAX or lower the amount.</div>
