@@ -17,5 +17,6 @@ no-log-ix-name = []
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 
 [dependencies]
+solana-security-txt = "1.1.1"
 anchor-lang = "0.32.1"
 anchor-spl = { version = "0.32.1", features = ["token", "token_2022"] }

@@ -5,15 +5,19 @@ import { clusterApiUrl } from "@solana/web3.js";
 import { PhantomWalletAdapter, SolflareWalletAdapter } from "@solana/wallet-adapter-wallets";
 import "@solana/wallet-adapter-react-ui/styles.css";
 
+const AnyConnectionProvider = ConnectionProvider as any;
+const AnySolanaWalletProvider = SolanaWalletProvider as any;
+const AnyWalletModalProvider = WalletModalProvider as any;
+
 export const AppWalletProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const endpoint = useMemo(() => clusterApiUrl("devnet"), []);
   const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter()], []);
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
-      <SolanaWalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
-      </SolanaWalletProvider>
-    </ConnectionProvider>
+    <AnyConnectionProvider endpoint={endpoint}>
+      <AnySolanaWalletProvider wallets={wallets} autoConnect>
+        <AnyWalletModalProvider>{children}</AnyWalletModalProvider>
+      </AnySolanaWalletProvider>
+    </AnyConnectionProvider>
   );
 };
