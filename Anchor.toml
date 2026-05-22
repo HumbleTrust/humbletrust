@@ -6,7 +6,6 @@ skip-lint = false
 
 [programs.devnet]
 humbletrust = "Gcz7NMtCqKdvzh53DF1ecoEYe7Hma9kWwdtCmmeBaxRi"
-humbletrust_v2 = "FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr"
 
 [registry]
 url = "https://api.apr.dev"

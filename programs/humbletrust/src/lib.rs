@@ -8,22 +8,6 @@ use anchor_spl::token_interface::{MintTo as InterfaceMintTo, mint_to as interfac
 
 declare_id!("Gcz7NMtCqKdvzh53DF1ecoEYe7Hma9kWwdtCmmeBaxRi");
 
-// security.txt — embedded into the .so binary as an ELF section.
-// Solscan, Solana Explorer, and bug-bounty scanners read this automatically.
-#[cfg(not(feature = "no-entrypoint"))]
-solana_security_txt::security_txt! {
-    name: "HumbleTrust",
-    project_url: "https://humbletrust.vercel.app",
-    contacts: "email:humble.trust@outlook.com,link:https://github.com/HumbleTrust/humbletrust/security",
-    policy: "https://github.com/HumbleTrust/humbletrust/blob/main/SECURITY.md",
-    preferred_languages: "en,ru",
-    source_code: "https://github.com/HumbleTrust/humbletrust",
-    source_revision: env!("CARGO_PKG_VERSION"),
-    source_release: env!("CARGO_PKG_VERSION"),
-    encryption: "",
-    auditors: "None - devnet alpha. See SECURITY.md for known limitations."
-}
-
 const FEE_WALLET: Pubkey = pubkey!("FYRtG8JMun6vqucUaXGcSZrWib6gNVEW4dd2LEP92mGM");
 // S3 fix: admin pubkey for rotating metrics_authority. Replace placeholder.
 // 11111111111111111111111111111111 (System Program) effectively disables the
