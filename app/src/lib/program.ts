@@ -5,7 +5,6 @@ import {
   createAssociatedTokenAccountInstruction,
   createInitializeMint2Instruction,
   createInitializeMetadataPointerInstruction,
-  createInitializeNonTransferableMintInstruction,
   createMintToInstruction,
   createSetAuthorityInstruction,
   ExtensionType,
@@ -376,8 +375,8 @@ export const mintLaunchCertificateV2 = async (
     ] as [string, string][],
   };
 
-  // Allocate space for: NonTransferable + MetadataPointer (fixed) + TokenMetadata (variable)
-  const mintLen = getMintLen([ExtensionType.NonTransferable, ExtensionType.MetadataPointer]);
+  // Allocate space for: MetadataPointer (fixed) + TokenMetadata (variable)
+  const mintLen = getMintLen([ExtensionType.MetadataPointer]);
   const metadataLen = TYPE_SIZE + LENGTH_SIZE + packTokenMetadata(certMetadata).length;
   const mintRent = await connection.getMinimumBalanceForRentExemption(mintLen + metadataLen);
 
@@ -401,8 +400,7 @@ export const mintLaunchCertificateV2 = async (
       lamports: mintRent,
       programId: TOKEN_2022_PROGRAM_ID,
     }),
-    // Order matters: extensions before InitializeMint2
-    createInitializeNonTransferableMintInstruction(certificateMint.publicKey, TOKEN_2022_PROGRAM_ID),
+    // MetadataPointer must be initialized before InitializeMint2
     createInitializeMetadataPointerInstruction(
       certificateMint.publicKey,
       creator,           // update authority
