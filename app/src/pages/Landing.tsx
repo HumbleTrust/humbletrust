@@ -25,6 +25,7 @@ import {
 import type React from "react";
 import type { ReactNode } from "react";
 import { API_BASE_URL, NETWORK_STAGE } from "../lib/constants";
+import { ZodiacBadgeCard } from "../components/ZodiacBadgeCard";
 
 const GITHUB_URL = "https://github.com/HumbleTrust/humbletrust";
 
@@ -70,52 +71,6 @@ const trustRows = [
   ["CommunityRisk", 81, "Reports, votes, abuse signals and future moderation inputs", "amber"],
 ] as const;
 
-const ELEMENT_PATHS: Record<string, string> = {
-  Fire:  "M45,37 L60,64 L30,64 Z",
-  Water: "M45,67 L60,40 L30,40 Z",
-  Earth: "M45,37 L60,52 L45,67 L30,52 Z",
-};
-
-const MiniShieldBadge = ({
-  zodiac, element, aura, edition,
-}: {
-  zodiac: string; element: string; aura: string; edition: number;
-}) => (
-  <div className="badge-mini-card">
-    <svg viewBox="0 0 90 110" fill="none" className="badge-mini-svg" aria-hidden="true">
-      <path d="M45,5 L83,19 L83,57 C83,79 45,103 45,103 C45,103 7,79 7,57 L7,19 Z"
-        fill={`${aura}18`} stroke={aura} strokeWidth="2"
-        style={{ filter: `drop-shadow(0 0 10px ${aura}80)` }}
-      />
-      <path d="M45,12 L76,23 L76,56 C76,74 45,95 45,95 C45,95 14,74 14,56 L14,23 Z"
-        fill="rgba(5,7,15,0.65)" stroke={`${aura}50`} strokeWidth="1"
-      />
-      {element === "Air" ? (
-        <>
-          <circle cx="45" cy="52" r="13" fill="none" stroke={aura} strokeWidth="2" opacity="0.9" />
-          <circle cx="45" cy="52" r="7"  fill="none" stroke={aura} strokeWidth="2" opacity="0.65" />
-        </>
-      ) : (
-        <path d={ELEMENT_PATHS[element]} fill={`${aura}40`} stroke={aura} strokeWidth="2"
-          strokeLinejoin="round" opacity="0.9" />
-      )}
-      <text x="45" y="83" textAnchor="middle" fill={aura} fontSize="7"
-        fontFamily="monospace" letterSpacing="2" opacity="0.8">
-        {zodiac.slice(0, 3).toUpperCase()}
-      </text>
-      <circle cx="76" cy="13" r="9" fill="#05070F" stroke="#00FF94" strokeWidth="4.5" />
-      <polyline points="70,13 75,19 84,7" stroke="#00FF94" strokeWidth="3.5"
-        fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      <text x="14" y="14" fill="rgba(255,255,255,0.22)" fontSize="5.5" fontFamily="monospace">
-        #{String(edition).padStart(3, "0")}
-      </text>
-    </svg>
-    <div className="badge-mini-meta">
-      <strong style={{ color: aura }}>{zodiac}</strong>
-      <span>{element}</span>
-    </div>
-  </div>
-);
 
 const BadgeNFTSection = () => (
   <section id="badge-nft" className="landing-section soft-band">
@@ -152,10 +107,10 @@ const BadgeNFTSection = () => (
         </div>
       </div>
       <div className="badge-nft-grid">
-        <MiniShieldBadge zodiac="Leo"      element="Fire"  aura="#FF3C6B" edition={7}  />
-        <MiniShieldBadge zodiac="Aquarius" element="Air"   aura="#00D4FF" edition={14} />
-        <MiniShieldBadge zodiac="Taurus"   element="Earth" aura="#9945FF" edition={3}  />
-        <MiniShieldBadge zodiac="Scorpio"  element="Water" aura="#39FF14" edition={21} />
+        <ZodiacBadgeCard zodiac="Leo"      element="Fire"  aura="#FF3C6B" edition={7}  />
+        <ZodiacBadgeCard zodiac="Aquarius" element="Air"   aura="#00D4FF" edition={14} />
+        <ZodiacBadgeCard zodiac="Taurus"   element="Earth" aura="#9945FF" edition={3}  />
+        <ZodiacBadgeCard zodiac="Scorpio"  element="Water" aura="#39FF14" edition={21} />
       </div>
     </div>
   </section>
