@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { ZodiacBadgeCard } from "./ZodiacBadgeCard";
+import { mintBadgeNft } from "../lib/mintBadgeNft";
 
 // ── Palette & zodiac (mirrors backend _zodiac.js) ──────────────────────────
 const AURA_PALETTE = [
@@ -56,7 +57,7 @@ function getZodiacToday() {
 type BadgeData = {
   wallet: string; zodiac: string; element: string;
   aura_color: string; edition: number; status: string;
-  minted_at: string; cooldown_until?: string;
+  minted_at: string; cooldown_until?: string; badge_mint?: string;
 };
 type Eligibility =
   | { can_mint: true; reason: null | "cooldown_expired"; badge: BadgeData | null }
@@ -66,14 +67,15 @@ type Eligibility =
 
 // ── Main modal ─────────────────────────────────────────────────────────────
 export function BadgeModal({ onClose, goLaunch }: { onClose: () => void; goLaunch?: () => void }) {
-  const { publicKey } = useWallet();
+  const wallet_adapter = useWallet();
+  const { publicKey } = wallet_adapter;
   const wallet = publicKey?.toBase58() ?? "";
 
   const [eligibility, setEligibility] = useState<Eligibility | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [minting, setMinting] = useState(false);
-  const [mintDone, setMintDone] = useState(false);
+  const [mintResult, setMintResult] = useState<{ badge_mint: string; zodiac: string } | null>(null);
   const [error, setError] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 
@@ -82,7 +84,6 @@ export function BadgeModal({ onClose, goLaunch }: { onClose: () => void; goLaunc
 
   const fetchEligibility = useCallback(async () => {
     if (!wallet) return;
-    // Cancel any in-flight request before starting a new one
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -107,23 +108,17 @@ export function BadgeModal({ onClose, goLaunch }: { onClose: () => void; goLaunc
     setMinting(true);
     setError("");
     try {
-      const res = await fetch("/api/badges/mint", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Mint failed");
-      setMintDone(true);
+      const result = await mintBadgeNft(wallet_adapter);
+      setMintResult({ badge_mint: result.badge_mint, zodiac: result.zodiac });
       await fetchEligibility();
     } catch (e: any) {
-      setError(e.message);
+      setError(e.message ?? "Mint failed");
     } finally {
       setMinting(false);
+      setConfirming(false);
     }
   };
 
-  // close on backdrop click
   const onBackdrop = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) onClose();
   };
@@ -132,11 +127,11 @@ export function BadgeModal({ onClose, goLaunch }: { onClose: () => void; goLaunc
   const badgeColor = badge?.aura_color ?? previewColor;
   const badgeZodiac = badge?.zodiac ?? preview.name;
   const badgeElement = badge?.element ?? preview.element;
+  const mintDone = mintResult !== null;
 
   return (
     <div className="badge-modal-backdrop" onClick={onBackdrop}>
       <div className="badge-modal">
-        {/* header */}
         <div className="badge-modal-header">
           <span className="badge-modal-title">HumbleTrust Badge</span>
           <button className="badge-modal-close" onClick={onClose}>✕</button>
@@ -148,7 +143,6 @@ export function BadgeModal({ onClose, goLaunch }: { onClose: () => void; goLaunc
           </div>
         ) : (
           <>
-            {/* badge preview */}
             <div style={{ display: "flex", justifyContent: "center", padding: "1rem 0 .5rem" }}>
               <ZodiacBadgeCard
                 zodiac={badgeZodiac}
@@ -158,11 +152,20 @@ export function BadgeModal({ onClose, goLaunch }: { onClose: () => void; goLaunc
               />
             </div>
 
-            {/* status / action */}
             <div className="badge-modal-action">
               {mintDone && (
                 <div className="badge-modal-success">
-                  Badge minted! Welcome, {badgeZodiac}.
+                  <div style={{ marginBottom: ".5rem" }}>
+                    Badge minted on-chain! Welcome, {mintResult.zodiac}.
+                  </div>
+                  <a
+                    href={`https://explorer.solana.com/address/${mintResult.badge_mint}?cluster=devnet`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: "var(--green-neon)", fontSize: ".82rem", textDecoration: "underline" }}
+                  >
+                    View on Solana Explorer ↗
+                  </a>
                 </div>
               )}
 
@@ -172,6 +175,16 @@ export function BadgeModal({ onClose, goLaunch }: { onClose: () => void; goLaunc
                   <div className="badge-modal-since">
                     Since {new Date(badge!.minted_at).toLocaleDateString()}
                   </div>
+                  {badge?.badge_mint && (
+                    <a
+                      href={`https://explorer.solana.com/address/${badge.badge_mint}?cluster=devnet`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "var(--green-neon)", fontSize: ".78rem", display: "block", marginTop: ".4rem", textDecoration: "underline" }}
+                    >
+                      View on Solana Explorer ↗
+                    </a>
+                  )}
                 </div>
               )}
 
@@ -235,6 +248,7 @@ export function BadgeModal({ onClose, goLaunch }: { onClose: () => void; goLaunc
                     <div>Element: <b>{preview.element}</b></div>
                     <div>Price: <b style={{ color: "var(--green-neon)" }}>0.2 SOL</b></div>
                     <div style={{ fontSize: ".8rem", color: "var(--muted)", marginTop: ".4rem" }}>
+                      A Metaplex NFT will be minted on Solana devnet and visible in Phantom.
                       This action is irreversible. A 30-day cooldown applies if you sell the badge.
                     </div>
                   </div>
@@ -245,7 +259,7 @@ export function BadgeModal({ onClose, goLaunch }: { onClose: () => void; goLaunc
                       disabled={minting}
                       style={{ borderColor: badgeColor, color: badgeColor, flex: 1 }}
                     >
-                      {minting ? "Minting…" : "Confirm & Mint"}
+                      {minting ? "Minting… (sign in Phantom)" : "Confirm & Mint"}
                     </button>
                     <button
                       className="badge-modal-mint-btn"
