@@ -241,6 +241,7 @@ export const launchTokenV2 = async (
     )
     .accounts({
       creator,
+      globalState: findGlobalStateV2Pda()[0],
       feeWallet: FEE_WALLET_PK,
       tokenMetadata: pdas.tokenMetadata,
       mint: mintKp.publicKey,
