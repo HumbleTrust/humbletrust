@@ -50,3 +50,4 @@ Thumbs.db
 *.swp
 *.sec.bak.*
 humbletrust_security_patch*.py
+.vercel

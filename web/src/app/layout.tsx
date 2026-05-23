@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
+import "@solana/wallet-adapter-react-ui/styles.css";
 import "./globals.css";
+import "@/legacy/index.css";
 import { Providers } from "@/components/layout/Providers";
 
 const geist = Geist({

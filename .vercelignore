@@ -1,0 +1,16 @@
+.git
+.vercel
+.anchor
+target
+node_modules
+**/node_modules
+**/.next
+**/dist
+**/build
+**/.cache
+*.tsbuildinfo
+*.sec.bak.*
+*.swp
+.env
+.env.*
+
