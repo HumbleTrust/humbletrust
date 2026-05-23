@@ -359,26 +359,51 @@ export const mintLaunchCertificateV2 = async (
     TOKEN_2022_PROGRAM_ID
   );
 
-  // Build Token-2022 metadata (on-chain, no external hosting needed)
   const certName = tokenName ? `${tokenName} Certificate` : "HumbleTrust Launch Certificate";
   const certSymbol = "CERT";
   const certUri = "https://humbletrust.vercel.app/cert-meta.json";
-  const certMetadata = {
+
+  // ── Tx1: create and initialize the mint ────────────────────────────────────
+  // Allocate ONLY the mint + MetadataPointer extension space here.
+  // Pre-allocating metadata space in the same account causes InitializeMint2 to
+  // see unrecognized trailing bytes and return InvalidAccountData.
+  const mintLen = getMintLen([ExtensionType.MetadataPointer]);
+  const mintRent = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+  const tx1 = new Transaction().add(
+    SystemProgram.createAccount({
+      fromPubkey: creator,
+      newAccountPubkey: certificateMint.publicKey,
+      space: mintLen,
+      lamports: mintRent,
+      programId: TOKEN_2022_PROGRAM_ID,
+    }),
+    createInitializeMetadataPointerInstruction(
+      certificateMint.publicKey,
+      creator,
+      certificateMint.publicKey,
+      TOKEN_2022_PROGRAM_ID
+    ),
+    createInitializeMint2Instruction(certificateMint.publicKey, 0, creator, null, TOKEN_2022_PROGRAM_ID),
+  );
+
+  await provider.sendAndConfirm(tx1, [certificateMint]);
+
+  // ── Tx2: write metadata, create ATA, mint, lock ─────────────────────────
+  // Token-2022 metadata initialize reallocates the mint account in-place.
+  // We must transfer the extra lamports BEFORE calling the instruction so the
+  // account can cover the new rent-exempt minimum.
+  const baseMetadataObj = {
     mint: certificateMint.publicKey,
+    updateAuthority: creator,
     name: certName,
     symbol: certSymbol,
     uri: certUri,
-    additionalMetadata: [
-      ["type", "LaunchCertificate"],
-      ["token", tokenMint.toBase58()],
-      ["protocol", "HumbleTrustV2"],
-    ] as [string, string][],
+    additionalMetadata: [] as [string, string][],
   };
-
-  // Allocate space for: MetadataPointer (fixed) + TokenMetadata (variable)
-  const mintLen = getMintLen([ExtensionType.MetadataPointer]);
-  const metadataLen = TYPE_SIZE + LENGTH_SIZE + packTokenMetadata(certMetadata).length;
-  const mintRent = await connection.getMinimumBalanceForRentExemption(mintLen + metadataLen);
+  const metadataLen = TYPE_SIZE + LENGTH_SIZE + packTokenMetadata(baseMetadataObj).length;
+  const totalRent = await connection.getMinimumBalanceForRentExemption(mintLen + metadataLen);
+  const rentDelta = totalRent - mintRent;
 
   const certificateIx = await program.methods
     .mintLaunchCertificateV2(certificateMint.publicKey)
@@ -392,23 +417,12 @@ export const mintLaunchCertificateV2 = async (
     })
     .instruction();
 
-  const tx = new Transaction().add(
-    SystemProgram.createAccount({
+  const tx2 = new Transaction().add(
+    SystemProgram.transfer({
       fromPubkey: creator,
-      newAccountPubkey: certificateMint.publicKey,
-      space: mintLen + metadataLen,
-      lamports: mintRent,
-      programId: TOKEN_2022_PROGRAM_ID,
+      toPubkey: certificateMint.publicKey,
+      lamports: rentDelta,
     }),
-    // MetadataPointer must be initialized before InitializeMint2
-    createInitializeMetadataPointerInstruction(
-      certificateMint.publicKey,
-      creator,           // update authority
-      certificateMint.publicKey, // metadata lives on the mint itself
-      TOKEN_2022_PROGRAM_ID
-    ),
-    createInitializeMint2Instruction(certificateMint.publicKey, 0, creator, null, TOKEN_2022_PROGRAM_ID),
-    // Write token metadata to the mint account
     createTokenMetadataInstruction({
       programId: TOKEN_2022_PROGRAM_ID,
       metadata: certificateMint.publicKey,
@@ -445,7 +459,7 @@ export const mintLaunchCertificateV2 = async (
     certificateIx
   );
 
-  const signature = await provider.sendAndConfirm(tx, [certificateMint]);
+  const signature = await provider.sendAndConfirm(tx2);
   return {
     signature,
     certificateMint: certificateMint.publicKey,
