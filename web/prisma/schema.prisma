@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id                   String              @id @default(cuid())
+  mintAddress          String              @unique
+  name                 String
+  symbol               String
+  description          String?
+  logoUrl              String?
+  creatorWallet        String
+  totalSupply          BigInt
+  decimals             Int                 @default(9)
+  trustScore           Int                 @default(0)
+  liquidityLocked      Boolean             @default(false)
+  lockDurationSeconds  Int
+  lockUnlockAt         DateTime?
+  vestingEnabled       Boolean             @default(false)
+  creatorAllocationPct Float
+  mintRevoked          Boolean             @default(false)
+  freezeRevoked        Boolean             @default(false)
+  dex                  String              @default("raydium")
+  vaultPda             String?
+  programId            String?
+  status               String              @default("pending")
+  totalInvestedSol     Float               @default(0)
+  holderCount          Int                 @default(0)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  investments          Investment[]
+  scoreHistory         TrustScoreHistory[]
+}
+
+model Investment {
+  id            String   @id @default(cuid())
+  projectId     String
+  walletAddress String
+  amountSol     Float
+  tokenAmount   BigInt
+  txSignature   String   @unique
+  createdAt     DateTime @default(now())
+  project       Project  @relation(fields: [projectId], references: [id])
+}
+
+model TrustScoreHistory {
+  id        String   @id @default(cuid())
+  projectId String
+  score     Int
+  breakdown Json
+  reason    String
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id])
+}
