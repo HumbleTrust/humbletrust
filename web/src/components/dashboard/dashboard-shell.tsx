@@ -9,10 +9,14 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
   ImagePlus,
+  RefreshCw,
   Rocket,
   Search,
   SlidersHorizontal,
+  TrendingUp,
+  X,
 } from "lucide-react";
 import {
   Bar,
@@ -28,7 +32,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -61,6 +65,7 @@ const navItems = [
   { tab: "launch", label: "Launch", icon: Rocket },
   { tab: "portfolio", label: "Portfolio", icon: Briefcase },
   { tab: "analytics", label: "Analytics", icon: BarChart3 },
+  { tab: "market", label: "Market", icon: TrendingUp },
 ] satisfies { tab: DashboardTab; label: string; icon: typeof Search }[];
 
 export function DashboardShell({ initialTab = "explore" }: DashboardShellProps) {
@@ -140,6 +145,7 @@ export function DashboardShell({ initialTab = "explore" }: DashboardShellProps) 
             {activeTab === "launch" ? <LaunchTab /> : null}
             {activeTab === "portfolio" ? <PortfolioTab /> : null}
             {activeTab === "analytics" ? <AnalyticsTab /> : null}
+            {activeTab === "market" ? <MarketTab /> : null}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -1000,3 +1006,348 @@ const tooltipStyle = {
   borderRadius: "8px",
   color: "#F0F4FF",
 };
+
+// ─── Market Tab ───────────────────────────────────────────────────────────────
+
+const POPULAR_ADDRESSES = [
+  "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+  "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm",
+  "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+  "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3",
+  "jtojtomepa8beP8AuQc6eXt5FriJwfFMwt2nCfxKdGS",
+  "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE",
+  "So11111111111111111111111111111111111111112",
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
+  "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs",
+].join(",");
+
+type DexPair = {
+  chainId: string;
+  dexId: string;
+  url: string;
+  pairAddress: string;
+  baseToken: { address: string; name: string; symbol: string };
+  quoteToken: { symbol: string };
+  priceUsd?: string;
+  volume: { h24: number };
+  priceChange: { h24: number };
+  liquidity?: { usd: number };
+  fdv?: number;
+  info?: { imageUrl?: string };
+};
+
+function fmtUsd(n: number) {
+  if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
+  if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
+  if (n >= 1e3) return `$${(n / 1e3).toFixed(1)}K`;
+  return `$${n.toFixed(2)}`;
+}
+
+function fmtPrice(p?: string) {
+  if (!p) return "—";
+  const n = Number(p);
+  if (n >= 1000) return `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  if (n >= 1) return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (n >= 0.01) return `$${n.toFixed(4)}`;
+  if (n >= 0.0001) return `$${n.toFixed(6)}`;
+  return `$${n.toExponential(3)}`;
+}
+
+function dedupe(pairs: DexPair[]) {
+  const best = new Map<string, DexPair>();
+  for (const p of pairs) {
+    const k = p.baseToken.address;
+    if (!best.has(k) || (p.volume?.h24 ?? 0) > (best.get(k)!.volume?.h24 ?? 0)) best.set(k, p);
+  }
+  return Array.from(best.values()).sort((a, b) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0));
+}
+
+function MarketTab() {
+  const [pairs, setPairs] = useState<DexPair[]>([]);
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [selected, setSelected] = useState<DexPair | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<"popular" | "search">("popular");
+  const abortRef = useRef<AbortController | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelPending = () => {
+    abortRef.current?.abort();
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  };
+
+  const fetchPopular = useCallback(async () => {
+    cancelPending();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setBusy(true);
+    setError(null);
+    setMode("popular");
+    try {
+      const res = await fetch(
+        `https://api.dexscreener.com/latest/dex/tokens/${POPULAR_ADDRESSES}`,
+        { signal: ctrl.signal },
+      );
+      const data = await res.json();
+      const sol = ((data.pairs ?? []) as DexPair[]).filter((p) => p.chainId === "solana");
+      setPairs(dedupe(sol).slice(0, 24));
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name !== "AbortError")
+        setError("DexScreener unavailable. Try again later.");
+    } finally {
+      if (!ctrl.signal.aborted) setBusy(false);
+    }
+  }, []);
+
+  const fetchSearch = useCallback(async (q: string) => {
+    if (!q.trim()) return;
+    cancelPending();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setBusy(true);
+    setError(null);
+    setMode("search");
+    try {
+      const res = await fetch(
+        `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(q)}`,
+        { signal: ctrl.signal },
+      );
+      const data = await res.json();
+      const sol = ((data.pairs ?? []) as DexPair[]).filter((p) => p.chainId === "solana");
+      setPairs(dedupe(sol).slice(0, 24));
+      if (sol.length === 0) setError(`No Solana results for "${q}"`);
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name !== "AbortError")
+        setError("Search failed. Try again.");
+    } finally {
+      if (!ctrl.signal.aborted) setBusy(false);
+    }
+  }, []);
+
+  const handleQueryChange = (val: string) => {
+    setQuery(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (val.trim().length >= 2) {
+      debounceRef.current = setTimeout(() => void fetchSearch(val), 500);
+    }
+  };
+
+  useEffect(() => {
+    void fetchPopular();
+    return cancelPending;
+  }, [fetchPopular]);
+
+  return (
+    <section>
+      <DashboardHeader
+        eyebrow="Market Watch · Mainnet"
+        title="Solana live market."
+        copy="Real tokens · DexScreener data · Live charts. Monitor only — your tokens are on devnet."
+      />
+
+      {/* Search bar */}
+      <form
+        className="mt-8 flex flex-col gap-3 rounded-lg border border-border-subtle bg-bg-surface p-3 md:flex-row md:items-center"
+        onSubmit={(e) => { e.preventDefault(); void fetchSearch(query); }}
+      >
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+          <Input
+            value={query}
+            onChange={(e) => handleQueryChange(e.target.value)}
+            placeholder="Token name, symbol, or address…"
+            className="pl-10"
+          />
+        </div>
+        <div className="flex gap-2">
+          <Button type="submit" disabled={busy} icon={<Search className="h-4 w-4" />}>
+            Search
+          </Button>
+          <Button
+            type="button"
+            variant={mode === "popular" ? "primary" : "outline"}
+            disabled={busy}
+            icon={<TrendingUp className="h-4 w-4" />}
+            onClick={() => { setQuery(""); void fetchPopular(); }}
+          >
+            Popular
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={busy}
+            onClick={() => mode === "popular" ? fetchPopular() : fetchSearch(query)}
+          >
+            <RefreshCw className={cn("h-4 w-4", busy && "animate-spin")} />
+          </Button>
+        </div>
+      </form>
+
+      {error && (
+        <Card variant="glass" className="mt-4 p-4 text-sm text-danger">
+          {error}
+        </Card>
+      )}
+
+      {/* Chart modal */}
+      {selected ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => setSelected(null)}
+        >
+          <div
+            className="flex w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-border-subtle bg-bg-surface shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="flex items-center justify-between border-b border-border-subtle p-4">
+              <div className="flex items-center gap-3">
+                <TrendingUp className="h-4 w-4 text-primary" />
+                <span className="font-semibold">
+                  {selected.baseToken.name}
+                  <span className="ml-1 text-text-muted font-normal">/ {selected.quoteToken.symbol}</span>
+                </span>
+                <span className="rounded border border-border-subtle bg-bg-elevated px-2 py-0.5 font-mono text-[10px] uppercase text-text-muted">
+                  {selected.dexId}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={selected.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 rounded border border-primary/30 bg-primary/10 px-3 py-1 text-xs text-primary hover:bg-primary/20"
+                >
+                  DexScreener <ExternalLink className="ml-1 h-3 w-3" />
+                </a>
+                <button
+                  onClick={() => setSelected(null)}
+                  className="grid h-8 w-8 place-items-center rounded border border-border-subtle text-text-muted hover:text-text-primary"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            {/* Price row */}
+            <div className="flex flex-wrap items-center gap-4 border-b border-border-subtle px-4 py-3">
+              <span className="font-geist text-2xl font-bold">{fmtPrice(selected.priceUsd)}</span>
+              {(() => {
+                const c = selected.priceChange?.h24 ?? 0;
+                const col = c > 0 ? "text-primary" : c < 0 ? "text-danger" : "text-text-muted";
+                return (
+                  <span className={cn("font-mono text-sm font-bold", col)}>
+                    {c > 0 ? "▲" : c < 0 ? "▼" : "–"} {Math.abs(c).toFixed(2)}%
+                  </span>
+                );
+              })()}
+              <span className="font-mono text-xs text-text-muted">
+                Vol 24h: {fmtUsd(selected.volume?.h24 ?? 0)}
+              </span>
+              <span className="font-mono text-xs text-text-muted">
+                Liq: {fmtUsd(selected.liquidity?.usd ?? 0)}
+              </span>
+              {selected.fdv ? (
+                <span className="font-mono text-xs text-text-muted">FDV: {fmtUsd(selected.fdv)}</span>
+              ) : null}
+            </div>
+            <iframe
+              src={`${selected.url}?embed=1&theme=dark&info=0&trades=1`}
+              className="h-[480px] w-full border-0"
+              title={`${selected.baseToken.symbol} chart`}
+              sandbox="allow-scripts allow-same-origin allow-popups"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {/* States */}
+      {pairs.length === 0 && busy && (
+        <div className="mt-10 grid place-items-center">
+          <div className="text-center text-text-muted">
+            <RefreshCw className="mx-auto h-8 w-8 animate-spin text-primary" />
+            <p className="mt-3">Loading market data…</p>
+          </div>
+        </div>
+      )}
+      {pairs.length === 0 && !busy && !error && (
+        <Card variant="glass" className="mt-6 grid min-h-60 place-items-center text-center">
+          <div>
+            <TrendingUp className="mx-auto h-8 w-8 text-primary" />
+            <h3 className="mt-3 font-geist text-xl font-semibold">No results</h3>
+            <p className="mt-1 text-text-muted">Try a different query.</p>
+          </div>
+        </Card>
+      )}
+
+      {/* Token grid */}
+      {pairs.length > 0 && (
+        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {pairs.map((pair) => {
+            const change = pair.priceChange?.h24 ?? 0;
+            const positive = change > 0;
+            const negative = change < 0;
+            const initials = pair.baseToken.symbol.slice(0, 2).toUpperCase();
+            return (
+              <button
+                key={pair.pairAddress}
+                onClick={() => setSelected(pair)}
+                className="group rounded-lg border border-border-subtle bg-bg-surface p-4 text-left transition hover:border-primary/30 hover:shadow-[0_0_24px_rgba(0,255,178,0.08)]"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-primary/10 font-mono text-sm font-bold text-primary">
+                    <span>{initials}</span>
+                    {pair.info?.imageUrl ? (
+                      <img
+                        src={pair.info.imageUrl}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover"
+                        onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
+                      />
+                    ) : null}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold truncate">{pair.baseToken.symbol}</p>
+                    <p className="text-xs text-text-muted truncate">{pair.baseToken.name} · {pair.dexId}</p>
+                  </div>
+                  <span
+                    className={cn(
+                      "rounded-full border px-2 py-0.5 font-mono text-xs font-bold",
+                      positive
+                        ? "border-primary/20 bg-primary/10 text-primary"
+                        : negative
+                          ? "border-danger/20 bg-danger/10 text-danger"
+                          : "border-border-subtle text-text-muted",
+                    )}
+                  >
+                    {positive ? "▲" : negative ? "▼" : "–"} {Math.abs(change).toFixed(2)}%
+                  </span>
+                </div>
+                <p className="mt-3 font-geist text-xl font-bold">{fmtPrice(pair.priceUsd)}</p>
+                <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <p className="text-text-muted">Vol 24h</p>
+                    <p className="font-mono font-semibold">{fmtUsd(pair.volume?.h24 ?? 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-text-muted">Liquidity</p>
+                    <p className="font-mono font-semibold">{fmtUsd(pair.liquidity?.usd ?? 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-text-muted">FDV</p>
+                    <p className="font-mono font-semibold">{pair.fdv ? fmtUsd(pair.fdv) : "—"}</p>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center gap-1 text-xs text-text-muted group-hover:text-primary">
+                  <TrendingUp className="h-3 w-3" /> Live chart
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
