@@ -7,7 +7,7 @@ export type TrustScoreLabel =
 
 export type RiskFilter = "all" | "verified" | "safe" | "moderate" | "risky";
 
-export type DashboardTab = "explore" | "launch" | "portfolio" | "analytics" | "market";
+export type DashboardTab = "explore" | "launch" | "portfolio" | "analytics" | "market" | "trade" | "nft";
 
 export type DexChoice = "raydium" | "orca";
 

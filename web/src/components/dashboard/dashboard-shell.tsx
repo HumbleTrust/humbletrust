@@ -4,6 +4,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  ArrowDownUp,
+  Award,
   BarChart3,
   Briefcase,
   Check,
@@ -11,12 +13,16 @@ import {
   ChevronRight,
   ExternalLink,
   ImagePlus,
+  Info,
   RefreshCw,
   Rocket,
   Search,
+  Settings2,
   SlidersHorizontal,
+  Sparkles,
   TrendingUp,
   X,
+  Zap,
 } from "lucide-react";
 import {
   Bar,
@@ -66,6 +72,8 @@ const navItems = [
   { tab: "portfolio", label: "Portfolio", icon: Briefcase },
   { tab: "analytics", label: "Analytics", icon: BarChart3 },
   { tab: "market", label: "Market", icon: TrendingUp },
+  { tab: "trade", label: "Trade", icon: ArrowDownUp },
+  { tab: "nft", label: "Badges", icon: Award },
 ] satisfies { tab: DashboardTab; label: string; icon: typeof Search }[];
 
 export function DashboardShell({ initialTab = "explore" }: DashboardShellProps) {
@@ -146,6 +154,8 @@ export function DashboardShell({ initialTab = "explore" }: DashboardShellProps) 
             {activeTab === "portfolio" ? <PortfolioTab /> : null}
             {activeTab === "analytics" ? <AnalyticsTab /> : null}
             {activeTab === "market" ? <MarketTab /> : null}
+            {activeTab === "trade" ? <TradeTab /> : null}
+            {activeTab === "nft" ? <NftTab /> : null}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -1348,6 +1358,575 @@ function MarketTab() {
           })}
         </div>
       )}
+    </section>
+  );
+}
+
+// ─── Trade Tab ────────────────────────────────────────────────────────────────
+
+const CURVE_FEE = 0.01;
+const INITIAL_TOKEN_RESERVE = 350_000_000;
+const INITIAL_SOL_RESERVE = 0.5;
+
+function calcBuy(solIn: number, solReserve: number, tokenReserve: number) {
+  const k = solReserve * tokenReserve;
+  const newSol = solReserve + solIn * (1 - CURVE_FEE);
+  const newToken = k / newSol;
+  return Math.max(0, tokenReserve - newToken);
+}
+
+function calcSell(tokensIn: number, solReserve: number, tokenReserve: number) {
+  const k = solReserve * tokenReserve;
+  const newToken = tokenReserve + tokensIn;
+  const newSol = k / newToken;
+  return Math.max(0, solReserve - newSol) * (1 - CURVE_FEE);
+}
+
+function spotPrice(solReserve: number, tokenReserve: number) {
+  return solReserve / tokenReserve;
+}
+
+function TradeTab() {
+  const { connected } = useWallet();
+  const { data } = useProjects();
+  const projects = data?.projects ?? mockProjects;
+
+  const [side, setSide] = useState<"buy" | "sell">("buy");
+  const [selectedId, setSelectedId] = useState(projects[0]?.id ?? "");
+  const [amount, setAmount] = useState("1");
+  const [slippage, setSlippage] = useState(1);
+  const [showSlippage, setShowSlippage] = useState(false);
+
+  const project = projects.find((p) => p.id === selectedId) ?? projects[0];
+
+  const solReserve = INITIAL_SOL_RESERVE + (project?.totalInvestedSol ?? 0) * 0.6;
+  const tokenReserve = INITIAL_TOKEN_RESERVE - calcBuy(project?.totalInvestedSol ?? 0, INITIAL_SOL_RESERVE, INITIAL_TOKEN_RESERVE);
+  const price = spotPrice(solReserve, tokenReserve);
+
+  const amountNum = parseFloat(amount) || 0;
+  const outputAmount = side === "buy"
+    ? calcBuy(amountNum, solReserve, tokenReserve)
+    : calcSell(amountNum, solReserve, tokenReserve);
+  const priceImpact = amountNum > 0
+    ? Math.abs((outputAmount / (amountNum / price) - 1) * 100)
+    : 0;
+  const minReceived = side === "buy"
+    ? outputAmount * (1 - slippage / 100)
+    : outputAmount * (1 - slippage / 100);
+
+  const fmtTokens = (n: number) =>
+    n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(2)}K` : n.toFixed(2);
+
+  return (
+    <section>
+      <DashboardHeader
+        eyebrow="Trade"
+        title="Buy and sell on the bonding curve."
+        copy="Devnet · Prices are simulated from on-chain reserves. Connect your wallet to execute real trades."
+      />
+
+      <div className="mt-8 grid gap-6 xl:grid-cols-[1fr_380px]">
+        {/* Token selector + stats */}
+        <div className="space-y-4">
+          <Card variant="glass" className="p-5">
+            <h3 className="mb-3 font-geist text-lg font-semibold">Select token</h3>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {projects.slice(0, 6).map((p) => {
+                const active = p.id === selectedId;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => setSelectedId(p.id)}
+                    className={cn(
+                      "rounded-lg border p-3 text-left transition",
+                      active
+                        ? "border-primary/50 bg-primary/10"
+                        : "border-border-subtle bg-bg-elevated/40 hover:border-primary/20",
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="grid h-8 w-8 place-items-center rounded-full bg-primary/15 font-mono text-xs font-bold text-primary">
+                        {p.symbol.slice(0, 2)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold">{p.symbol}</p>
+                        <p className="text-xs text-text-muted">{p.name}</p>
+                      </div>
+                    </div>
+                    <p className={cn("mt-2 font-mono text-xs", active ? "text-primary" : "text-text-muted")}>
+                      TrustScore {p.trustScore}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+
+          {/* Market stats */}
+          {project ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Metric label="Spot Price" value={`${(price * 1000).toFixed(4)}m◎`} />
+              <Metric label="SOL Reserve" value={`◎ ${solReserve.toFixed(2)}`} />
+              <Metric label="TVL" value={`◎ ${formatSol(project.totalInvestedSol)}`} />
+              <Metric label="TrustScore" value={String(project.trustScore)} />
+            </div>
+          ) : null}
+
+          {/* Bonding curve visual */}
+          <Card variant="glass" className="p-5">
+            <h3 className="mb-4 font-geist text-lg font-semibold">Bonding curve</h3>
+            <div className="relative h-40 w-full overflow-hidden rounded-lg bg-bg-elevated/60">
+              <svg viewBox="0 0 300 120" className="h-full w-full" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="curveGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#00FFB2" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="#00FFB2" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <path
+                  d="M0 120 C30 115 60 100 100 70 C140 40 180 20 220 10 C250 4 280 2 300 1 L300 120 Z"
+                  fill="url(#curveGrad)"
+                />
+                <path
+                  d="M0 120 C30 115 60 100 100 70 C140 40 180 20 220 10 C250 4 280 2 300 1"
+                  fill="none"
+                  stroke="#00FFB2"
+                  strokeWidth="2"
+                />
+                {/* Current position dot */}
+                <circle cx={Math.min(280, 20 + (project?.totalInvestedSol ?? 0) * 3)} cy={Math.max(5, 118 - (project?.totalInvestedSol ?? 0) * 3)} r="5" fill="#00FFB2" />
+              </svg>
+              <div className="absolute bottom-2 left-3 font-mono text-xs text-text-muted">SOL in →</div>
+              <div className="absolute left-2 top-2 rotate-[-90deg] font-mono text-xs text-text-muted">Price ↑</div>
+            </div>
+            <p className="mt-2 text-xs text-text-muted">
+              Price increases as more SOL enters the pool. The curve is constant-product (x·y=k).
+            </p>
+          </Card>
+        </div>
+
+        {/* Trade panel */}
+        <aside className="xl:sticky xl:top-6 xl:self-start">
+          <Card variant="glass" className="p-5">
+            {/* Buy / Sell toggle */}
+            <div className="mb-5 grid grid-cols-2 rounded-lg border border-border-subtle bg-bg-elevated/40 p-1">
+              {(["buy", "sell"] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setSide(s)}
+                  className={cn(
+                    "rounded-md py-2 text-sm font-semibold capitalize transition",
+                    side === s
+                      ? s === "buy" ? "bg-primary text-bg-base" : "bg-danger text-white"
+                      : "text-text-secondary hover:text-text-primary",
+                  )}
+                >
+                  {s === "buy" ? "▲ Buy" : "▼ Sell"}
+                </button>
+              ))}
+            </div>
+
+            {/* Amount */}
+            <div className="space-y-3">
+              <div>
+                <div className="mb-1.5 flex justify-between text-xs text-text-muted">
+                  <span>You pay</span>
+                  <span>{side === "buy" ? "SOL" : project?.symbol}</span>
+                </div>
+                <div className="flex items-center gap-2 rounded-lg border border-border-subtle bg-bg-elevated/60 px-3 py-2.5">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    className="flex-1 bg-transparent font-mono text-lg text-text-primary outline-none"
+                    placeholder="0.00"
+                  />
+                  <span className="font-mono text-sm text-primary">
+                    {side === "buy" ? "◎" : project?.symbol}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex justify-center">
+                <button
+                  onClick={() => setSide(side === "buy" ? "sell" : "buy")}
+                  className="grid h-8 w-8 place-items-center rounded-full border border-border-subtle bg-bg-elevated text-text-muted transition hover:border-primary/40 hover:text-primary"
+                >
+                  <ArrowDownUp className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <div>
+                <div className="mb-1.5 flex justify-between text-xs text-text-muted">
+                  <span>You receive</span>
+                  <span>{side === "buy" ? project?.symbol : "SOL"}</span>
+                </div>
+                <div className="flex items-center gap-2 rounded-lg border border-border-subtle bg-bg-elevated/60 px-3 py-2.5">
+                  <span className="flex-1 font-mono text-lg text-text-primary">
+                    {amountNum > 0
+                      ? side === "buy"
+                        ? fmtTokens(outputAmount)
+                        : outputAmount.toFixed(4)
+                      : "—"}
+                  </span>
+                  <span className="font-mono text-sm text-text-muted">
+                    {side === "buy" ? project?.symbol : "◎"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Trade details */}
+            {amountNum > 0 && (
+              <div className="mt-4 space-y-2 rounded-lg border border-border-subtle bg-bg-elevated/40 p-3 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-text-muted">Price impact</span>
+                  <span className={priceImpact > 5 ? "text-danger" : priceImpact > 2 ? "text-warning" : "text-primary"}>
+                    {priceImpact.toFixed(2)}%
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-text-muted">Min received ({slippage}%)</span>
+                  <span className="font-mono">
+                    {side === "buy" ? fmtTokens(minReceived) : minReceived.toFixed(4)}{" "}
+                    {side === "buy" ? project?.symbol : "◎"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-text-muted">Protocol fee (1%)</span>
+                  <span className="font-mono">
+                    {(amountNum * 0.01).toFixed(4)} {side === "buy" ? "◎" : project?.symbol}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Slippage */}
+            <div className="mt-3">
+              <button
+                onClick={() => setShowSlippage(!showSlippage)}
+                className="flex items-center gap-1 text-xs text-text-muted hover:text-text-primary"
+              >
+                <Settings2 className="h-3 w-3" /> Slippage: {slippage}%
+              </button>
+              {showSlippage && (
+                <div className="mt-2 flex gap-2">
+                  {[0.5, 1, 2, 5].map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setSlippage(s)}
+                      className={cn(
+                        "rounded border px-2 py-1 text-xs transition",
+                        slippage === s
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border-subtle text-text-muted hover:border-primary/40",
+                      )}
+                    >
+                      {s}%
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* CTA */}
+            <div className="mt-5">
+              {connected ? (
+                <Button size="lg" className="w-full" icon={<Zap className="h-4 w-4" />}>
+                  {side === "buy" ? "Buy" : "Sell"} {project?.symbol}
+                </Button>
+              ) : (
+                <WalletButton className="w-full" />
+              )}
+              <div className="mt-3 flex items-start gap-2 rounded-lg border border-primary/15 bg-primary/5 p-3 text-xs text-text-secondary">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                Devnet only. Trades execute against the on-chain bonding curve program.
+                Connect Phantom or Solflare configured for Devnet.
+              </div>
+            </div>
+          </Card>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+// ─── NFT / Zodiac Badges Tab ──────────────────────────────────────────────────
+
+const ZODIAC_SIGNS = [
+  { name: "Aries",       symbol: "♈", element: "Fire",  color: "#FF4444", season: "21 Mar – 19 Apr" },
+  { name: "Taurus",      symbol: "♉", element: "Earth", color: "#00FFB2", season: "20 Apr – 20 May" },
+  { name: "Gemini",      symbol: "♊", element: "Air",   color: "#00D4FF", season: "21 May – 20 Jun" },
+  { name: "Cancer",      symbol: "♋", element: "Water", color: "#3D7FFF", season: "21 Jun – 22 Jul" },
+  { name: "Leo",         symbol: "♌", element: "Fire",  color: "#FF7A00", season: "23 Jul – 22 Aug" },
+  { name: "Virgo",       symbol: "♍", element: "Earth", color: "#00FFB2", season: "23 Aug – 22 Sep" },
+  { name: "Libra",       symbol: "♎", element: "Air",   color: "#7B4FFF", season: "23 Sep – 22 Oct" },
+  { name: "Scorpio",     symbol: "♏", element: "Water", color: "#FF3C6B", season: "23 Oct – 21 Nov" },
+  { name: "Sagittarius", symbol: "♐", element: "Fire",  color: "#FFB800", season: "22 Nov – 21 Dec" },
+  { name: "Capricorn",   symbol: "♑", element: "Earth", color: "#00D4FF", season: "22 Dec – 19 Jan" },
+  { name: "Aquarius",    symbol: "♒", element: "Air",   color: "#7B4FFF", season: "20 Jan – 18 Feb" },
+  { name: "Pisces",      symbol: "♓", element: "Water", color: "#3D7FFF", season: "19 Feb – 20 Mar" },
+] as const;
+
+const HOW_IT_WORKS = [
+  {
+    num: "01",
+    title: "Launch with Premium tier",
+    body: "Select Premium when launching a token on HumbleTrust. Only Premium creators are eligible to mint a Zodiac Badge.",
+  },
+  {
+    num: "02",
+    title: "Zodiac assigned by launch date",
+    body: "Your zodiac sign is locked to the calendar date of your token launch. The aura color is hashed from your wallet address.",
+  },
+  {
+    num: "03",
+    title: "Unique NFT minted on-chain",
+    body: "A Token-2022 NFT is created on Solana with your shield, zodiac glyph, element sigil and aura encoded as on-chain metadata.",
+  },
+];
+
+const FAQ_ITEMS = [
+  {
+    q: "Can I sell my Zodiac Badge?",
+    a: "Yes. The badge is a standard Token-2022 NFT and can be listed on any compatible marketplace. After selling, a 30-day cooldown applies before you can mint again.",
+  },
+  {
+    q: "Can I own more than one badge?",
+    a: "No. Each wallet can hold one active Zodiac Badge at a time. Selling your badge resets eligibility after the 30-day cooldown.",
+  },
+  {
+    q: "Is it tradeable on Magic Eden?",
+    a: "Yes. Zodiac Badges are compatible with Magic Eden, Tensor, and other Solana NFT marketplaces that support Token-2022.",
+  },
+];
+
+function NftTab() {
+  const { connected } = useWallet();
+  const [minting, setMinting] = useState(false);
+  const [minted, setMinted] = useState(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  const today = new Date();
+  const month = today.getMonth();
+  const day = today.getDate();
+  const signIndex =
+    (month === 2 && day >= 21) || (month === 3 && day <= 19) ? 0 :
+    (month === 3 && day >= 20) || (month === 4 && day <= 20) ? 1 :
+    (month === 4 && day >= 21) || (month === 5 && day <= 20) ? 2 :
+    (month === 5 && day >= 21) || (month === 6 && day <= 22) ? 3 :
+    (month === 6 && day >= 23) || (month === 7 && day <= 22) ? 4 :
+    (month === 7 && day >= 23) || (month === 8 && day <= 22) ? 5 :
+    (month === 8 && day >= 23) || (month === 9 && day <= 22) ? 6 :
+    (month === 9 && day >= 23) || (month === 10 && day <= 21) ? 7 :
+    (month === 10 && day >= 22) || (month === 11 && day <= 21) ? 8 :
+    (month === 11 && day >= 22) || (month === 0 && day <= 19) ? 9 :
+    (month === 0 && day >= 20) || (month === 1 && day <= 18) ? 10 : 11;
+
+  const currentSign = ZODIAC_SIGNS[signIndex];
+
+  async function handleMint() {
+    if (!connected) return;
+    setMinting(true);
+    await new Promise((r) => setTimeout(r, 2000));
+    setMinting(false);
+    setMinted(true);
+  }
+
+  return (
+    <section>
+      <DashboardHeader
+        eyebrow="Zodiac Badge NFT"
+        title="Your on-chain identity, written in the stars."
+        copy="Zodiac Badge NFTs are unique, on-chain shields awarded exclusively to Premium token creators on HumbleTrust."
+      />
+
+      {/* Hero badge preview */}
+      <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-4">
+          {/* Today's sign */}
+          <Card variant="glass" className="p-6">
+            <div className="flex items-center gap-3">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <span className="font-mono text-xs uppercase tracking-widest text-primary">Today's sign</span>
+            </div>
+            <div className="mt-4 flex items-center gap-5">
+              <div
+                className="grid h-20 w-20 shrink-0 place-items-center rounded-xl border text-5xl"
+                style={{
+                  borderColor: `${currentSign.color}40`,
+                  background: `${currentSign.color}10`,
+                  color: currentSign.color,
+                  textShadow: `0 0 30px ${currentSign.color}80`,
+                }}
+              >
+                {currentSign.symbol}
+              </div>
+              <div>
+                <h3 className="font-geist text-3xl font-bold" style={{ color: currentSign.color }}>
+                  {currentSign.name}
+                </h3>
+                <p className="mt-1 text-text-secondary">{currentSign.element} · {currentSign.season}</p>
+                <p className="mt-2 font-mono text-xs text-text-muted">
+                  Token launched today → {currentSign.name} badge
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          {/* All 12 signs grid */}
+          <Card variant="glass" className="p-5">
+            <h3 className="mb-4 font-geist text-lg font-semibold">All 12 Signs</h3>
+            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+              {ZODIAC_SIGNS.map((sign) => (
+                <div
+                  key={sign.name}
+                  className="flex flex-col items-center gap-1.5 rounded-lg border p-3 text-center transition hover:scale-105"
+                  style={{
+                    borderColor: `${sign.color}30`,
+                    background: `${sign.color}08`,
+                  }}
+                >
+                  <span
+                    className="text-3xl"
+                    style={{ color: sign.color, textShadow: `0 0 20px ${sign.color}60` }}
+                  >
+                    {sign.symbol}
+                  </span>
+                  <p className="text-xs font-semibold">{sign.name}</p>
+                  <p className="text-[10px] text-text-muted">{sign.element}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          {/* How it works */}
+          <Card variant="glass" className="p-5">
+            <h3 className="mb-4 font-geist text-lg font-semibold">How it works</h3>
+            <div className="space-y-4">
+              {HOW_IT_WORKS.map((step) => (
+                <div key={step.num} className="flex gap-4">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-primary/25 bg-primary/10 font-mono text-sm font-bold text-primary">
+                    {step.num}
+                  </div>
+                  <div>
+                    <p className="font-semibold">{step.title}</p>
+                    <p className="mt-1 text-sm text-text-secondary">{step.body}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          {/* FAQ */}
+          <Card variant="glass" className="p-5">
+            <h3 className="mb-4 font-geist text-lg font-semibold">FAQ</h3>
+            <div className="space-y-2">
+              {FAQ_ITEMS.map((item, i) => (
+                <div key={i} className="rounded-lg border border-border-subtle overflow-hidden">
+                  <button
+                    className="flex w-full items-center justify-between p-4 text-left text-sm font-medium hover:bg-bg-elevated/40"
+                    onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                  >
+                    {item.q}
+                    <span className="ml-3 text-primary">{openFaq === i ? "−" : "+"}</span>
+                  </button>
+                  {openFaq === i && (
+                    <div className="border-t border-border-subtle bg-bg-elevated/30 px-4 py-3 text-sm text-text-secondary">
+                      {item.a}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+
+        {/* Mint panel */}
+        <aside className="lg:sticky lg:top-6 lg:self-start">
+          <Card variant="glass" className="p-5">
+            {minted ? (
+              <div className="grid min-h-64 place-items-center text-center">
+                <div>
+                  <div
+                    className="mx-auto mb-4 grid h-20 w-20 place-items-center rounded-xl text-5xl"
+                    style={{
+                      background: `${currentSign.color}15`,
+                      color: currentSign.color,
+                      textShadow: `0 0 30px ${currentSign.color}`,
+                    }}
+                  >
+                    {currentSign.symbol}
+                  </div>
+                  <h3 className="font-geist text-xl font-bold text-primary">Badge minted!</h3>
+                  <p className="mt-2 text-sm text-text-secondary">
+                    Your {currentSign.name} badge is on-chain.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="mb-5">
+                  <p className="font-mono text-xs uppercase tracking-widest text-text-muted">Your badge</p>
+                  <div
+                    className="mt-3 grid h-36 w-36 mx-auto place-items-center rounded-xl border text-7xl"
+                    style={{
+                      borderColor: `${currentSign.color}40`,
+                      background: `linear-gradient(135deg, ${currentSign.color}15, ${currentSign.color}05)`,
+                      color: currentSign.color,
+                      textShadow: `0 0 40px ${currentSign.color}80`,
+                      boxShadow: `0 0 40px ${currentSign.color}20`,
+                    }}
+                  >
+                    {currentSign.symbol}
+                  </div>
+                  <p className="mt-3 text-center font-geist text-xl font-bold" style={{ color: currentSign.color }}>
+                    {currentSign.name}
+                  </p>
+                  <p className="text-center text-sm text-text-muted">{currentSign.element} · {currentSign.season}</p>
+                </div>
+
+                <div className="space-y-2 rounded-lg border border-border-subtle bg-bg-elevated/40 p-3 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-text-muted">Standard</span>
+                    <span>Token-2022 NFT</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-text-muted">Network</span>
+                    <span className="text-primary">Devnet</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-text-muted">Eligibility</span>
+                    <span>Premium launches only</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-text-muted">Mint fee</span>
+                    <span>~0.01 SOL</span>
+                  </div>
+                </div>
+
+                <div className="mt-5">
+                  {connected ? (
+                    <Button
+                      size="lg"
+                      className="w-full"
+                      loading={minting}
+                      onClick={handleMint}
+                      icon={<Award className="h-4 w-4" />}
+                    >
+                      Mint {currentSign.name} Badge
+                    </Button>
+                  ) : (
+                    <WalletButton className="w-full" />
+                  )}
+                </div>
+              </>
+            )}
+          </Card>
+        </aside>
+      </div>
     </section>
   );
 }
