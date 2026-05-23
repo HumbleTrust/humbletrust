@@ -1,0 +1,9 @@
+{
+  "buildCommand": "npm --prefix app install && npm --prefix app run build",
+  "outputDirectory": "app/dist",
+  "installCommand": "echo skip-root-install",
+  "framework": null,
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/" }
+  ]
+}
