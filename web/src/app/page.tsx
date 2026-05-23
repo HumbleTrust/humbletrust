@@ -1,5 +1,5 @@
-import { LegacyClientApp } from "@/legacy/LegacyClientApp";
+import { LandingPage } from "@/components/landing/landing-page";
 
-export default function LandingPage() {
-  return <LegacyClientApp />;
+export default function Page() {
+  return <LandingPage />;
 }

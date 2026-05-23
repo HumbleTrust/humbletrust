@@ -1,9 +1,37 @@
-import { NextRequest, NextResponse } from "next/server";
-import { MOCK_PROJECTS } from "@/lib/mockData";
+import { NextResponse, type NextRequest } from "next/server";
+import { findProject } from "@/lib/mock-data";
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const project = MOCK_PROJECTS.find((p) => p.id === id);
-  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(project);
+type RouteContext = {
+  params: {
+    id: string;
+  };
+};
+
+export function GET(_request: NextRequest, { params }: RouteContext) {
+  const project = findProject(params.id);
+
+  if (!project) {
+    return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ project });
+}
+
+export async function PATCH(request: NextRequest, { params }: RouteContext) {
+  const project = findProject(params.id);
+
+  if (!project) {
+    return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  }
+
+  const body = (await request.json()) as Partial<typeof project>;
+
+  return NextResponse.json({
+    project: {
+      ...project,
+      ...body,
+      id: project.id,
+      updatedAt: new Date().toISOString(),
+    },
+  });
 }

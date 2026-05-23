@@ -1,5 +1,5 @@
-import { LegacyClientApp } from "@/legacy/LegacyClientApp";
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 
 export default function AppPage() {
-  return <LegacyClientApp initialPage="discover" />;
+  return <DashboardShell initialTab="explore" />;
 }

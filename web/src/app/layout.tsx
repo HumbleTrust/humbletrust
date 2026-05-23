@@ -1,20 +1,13 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Inter } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "@solana/wallet-adapter-react-ui/styles.css";
 import "./globals.css";
-import "@/legacy/index.css";
-import { Providers } from "@/components/layout/Providers";
+import { AppProviders } from "@/components/providers/app-providers";
 
-const geist = Geist({
+const geist = localFont({
+  src: "./fonts/GeistVF.woff",
   variable: "--font-geist",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-mono",
-  subsets: ["latin"],
-  display: "swap",
 });
 
 const inter = Inter({
@@ -23,22 +16,35 @@ const inter = Inter({
   display: "swap",
 });
 
+const jetbrains = JetBrains_Mono({
+  variable: "--font-mono",
+  subsets: ["latin"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "HumbleTrust — Trust Infrastructure for Web3",
+  title: "HumbleTrust - Trust Infrastructure for Web3",
   description:
-    "Accountability enforced by code, not promises. Launch tokens with verifiable on-chain trust signals.",
+    "Launch tokens with liquidity locks, creator vesting, and on-chain TrustScore verification enforced by Solana smart contracts.",
   openGraph: {
     title: "HumbleTrust",
-    description: "Trust Infrastructure for Web3. Built on Solana.",
+    description: "Where trust becomes executable.",
     type: "website",
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <html lang="en" className={`${geist.variable} ${geistMono.variable} ${inter.variable}`}>
-      <body style={{ background: "var(--bg-base)", color: "var(--text-primary)", fontFamily: "var(--font-inter)" }}>
-        <Providers>{children}</Providers>
+    <html lang="en" className="dark">
+      <body className={`${geist.variable} ${inter.variable} ${jetbrains.variable} antialiased`}>
+        <AppProviders>
+          <div className="noise-overlay" />
+          {children}
+        </AppProviders>
       </body>
     </html>
   );
