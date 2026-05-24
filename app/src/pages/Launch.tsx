@@ -262,6 +262,8 @@ export const Launch = () => {
         launchScore: trustScore,
         lockPercent,
         burnOption: burn,
+        tier,
+        logoUri: logoDataUrl || null,
       }).catch(() => { /* API might not be configured yet */ });
 
       if (useV2) {
@@ -284,7 +286,9 @@ export const Launch = () => {
             launchScore: trustScore,
             lockPercent,
             burnOption: burn,
+            tier,
             certificateMint,
+            logoUri: logoDataUrl || null,
           }).catch(() => {});
         }
       }

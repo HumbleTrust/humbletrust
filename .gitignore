@@ -13,6 +13,7 @@ test-ledger/
 !*/package.json
 !*/package-lock.json
 !*/tsconfig.json
+!vercel.json
 !app/public/*.json
 !vercel.json
 !app/public/*.svg

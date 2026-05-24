@@ -1,12 +1,6 @@
 import { NextResponse } from "next/server";
+import { platformStats } from "@/lib/mock-data";
 
-export async function GET() {
-  // Real platform stats (would come from DB/on-chain in production)
-  const stats = {
-    tvl: 31894,
-    projectsLaunched: 10,
-    investorsProtected: 14238,
-    rugsPreventedCount: 0,
-  };
-  return NextResponse.json(stats);
+export function GET() {
+  return NextResponse.json({ stats: platformStats });
 }

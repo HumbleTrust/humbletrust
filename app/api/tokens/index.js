@@ -26,13 +26,14 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === "POST") {
-      const { mint, creator, name, symbol, signature, launchScore, lockPercent, burnOption, certificateMint, tier } = req.body || {};
+      const { mint, creator, name, symbol, signature, launchScore, lockPercent, burnOption, certificateMint, tier, logoUri } = req.body || {};
 
       if (!mint || !creator) return res.status(400).json({ error: "mint and creator required" });
       if (!isValidWallet(mint)) return res.status(400).json({ error: "invalid mint address" });
       if (!isValidWallet(creator)) return res.status(400).json({ error: "invalid creator address" });
       if (name && typeof name === 'string' && name.length > 64) return res.status(400).json({ error: "name too long (max 64)" });
       if (symbol && typeof symbol === 'string' && symbol.length > 10) return res.status(400).json({ error: "symbol too long (max 10)" });
+      if (logoUri && typeof logoUri === 'string' && logoUri.length > 200_000) return res.status(400).json({ error: "logo too large (max 200 KB)" });
 
       const score = Math.min(100, Math.max(0, Number(launchScore) || 0));
       const trustLevel = score >= 85 ? "ELITE" : score >= 70 ? "STRONG" : score >= 40 ? "OK" : "WEAK";
@@ -43,6 +44,7 @@ module.exports = async (req, res) => {
         creator,
         name: name || null,
         symbol: symbol || null,
+        logo_uri: logoUri || null,
         launch_tx: signature || null,
         launch_score: score,
         trust_score: score,
