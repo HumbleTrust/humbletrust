@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, Rocket, Compass, ArrowLeftRight, LineChart,
+  Home, LayoutDashboard, Rocket, Compass, ArrowLeftRight, LineChart,
   Wallet, BarChart2, Award, Settings, Shield,
 } from "lucide-react";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -13,6 +13,7 @@ interface NavigationProps {
 }
 
 const navItems = [
+  { id: "home",       label: "Home",        icon: Home },
   { id: "dashboard",  label: "Dashboard",  icon: LayoutDashboard },
   { id: "launch",     label: "Launch",      icon: Rocket },
   { id: "discover",   label: "Discover",    icon: Compass },
