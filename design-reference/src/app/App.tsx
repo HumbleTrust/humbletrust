@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { WalletProvider } from "../lib/WalletProvider";
 import { HexagonBackground } from "./components/HexagonBackground";
 import { Navigation } from "./components/Navigation";
@@ -16,19 +16,28 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [openMint, setOpenMint] = useState<string | null>(null);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const tab = (e as CustomEvent<string>).detail;
+      if (tab) { setActiveTab(tab); setOpenMint(null); }
+    };
+    window.addEventListener("ht:navigate", handler);
+    return () => window.removeEventListener("ht:navigate", handler);
+  }, []);
+
   const renderPage = () => {
     if (openMint) return <DiscoverPage initialMint={openMint} onBack={() => setOpenMint(null)} />;
     switch (activeTab) {
-      case "dashboard": return <Dashboard />;
+      case "dashboard": return <Dashboard onTabChange={setActiveTab} />;
       case "launch":    return <LaunchPage />;
       case "discover":  return <DiscoverPage onOpenToken={(m) => setOpenMint(m)} />;
-      case "trade":     return <TradePage />;
+      case "trade":     return <TradePage goDiscover={() => setActiveTab("discover")} />;
       case "charts":    return <Charts />;
       case "portfolio": return <Portfolio />;
       case "market":    return <MarketPage />;
-      case "nft":       return <NftPage />;
+      case "nft":       return <NftPage goLaunch={() => setActiveTab("launch")} />;
       case "settings":  return <Settings />;
-      default:          return <Dashboard />;
+      default:          return <Dashboard onTabChange={setActiveTab} />;
     }
   };
 

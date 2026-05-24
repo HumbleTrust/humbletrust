@@ -1,78 +1,133 @@
 import { GlassPanel } from "../GlassPanel";
 import { motion } from "motion/react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid } from "recharts";
-import { TrendingUp, TrendingDown, ExternalLink } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { TrendingUp, ExternalLink, Wallet, RefreshCw } from "lucide-react";
+import { listTokens } from "../../../lib/solana/image";
+
+interface SplToken {
+  mint: string;
+  balance: number;
+  symbol: string;
+  name: string;
+  trustScore?: number;
+}
+
+const COLORS = ["#00FF41", "#B026FF", "#00D4FF", "#FFD700", "#FF7A2F", "#FF3C6B"];
 
 export function Portfolio() {
-  const holdings = [
-    { token: "ETH", icon: "⟠", amount: "2.45", value: "$4,850.00", allocation: 37.4, change24h: 3.45, pnl: "$542.00" },
-    { token: "BTC", icon: "₿", amount: "0.15", value: "$6,300.00", allocation: 48.6, change24h: 2.18, pnl: "$485.00" },
-    { token: "SOL", icon: "◎", amount: "45.2", value: "$1,810.00", allocation: 14.0, change24h: -1.24, pnl: "-$58.00" },
+  const { publicKey, connected } = useWallet();
+  const { connection } = useConnection();
+  const [solBalance, setSolBalance] = useState<number | null>(null);
+  const [splTokens, setSplTokens] = useState<SplToken[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const savedTokens = listTokens();
+
+  const loadPortfolio = useCallback(async () => {
+    if (!publicKey) return;
+    setLoading(true);
+    try {
+      const [balanceLamports, parsedTokenAccounts] = await Promise.all([
+        connection.getBalance(publicKey),
+        connection.getParsedTokenAccountsByOwner(publicKey, { programId: TOKEN_PROGRAM_ID }),
+      ]);
+
+      setSolBalance(balanceLamports / LAMPORTS_PER_SOL);
+
+      const tokens: SplToken[] = [];
+      const seen = new Set<string>();
+      for (const { account } of parsedTokenAccounts.value) {
+        const info = (account.data as any).parsed?.info;
+        const amountInfo = info?.tokenAmount;
+        const mint = info?.mint as string | undefined;
+        if (!mint || !amountInfo || seen.has(mint)) continue;
+        const balance = Number(amountInfo.uiAmountString ?? amountInfo.uiAmount ?? 0);
+        if (balance <= 0) continue;
+        seen.add(mint);
+        const saved = savedTokens.find(t => t.mint === mint);
+        tokens.push({
+          mint, balance,
+          symbol: saved?.symbol || mint.slice(0, 4).toUpperCase(),
+          name: saved?.name || "Unknown Token",
+          trustScore: saved?.trustScore,
+        });
+      }
+      setSplTokens(tokens.sort((a, b) => b.balance - a.balance));
+    } catch (e) {
+      console.error("Portfolio load error", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [publicKey, connection]);
+
+  useEffect(() => {
+    if (connected && publicKey) {
+      void loadPortfolio();
+    } else {
+      setSolBalance(null);
+      setSplTokens([]);
+    }
+  }, [connected, publicKey?.toBase58()]);
+
+  const pieItems = [
+    ...(solBalance !== null && solBalance > 0 ? [{ name: "SOL", value: solBalance }] : []),
+    ...splTokens.slice(0, 5).map((t, i) => ({ name: t.symbol, value: Math.max(0.001, t.balance) })),
   ];
 
-  const pieData = holdings.map(h => ({ name: h.token, value: h.allocation }));
-  const COLORS = ["#00FF41", "#B026FF", "#00D4FF"];
-
-  const performanceData = Array.from({ length: 30 }, (_, i) => ({
-    day: i + 1,
-    value: 10000 + Math.random() * 3000,
-  }));
-
-  const transactions = [
-    { type: "Buy", token: "ETH", amount: "0.5 ETH", value: "$990.00", date: "2024-05-20", hash: "0x1a2b...3c4d" },
-    { type: "Sell", token: "BTC", amount: "0.02 BTC", value: "$840.00", date: "2024-05-19", hash: "0x5e6f...7g8h" },
-    { type: "Swap", token: "SOL → ETH", amount: "10 SOL", value: "$401.20", date: "2024-05-18", hash: "0x9i0j...1k2l" },
-    { type: "Stake", token: "SOL", amount: "20 SOL", value: "$804.00", date: "2024-05-17", hash: "0x3m4n...5o6p" },
-  ];
+  if (!connected) {
+    return (
+      <div className="space-y-6">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          <GlassPanel className="p-12 text-center" glow="green">
+            <Wallet className="w-12 h-12 text-neon-green/40 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-white mb-2">Connect your wallet</h2>
+            <p className="text-white/50 text-sm">Connect your Solana wallet to view your portfolio.</p>
+          </GlassPanel>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Portfolio Overview */}
+      {/* Overview */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="grid grid-cols-1 md:grid-cols-4 gap-4"
+        className="grid grid-cols-1 md:grid-cols-3 gap-4"
       >
         <GlassPanel className="p-6" glow="green">
-          <p className="text-sm text-white/50 mb-1">Total Value</p>
-          <h2 className="text-3xl font-bold text-white mb-2">$12,960.00</h2>
-          <div className="flex items-center gap-1 text-neon-green">
-            <TrendingUp className="w-4 h-4" />
-            <span className="text-sm">+18.5% All Time</span>
-          </div>
+          <p className="text-sm text-white/50 mb-1">SOL Balance</p>
+          <h2 className="text-3xl font-bold text-white mb-2 font-mono">
+            {solBalance !== null ? `◎ ${solBalance.toFixed(4)}` : "Loading..."}
+          </h2>
+          <p className="text-xs text-white/40 font-mono">
+            {publicKey?.toBase58().slice(0, 6)}...{publicKey?.toBase58().slice(-6)}
+          </p>
         </GlassPanel>
 
         <GlassPanel className="p-6">
-          <p className="text-sm text-white/50 mb-1">24h PnL</p>
-          <h2 className="text-3xl font-bold text-neon-green mb-2">+$969.00</h2>
-          <div className="flex items-center gap-1 text-neon-green">
-            <TrendingUp className="w-4 h-4" />
-            <span className="text-sm">+7.48%</span>
-          </div>
-        </GlassPanel>
-
-        <GlassPanel className="p-6">
-          <p className="text-sm text-white/50 mb-1">7d PnL</p>
-          <h2 className="text-3xl font-bold text-neon-green mb-2">+$1,245.00</h2>
-          <div className="flex items-center gap-1 text-neon-green">
-            <TrendingUp className="w-4 h-4" />
-            <span className="text-sm">+10.6%</span>
-          </div>
-        </GlassPanel>
-
-        <GlassPanel className="p-6">
-          <p className="text-sm text-white/50 mb-1">30d PnL</p>
-          <h2 className="text-3xl font-bold text-white/70 mb-2">+$2,105.00</h2>
+          <p className="text-sm text-white/50 mb-1">SPL Tokens</p>
+          <h2 className="text-3xl font-bold text-white mb-2">{splTokens.length}</h2>
           <div className="flex items-center gap-1 text-white/50">
             <TrendingUp className="w-4 h-4" />
-            <span className="text-sm">+19.4%</span>
+            <span className="text-sm">{savedTokens.length} via HumbleTrust</span>
           </div>
+        </GlassPanel>
+
+        <GlassPanel className="p-6">
+          <p className="text-sm text-white/50 mb-1">Launches</p>
+          <h2 className="text-3xl font-bold text-white mb-2">{savedTokens.length}</h2>
+          <p className="text-xs text-white/40">Tokens created on devnet</p>
         </GlassPanel>
       </motion.div>
 
-      {/* Charts */}
+      {/* Holdings + Pie chart */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Performance Chart */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -80,164 +135,197 @@ export function Portfolio() {
           className="lg:col-span-2"
         >
           <GlassPanel className="p-6">
-            <h3 className="font-bold text-white mb-4">Portfolio Performance</h3>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={performanceData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="day" stroke="rgba(255,255,255,0.3)" />
-                  <YAxis stroke="rgba(255,255,255,0.3)" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "rgba(10, 10, 15, 0.95)",
-                      border: "1px solid rgba(255,255,255,0.1)",
-                      borderRadius: "8px",
-                      color: "#fff",
-                    }}
-                  />
-                  <Line type="monotone" dataKey="value" stroke="#00FF41" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-white">Token Holdings</h3>
+              <button
+                onClick={loadPortfolio}
+                disabled={loading}
+                className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-white/50 hover:text-white disabled:opacity-40"
+              >
+                <RefreshCw size={11} className={loading ? "animate-spin" : undefined} />
+              </button>
+            </div>
+
+            {splTokens.length === 0 && !loading && (
+              <p className="text-white/40 text-sm">No SPL tokens with non-zero balance on devnet.</p>
+            )}
+
+            <div className="space-y-3">
+              {solBalance !== null && (
+                <div className="flex items-center justify-between p-4 rounded-lg bg-white/5 border border-white/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-neon-green/20 border border-neon-green/30 flex items-center justify-center text-sm font-bold text-neon-green">◎</div>
+                    <div>
+                      <p className="font-medium text-white">SOL</p>
+                      <p className="text-xs text-white/40">Native · Devnet</p>
+                    </div>
+                  </div>
+                  <p className="font-mono font-bold text-white">{solBalance.toFixed(4)}</p>
+                </div>
+              )}
+              {splTokens.map((t, i) => (
+                <div
+                  key={t.mint}
+                  className="flex items-center justify-between p-4 rounded-lg bg-white/5 border border-white/10 hover:border-white/20 transition-all"
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                      style={{
+                        background: COLORS[i % COLORS.length] + "20",
+                        border: `1px solid ${COLORS[i % COLORS.length]}40`,
+                        color: COLORS[i % COLORS.length],
+                      }}
+                    >
+                      {t.symbol.slice(0, 2)}
+                    </div>
+                    <div>
+                      <p className="font-medium text-white">
+                        ${t.symbol}
+                        {t.trustScore !== undefined && (
+                          <span className="text-xs text-neon-green ml-2">Trust {t.trustScore}</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-white/40 font-mono">{t.mint.slice(0, 6)}...{t.mint.slice(-4)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p className="font-mono text-white">{t.balance.toLocaleString("en-US", { maximumFractionDigits: 4 })}</p>
+                    <a
+                      href={`https://solscan.io/token/${t.mint}?cluster=devnet`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-neon-green/50 hover:text-neon-green"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                </div>
+              ))}
             </div>
           </GlassPanel>
         </motion.div>
 
-        {/* Asset Allocation */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
           <GlassPanel className="p-6">
-            <h3 className="font-bold text-white mb-4">Asset Allocation</h3>
-            <div className="h-[200px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="space-y-2 mt-4">
-              {holdings.map((h, i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: COLORS[i] }}
-                    />
-                    <span className="text-sm text-white">{h.token}</span>
-                  </div>
-                  <span className="text-sm text-white/70">{h.allocation}%</span>
+            <h3 className="font-bold text-white mb-4">Allocation</h3>
+            {pieItems.length > 0 ? (
+              <>
+                <div className="h-[200px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={pieItems}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={75}
+                        paddingAngle={4}
+                        dataKey="value"
+                      >
+                        {pieItems.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "rgba(10,10,15,0.95)",
+                          border: "1px solid rgba(255,255,255,0.1)",
+                          borderRadius: "8px",
+                          color: "#fff",
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-              ))}
-            </div>
+                <div className="space-y-2 mt-3">
+                  {pieItems.map((item, i) => (
+                    <div key={item.name} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                        <span className="text-white">{item.name}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="text-white/30 text-sm text-center py-8">No holdings to display</p>
+            )}
           </GlassPanel>
         </motion.div>
       </div>
 
-      {/* Holdings Table */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-      >
-        <GlassPanel className="p-6">
-          <h3 className="font-bold text-white mb-4">Token Holdings</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-white/10">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-white/70">Asset</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-white/70">Amount</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-white/70">Value</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-white/70">Allocation</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-white/70">24h Change</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-white/70">PnL</th>
-                </tr>
-              </thead>
-              <tbody>
-                {holdings.map((holding, i) => (
-                  <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-2xl">{holding.icon}</span>
-                        <span className="font-medium text-white">{holding.token}</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-right text-white">{holding.amount}</td>
-                    <td className="py-3 px-4 text-right font-medium text-white">{holding.value}</td>
-                    <td className="py-3 px-4 text-right text-white/70">{holding.allocation}%</td>
-                    <td className={`py-3 px-4 text-right ${holding.change24h >= 0 ? "text-neon-green" : "text-bearish"}`}>
-                      <div className="flex items-center justify-end gap-1">
-                        {holding.change24h >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                        {holding.change24h >= 0 ? "+" : ""}{holding.change24h}%
-                      </div>
-                    </td>
-                    <td className={`py-3 px-4 text-right font-medium ${holding.pnl.startsWith("-") ? "text-bearish" : "text-neon-green"}`}>
-                      {holding.pnl}
-                    </td>
+      {/* HumbleTrust Launches */}
+      {savedTokens.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <GlassPanel className="p-6">
+            <h3 className="font-bold text-white mb-4">Your HumbleTrust Launches</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="text-left py-3 px-4 text-sm font-medium text-white/50">Token</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-white/50">Mint</th>
+                    <th className="text-center py-3 px-4 text-sm font-medium text-white/50">Trust</th>
+                    <th className="text-center py-3 px-4 text-sm font-medium text-white/50">Mode</th>
+                    <th className="text-right py-3 px-4 text-sm font-medium text-white/50">Date</th>
+                    <th className="py-3 px-4" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </GlassPanel>
-      </motion.div>
-
-      {/* Transaction History */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-      >
-        <GlassPanel className="p-6">
-          <h3 className="font-bold text-white mb-4">Transaction History</h3>
-          <div className="space-y-2">
-            {transactions.map((tx, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between p-4 rounded-lg bg-white/5 border border-white/10 hover:border-white/20 transition-all"
-              >
-                <div className="flex items-center gap-4">
-                  <div className={`px-3 py-1 rounded text-sm ${
-                    tx.type === "Buy" ? "bg-neon-green/20 text-neon-green" :
-                    tx.type === "Sell" ? "bg-bearish/20 text-bearish" :
-                    "bg-neon-purple/20 text-neon-purple"
-                  }`}>
-                    {tx.type}
-                  </div>
-                  <div>
-                    <p className="font-medium text-white">{tx.token}</p>
-                    <p className="text-sm text-white/50">{tx.amount}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-medium text-white">{tx.value}</p>
-                  <div className="flex items-center gap-1 text-xs text-white/50">
-                    <span>{tx.date}</span>
-                    <button className="hover:text-neon-green transition-colors">
-                      <ExternalLink className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </GlassPanel>
-      </motion.div>
+                </thead>
+                <tbody>
+                  {savedTokens.map((token) => (
+                    <tr key={token.mint} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                      <td className="py-3 px-4">
+                        <div>
+                          <p className="font-medium text-white">{token.name || "Token"}</p>
+                          <p className="text-xs text-neon-green/70">${token.symbol}</p>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <p className="font-mono text-xs text-white/40">{token.mint.slice(0, 8)}...{token.mint.slice(-6)}</p>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span className="font-bold text-neon-green">{token.trustScore ?? 0}</span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`text-xs px-2 py-0.5 rounded font-mono ${
+                          token.launchMode === "v2"
+                            ? "bg-neon-green/20 text-neon-green"
+                            : "bg-white/10 text-white/50"
+                        }`}>
+                          {token.launchMode === "v2" ? "V2" : "V1"}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right text-xs text-white/40">
+                        {new Date(token.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="py-3 px-4">
+                        <a
+                          href={`https://solscan.io/token/${token.mint}?cluster=devnet`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-neon-green/50 hover:text-neon-green"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </GlassPanel>
+        </motion.div>
+      )}
     </div>
   );
 }

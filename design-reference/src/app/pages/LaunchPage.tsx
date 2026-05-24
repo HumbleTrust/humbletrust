@@ -136,6 +136,7 @@ export function LaunchPage() {
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [launchMode, setLaunchMode] = useState<LaunchMode>("checking");
   const [programStatusError, setProgramStatusError] = useState<string | null>(null);
+  const [walletSolBalance, setWalletSolBalance] = useState<number | null>(null);
 
   // ── Form state ────────────────────────────────────────────────────────────
   const [name, setName] = useState("");
@@ -172,6 +173,15 @@ export function LaunchPage() {
   }, [connection]);
 
   useEffect(() => {
+    if (!wallet.publicKey) { setWalletSolBalance(null); return; }
+    let mounted = true;
+    connection.getBalance(wallet.publicKey).then(l => {
+      if (mounted) setWalletSolBalance(l / 1_000_000_000);
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, [wallet.publicKey, connection]);
+
+  useEffect(() => {
     if (launchMode === "v1") setAirdrop((value) => toV1Airdrop(value));
     if (launchMode === "v2") {
       setAirdrop((value) => Math.min(value, 5));
@@ -194,7 +204,9 @@ export function LaunchPage() {
   );
   const circulation = isV2Launch ? v2Circulation : v1Circulation;
   const initialSolNum = useMemo(() => Number(initialSol), [initialSol]);
+  const maxAffordableSol = walletSolBalance !== null ? Math.max(0, walletSolBalance - 0.01) : null;
   const validInitialSol = !isV2Launch || (Number.isFinite(initialSolNum) && initialSolNum >= 0.5);
+  const insufficientSol = isV2Launch && walletSolBalance !== null && initialSolNum > walletSolBalance - 0.01;
 
   // ── TrustScore (mirrors contract calculate_trust_score_v2) ────────────────
   const trustBreakdown = useMemo(() => {
@@ -464,33 +476,40 @@ export function LaunchPage() {
     ticks?: string[];
     unit?: string;
     title?: string;
-  }) => (
-    <div className="mb-4">
-      <div className="flex items-center justify-between mb-2">
-        <label className="text-sm font-medium text-white/70">{label}</label>
-        <span className="text-sm font-bold text-[#00FF41] font-mono">
-          {value}{unit}
-        </span>
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        title={title}
-        onChange={(e) => onChange(+e.target.value)}
-        className="w-full h-1.5 rounded-full appearance-none bg-white/10 accent-[#00FF41] cursor-pointer"
-      />
-      {ticks && (
-        <div className="flex justify-between mt-1">
-          {ticks.map((t) => (
-            <span key={t} className="text-xs text-white/30">{t}</span>
-          ))}
+  }) => {
+    const pct = ((value - min) / (max - min)) * 100;
+    const trackStyle = {
+      background: `linear-gradient(to right, #00FF41 ${pct}%, rgba(255,255,255,0.1) ${pct}%)`,
+    };
+    return (
+      <div className="mb-5">
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-medium text-white/70">{label}</label>
+          <span className="text-sm font-bold text-[#00FF41] font-mono px-2 py-0.5 rounded bg-[#00FF41]/10 border border-[#00FF41]/20">
+            {value}{unit}
+          </span>
         </div>
-      )}
-    </div>
-  );
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          title={title}
+          onChange={(e) => onChange(+e.target.value)}
+          className="ht-slider w-full cursor-pointer"
+          style={trackStyle}
+        />
+        {ticks && (
+          <div className="flex justify-between mt-1.5">
+            {ticks.map((t) => (
+              <span key={t} className="text-xs text-white/30">{t}</span>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -587,9 +606,27 @@ export function LaunchPage() {
 
               {isV2Launch && (
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-white/70 mb-1.5">Initial Liquidity (SOL)</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-sm font-medium text-white/70">Initial Liquidity (SOL)</label>
+                    {walletSolBalance !== null && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-white/40">
+                          Wallet: <span className={cn("font-mono font-semibold", insufficientSol ? "text-red-400" : "text-white/70")}>◎ {walletSolBalance.toFixed(4)}</span>
+                        </span>
+                        {maxAffordableSol !== null && (
+                          <button
+                            type="button"
+                            onClick={() => setInitialSol(Math.max(0.5, maxAffordableSol).toFixed(2))}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-[#00FF41]/10 border border-[#00FF41]/20 text-[#00FF41] hover:bg-[#00FF41]/20 transition-all"
+                          >
+                            MAX
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <input
-                    className={cn(inputCls, !validInitialSol && "border-red-500/60")}
+                    className={cn(inputCls, (!validInitialSol || insufficientSol) && "border-red-500/60 focus:border-red-500/60")}
                     type="number"
                     min={0.5}
                     step={0.1}
@@ -600,6 +637,13 @@ export function LaunchPage() {
                   {!validInitialSol && (
                     <p className="text-red-400 text-xs mt-1">Initial liquidity must be at least 0.5 SOL.</p>
                   )}
+                  {validInitialSol && insufficientSol && (
+                    <p className="text-red-400 text-xs mt-1">
+                      Insufficient balance — you have ◎ {walletSolBalance!.toFixed(4)} SOL.
+                      Max you can use: <button type="button" className="underline" onClick={() => setInitialSol(Math.max(0.5, maxAffordableSol!).toFixed(2))}>◎ {maxAffordableSol!.toFixed(2)} SOL</button>
+                    </p>
+                  )}
+                  <p className="text-white/30 text-xs mt-1">Funds the bonding curve treasury — not sent to creator.</p>
                 </div>
               )}
 
@@ -930,7 +974,7 @@ export function LaunchPage() {
               disabled={
                 busy || isCheckingProgram || !wallet.connected ||
                 !validDistribution || !validCombinedLiquidity ||
-                !validInitialSol || !name || !symbol
+                !validInitialSol || insufficientSol || !name || !symbol
               }
               className="w-full py-4 rounded-lg bg-gradient-to-r from-[#00FF41] to-[#00cc33] text-black font-bold text-lg hover:shadow-[0_0_30px_rgba(0,255,65,0.4)] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >

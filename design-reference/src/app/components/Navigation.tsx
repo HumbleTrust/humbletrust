@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
+import { motion } from "motion/react";
 import { cn } from "./ui/utils";
 
 interface NavigationProps {
@@ -34,13 +35,23 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
   return (
     <>
       {/* Desktop Sidebar */}
-      <div className="hidden md:flex fixed left-0 top-0 h-full w-64 flex-col backdrop-blur-xl bg-[rgba(10,10,15,0.9)] border-r border-white/10 z-30">
+      <motion.div
+        initial={{ x: -20, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className="hidden md:flex fixed left-0 top-0 h-full w-64 flex-col backdrop-blur-xl bg-[rgba(10,10,15,0.92)] border-r border-white/10 z-30"
+        style={{ boxShadow: "4px 0 24px rgba(0,0,0,0.5)" }}
+      >
         {/* Logo */}
         <div className="p-6 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#00FF41] to-[#B026FF] flex items-center justify-center">
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#00FF41] to-[#B026FF] flex items-center justify-center"
+              style={{ boxShadow: "0 0 16px rgba(0,255,65,0.3)" }}
+            >
               <Shield className="w-6 h-6 text-black" />
-            </div>
+            </motion.div>
             <div>
               <h1 className="font-bold text-xl text-white">HumbleTrust</h1>
               <p className="text-xs text-white/50">Trust Layer · Devnet</p>
@@ -50,35 +61,68 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
 
         {/* Nav Items */}
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {navItems.map(({ id, label, icon: Icon }) => {
+          {navItems.map(({ id, label, icon: Icon }, idx) => {
             const isActive = activeTab === id;
             return (
-              <button
+              <motion.button
                 key={id}
                 onClick={() => onTabChange(id)}
-                className={cn(
-                  "w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 hover:bg-white/5",
-                  isActive && "bg-[#00FF41]/10 border border-[#00FF41]/30 shadow-[0_0_20px_rgba(0,255,65,0.15)]"
-                )}
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: idx * 0.04, duration: 0.3 }}
+                whileHover={{ x: 3 }}
+                whileTap={{ scale: 0.97 }}
+                className="relative w-full flex items-center gap-3 px-4 py-3 rounded-lg group"
               >
-                <Icon className={cn("w-5 h-5 transition-colors", isActive ? "text-[#00FF41]" : "text-white/50")} />
-                <span className={cn("font-medium transition-colors", isActive ? "text-[#00FF41]" : "text-white/70")}>
+                {/* Animated active background */}
+                {isActive && (
+                  <motion.div
+                    layoutId="nav-active-bg"
+                    className="absolute inset-0 rounded-lg bg-[#00FF41]/10 border border-[#00FF41]/30"
+                    style={{ boxShadow: "0 0 20px rgba(0,255,65,0.12), inset 0 0 20px rgba(0,255,65,0.05)" }}
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
+                  />
+                )}
+                <Icon
+                  className={cn(
+                    "w-5 h-5 relative z-10 transition-all duration-300",
+                    isActive
+                      ? "text-[#00FF41]"
+                      : "text-white/40 group-hover:text-white/70"
+                  )}
+                  style={isActive ? { filter: "drop-shadow(0 0 6px rgba(0,255,65,0.7))" } : undefined}
+                />
+                <span className={cn(
+                  "font-medium relative z-10 transition-colors duration-300",
+                  isActive ? "text-[#00FF41]" : "text-white/60 group-hover:text-white/80"
+                )}>
                   {label}
                 </span>
                 {id === "launch" && (
-                  <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-[#00FF41]/20 text-[#00FF41] font-mono">
+                  <span className="ml-auto relative z-10 text-[10px] px-1.5 py-0.5 rounded bg-[#00FF41]/20 text-[#00FF41] font-mono">
                     NEW
                   </span>
                 )}
-              </button>
+                {/* Active dot indicator */}
+                {isActive && (
+                  <motion.div
+                    layoutId="nav-active-dot"
+                    className="absolute right-3 w-1.5 h-1.5 rounded-full bg-[#00FF41]"
+                    style={{ boxShadow: "0 0 6px rgba(0,255,65,0.9)" }}
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
+                  />
+                )}
+              </motion.button>
             );
           })}
         </nav>
 
         {/* Wallet Button */}
         <div className="p-4 border-t border-white/10">
-          <button
+          <motion.button
             onClick={() => setVisible(true)}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             className={cn(
               "w-full px-4 py-3 rounded-lg font-medium transition-all duration-300 text-sm",
               wallet.connected
@@ -87,9 +131,9 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
             )}
           >
             {walletLabel}
-          </button>
+          </motion.button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Mobile Bottom Nav */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 backdrop-blur-xl bg-[rgba(10,10,15,0.95)] border-t border-white/10 z-30">
@@ -97,14 +141,18 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
           {navItems.slice(0, 5).map(({ id, label, icon: Icon }) => {
             const isActive = activeTab === id;
             return (
-              <button
+              <motion.button
                 key={id}
                 onClick={() => onTabChange(id)}
-                className={cn("flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all", isActive && "bg-[#00FF41]/10")}
+                whileTap={{ scale: 0.92 }}
+                className={cn("relative flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all", isActive && "bg-[#00FF41]/10")}
               >
-                <Icon className={cn("w-5 h-5", isActive ? "text-[#00FF41]" : "text-white/50")} />
+                <Icon
+                  className={cn("w-5 h-5", isActive ? "text-[#00FF41]" : "text-white/50")}
+                  style={isActive ? { filter: "drop-shadow(0 0 4px rgba(0,255,65,0.7))" } : undefined}
+                />
                 <span className={cn("text-xs", isActive ? "text-[#00FF41]" : "text-white/50")}>{label}</span>
-              </button>
+              </motion.button>
             );
           })}
         </nav>
