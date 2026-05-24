@@ -15,11 +15,8 @@ import {
   TrendingUp,
   Zap,
 } from "lucide-react";
-import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  ReferenceLine, CartesianGrid,
-} from "recharts";
 import { getTokenTrades, type ApiTrade } from "../../lib/solana/api";
+import { LightweightTradeChart } from "../components/LightweightTradeChart";
 import {
   PROGRAM_ID_V2_PK,
   buyOnCurveV2,
@@ -277,26 +274,20 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
     void loadWalletTokens();
   }, [walletAddress, wallet.connected, loadWalletTokens]);
 
-  useEffect(() => {
-    if (!validMint) {
-      setChartTrades([]);
-      setChartError(null);
-      return;
-    }
-    chartAbortRef.current?.abort();
-    setChartLoading(true);
-    setChartError(null);
+  const fetchChartTrades = useCallback((mint: string, silent = false) => {
+    if (!silent) { setChartLoading(true); setChartError(null); }
+    getTokenTrades(mint, 500)
+      .then((res) => { setChartTrades(res.trades ?? []); setChartLoading(false); })
+      .catch((err: Error) => { if (!silent) setChartError(err.message); setChartLoading(false); });
+  }, []);
 
-    getTokenTrades(mintInput.trim(), 200)
-      .then((res) => {
-        setChartTrades(res.trades ?? []);
-        setChartLoading(false);
-      })
-      .catch((err: Error) => {
-        setChartError(err.message);
-        setChartLoading(false);
-      });
-  }, [validMint, mintInput]);
+  useEffect(() => {
+    if (!validMint) { setChartTrades([]); setChartError(null); return; }
+    const mint = mintInput.trim();
+    fetchChartTrades(mint);
+    const interval = setInterval(() => fetchChartTrades(mint, true), 30_000);
+    return () => clearInterval(interval);
+  }, [validMint, mintInput, fetchChartTrades]);
 
   const refreshReserves = async (mintOverride?: string) => {
     const mintValue = (mintOverride ?? mintInput).trim();
@@ -886,11 +877,8 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                   </div>
                 );
 
-                const sorted = [...chartTrades]
-                  .filter(t => Number(t.price_sol) > 0)
-                  .sort((a, b) => new Date(a.block_time).getTime() - new Date(b.block_time).getTime());
-
-                if (sorted.length === 0) return (
+                const hasData = chartTrades.filter(t => Number(t.price_sol) > 0).length > 0;
+                if (!hasData) return (
                   <div className="h-52 flex items-center justify-center rounded-lg bg-white/[0.02] border border-white/5">
                     <div className="text-center">
                       <p className="text-white/30 text-sm mb-1">No trades yet</p>
@@ -899,97 +887,12 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                   </div>
                 );
 
-                const chartData = sorted.map((t, i) => ({
-                  i,
-                  price: Number(t.price_sol),
-                  side: t.side,
-                  sol: Number(t.sol_amount),
-                  time: new Date(t.block_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-                  sig: t.signature,
-                }));
-
-                const prices = chartData.map(d => d.price);
-                const minP = Math.min(...prices);
-                const maxP = Math.max(...prices);
-                const avgP = prices.reduce((a, b) => a + b, 0) / prices.length;
-
-                const CustomDot = (props: any) => {
-                  const { cx, cy, payload } = props;
-                  if (!payload || cx === undefined || cy === undefined) return null;
-                  const isBuy = payload.side === "buy";
-                  const color = isBuy ? "#00FF41" : "#FF3C6B";
-                  return (
-                    <circle
-                      cx={cx} cy={cy} r={5}
-                      fill={color}
-                      stroke="rgba(0,0,0,0.6)"
-                      strokeWidth={1.5}
-                      style={{ filter: `drop-shadow(0 0 4px ${color})` }}
-                    />
-                  );
-                };
-
-                const CustomTooltip = ({ active, payload }: any) => {
-                  if (!active || !payload?.[0]) return null;
-                  const d = payload[0].payload;
-                  const isBuy = d.side === "buy";
-                  return (
-                    <div className="bg-[rgba(10,10,20,0.98)] border border-white/15 rounded-lg px-3 py-2 text-xs shadow-2xl">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span
-                          className="px-1.5 py-0.5 rounded text-[10px] font-bold"
-                          style={{ color: isBuy ? "#00FF41" : "#FF3C6B", background: isBuy ? "rgba(0,255,65,0.1)" : "rgba(255,60,107,0.1)" }}
-                        >
-                          {d.side.toUpperCase()}
-                        </span>
-                        <span className="text-white/50">{d.time}</span>
-                      </div>
-                      <div className="text-white font-mono">
-                        {d.price < 0.000001 ? d.price.toExponential(4) : d.price.toFixed(10)}
-                      </div>
-                      <div className="text-white/50 mt-0.5">{d.sol.toFixed(4)} SOL</div>
-                    </div>
-                  );
-                };
+                const periodSec =
+                  timeframe === "1s" ? 1 : timeframe === "5s" ? 5 :
+                  timeframe === "5m" ? 300 : timeframe === "1h" ? 3600 : 60;
 
                 return (
-                  <div className="h-52">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={chartData} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                        <XAxis
-                          dataKey="time"
-                          tick={{ fill: "rgba(255,255,255,0.25)", fontSize: 9 }}
-                          tickLine={false}
-                          axisLine={false}
-                          interval="preserveStartEnd"
-                        />
-                        <YAxis
-                          tick={{ fill: "rgba(255,255,255,0.25)", fontSize: 9 }}
-                          tickLine={false}
-                          axisLine={false}
-                          tickFormatter={(v: number) => v < 0.000001 ? v.toExponential(1) : v.toFixed(7)}
-                          width={72}
-                          domain={[minP * 0.98, maxP * 1.02]}
-                        />
-                        <Tooltip content={<CustomTooltip />} />
-                        <ReferenceLine
-                          y={avgP}
-                          stroke="rgba(255,255,255,0.1)"
-                          strokeDasharray="4 4"
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="price"
-                          stroke="rgba(255,255,255,0.3)"
-                          strokeWidth={1}
-                          dot={<CustomDot />}
-                          activeDot={false}
-                          isAnimationActive={false}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
+                  <LightweightTradeChart trades={chartTrades} periodSec={periodSec} height={208} />
                 );
               })()}
 
@@ -1003,7 +906,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                     <span className="text-[#00FF41]">▲ {buys} buys</span>
                     <span className="text-[#FF3C6B]">▼ {sells} sells</span>
                     <span className="text-white/40">{totalSol.toFixed(3)} SOL vol</span>
-                    <span className="text-white/25 ml-auto">{chartTrades.length} trades total</span>
+                    <span className="text-white/25 ml-auto">{chartTrades.length} trades · auto 30s</span>
                   </div>
                 );
               })()}

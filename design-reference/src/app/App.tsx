@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { HomePage } from "./pages/HomePage";
 import { WalletProvider } from "../lib/WalletProvider";
 import { HexagonBackground } from "./components/HexagonBackground";
 import { Navigation } from "./components/Navigation";
@@ -13,7 +14,7 @@ import { MarketPage } from "./pages/MarketPage";
 import { NftPage } from "./pages/NftPage";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = useState("home");
   const [openMint, setOpenMint] = useState<string | null>(null);
 
   useEffect(() => {
@@ -28,6 +29,7 @@ export default function App() {
   const renderPage = () => {
     if (openMint) return <DiscoverPage initialMint={openMint} onBack={() => setOpenMint(null)} />;
     switch (activeTab) {
+      case "home":      return <HomePage onTabChange={setActiveTab} />;
       case "dashboard": return <Dashboard onTabChange={setActiveTab} />;
       case "launch":    return <LaunchPage />;
       case "discover":  return <DiscoverPage onOpenToken={(m) => setOpenMint(m)} />;
@@ -37,7 +39,7 @@ export default function App() {
       case "market":    return <MarketPage />;
       case "nft":       return <NftPage goLaunch={() => setActiveTab("launch")} />;
       case "settings":  return <Settings />;
-      default:          return <Dashboard onTabChange={setActiveTab} />;
+      default:          return <HomePage onTabChange={setActiveTab} />;
     }
   };
 
