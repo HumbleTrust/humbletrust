@@ -193,17 +193,20 @@ export function Charts() {
 
       {error && <div className="text-red-400 text-sm px-1">{error}</div>}
 
-      {/* Main layout: sidebar + chart */}
-      <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr] gap-4">
+      {/* Main layout: sidebar + chart — fills remaining viewport height */}
+      <div
+        className="grid grid-cols-1 xl:grid-cols-[280px_1fr] gap-4"
+        style={{ height: "calc(100vh - 320px)", minHeight: 520 }}
+      >
 
         {/* Token list sidebar */}
-        <motion.div initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }}>
-          <GlassPanel className="overflow-hidden">
-            <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+        <motion.div initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }} className="h-full">
+          <GlassPanel className="overflow-hidden flex flex-col h-full">
+            <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between shrink-0">
               <span className="text-xs font-mono text-white/50 uppercase tracking-widest">Pairs</span>
               <span className="text-xs text-white/30">{pairs.length}</span>
             </div>
-            <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto">
+            <div className="flex-1 divide-y divide-white/5 overflow-y-auto">
               {pairs.length === 0 && busy && (
                 <div className="px-4 py-6 text-center text-white/30 text-sm">Loading...</div>
               )}
@@ -250,7 +253,7 @@ export function Charts() {
         </motion.div>
 
         {/* Chart area */}
-        <motion.div initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="space-y-4">
+        <motion.div initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="h-full flex flex-col gap-4">
           <AnimatePresence mode="wait">
             {selected ? (
               <motion.div
@@ -259,8 +262,9 @@ export function Charts() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
+                className="flex-1 min-h-0"
               >
-                <GlassPanel className="flex flex-col" glow="green" style={{ height: 560 } as React.CSSProperties}>
+                <GlassPanel className="flex flex-col h-full" glow="green">
                   {/* Chart header */}
                   <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0 flex-wrap gap-2">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -314,19 +318,38 @@ export function Charts() {
                     )}
                   </div>
 
-                  {/* DexScreener iframe */}
+                  {/* DexScreener iframe — fills remaining height */}
                   <iframe
                     src={`${selected.url}?embed=1&theme=dark&info=0&trades=0`}
-                    className="flex-1 w-full border-0"
+                    className="flex-1 w-full border-0 min-h-0"
+                    style={{ minHeight: 320 }}
                     title={`${selected.baseToken.symbol} chart`}
                     sandbox="allow-scripts allow-same-origin allow-popups"
                     referrerPolicy="no-referrer"
                   />
+
+                  {/* Quick stats pinned to bottom */}
+                  <div className="flex items-center gap-6 px-4 py-2.5 border-t border-white/10 bg-white/[0.02] shrink-0 flex-wrap">
+                    {[
+                      { label: "Price", value: fmtPrice(selected.priceUsd) },
+                      { label: "24h", value: `${(selected.priceChange?.h24 ?? 0) > 0 ? "+" : ""}${(selected.priceChange?.h24 ?? 0).toFixed(2)}%`, val: selected.priceChange?.h24 ?? 0 },
+                      { label: "Vol 24h", value: fmtUsd(selected.volume?.h24 ?? 0) },
+                      { label: "Liquidity", value: fmtUsd(selected.liquidity?.usd ?? 0) },
+                    ].map(({ label, value, val }) => (
+                      <div key={label} className="flex items-center gap-1.5 text-xs">
+                        <span className="text-white/40">{label}:</span>
+                        <span className={cn(
+                          "font-mono font-semibold",
+                          val !== undefined ? (val > 0 ? "text-[#00FF41]" : val < 0 ? "text-red-400" : "text-white") : "text-white"
+                        )}>{value}</span>
+                      </div>
+                    ))}
+                  </div>
                 </GlassPanel>
               </motion.div>
             ) : (
-              <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <GlassPanel className="flex items-center justify-center" style={{ height: 560 } as React.CSSProperties}>
+              <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 min-h-0">
+                <GlassPanel className="flex items-center justify-center h-full">
                   <div className="text-center text-white/30">
                     <BarChart2 size={40} className="mx-auto mb-3 opacity-30" />
                     <p className="text-sm">Select a token from the list to view its chart</p>
@@ -335,36 +358,6 @@ export function Charts() {
               </motion.div>
             )}
           </AnimatePresence>
-
-          {/* Quick stats for selected */}
-          {selected && (
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <GlassPanel className="p-4">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {[
-                    { label: "Price", value: fmtPrice(selected.priceUsd) },
-                    { label: "24h Change", value: `${(selected.priceChange?.h24 ?? 0) > 0 ? "+" : ""}${(selected.priceChange?.h24 ?? 0).toFixed(2)}%`, colored: true, val: selected.priceChange?.h24 ?? 0 },
-                    { label: "Volume 24h", value: fmtUsd(selected.volume?.h24 ?? 0) },
-                    { label: "Liquidity", value: fmtUsd(selected.liquidity?.usd ?? 0) },
-                  ].map(({ label, value, colored, val }) => (
-                    <div key={label} className="space-y-0.5">
-                      <div className="text-white/40 text-xs">{label}</div>
-                      <div className={cn(
-                        "text-white font-mono text-sm font-semibold",
-                        colored && val !== undefined && (val > 0 ? "text-[#00FF41]" : val < 0 ? "text-red-400" : "text-white")
-                      )}>
-                        {value}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </GlassPanel>
-            </motion.div>
-          )}
         </motion.div>
       </div>
     </div>
