@@ -79,6 +79,7 @@ export const registerToken = (data: {
   burnOption: number;
   certificateMint?: string | null;
   tier?: number;
+  logoUri?: string | null;
 }) =>
   fetch(`${API_BASE}/tokens`, {
     method: "POST",
