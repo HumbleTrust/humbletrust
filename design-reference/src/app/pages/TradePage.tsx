@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAnchorWallet, useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { AnchorProvider } from "@coral-xyz/anchor";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
@@ -15,6 +15,11 @@ import {
   TrendingUp,
   Zap,
 } from "lucide-react";
+import {
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  ComposedChart, Bar,
+} from "recharts";
+import { getTokenOhlcv, getTokenTrades, type ApiCandle, type ApiTrade } from "../../lib/solana/api";
 import {
   PROGRAM_ID_V2_PK,
   buyOnCurveV2,
@@ -169,6 +174,13 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   const toggleIndicator = (key: keyof ChartIndicators) =>
     setIndicators(prev => ({ ...prev, [key]: !prev[key] }));
 
+  // chart data
+  const [chartCandles, setChartCandles] = useState<ApiCandle[]>([]);
+  const [chartTrades, setChartTrades] = useState<ApiTrade[]>([]);
+  const [chartLoading, setChartLoading] = useState(false);
+  const [chartError, setChartError] = useState<string | null>(null);
+  const chartAbortRef = useRef<AbortController | null>(null);
+
   useEffect(() => {
     let mounted = true;
     isProgramExecutable(connection, PROGRAM_ID_V2_PK)
@@ -265,6 +277,31 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
     if (!wallet.connected || !wallet.publicKey) { setWalletTokens([]); return; }
     void loadWalletTokens();
   }, [walletAddress, wallet.connected, loadWalletTokens]);
+
+  useEffect(() => {
+    if (!validMint) {
+      setChartCandles([]);
+      setChartTrades([]);
+      setChartError(null);
+      return;
+    }
+    chartAbortRef.current?.abort();
+    setChartLoading(true);
+    setChartError(null);
+
+    const mint = mintInput.trim();
+    Promise.all([
+      getTokenOhlcv(mint, timeframe, 120),
+      getTokenTrades(mint, 50),
+    ]).then(([ohlcv, trades]) => {
+      setChartCandles(ohlcv.candles ?? []);
+      setChartTrades(trades.trades ?? []);
+      setChartLoading(false);
+    }).catch((err: Error) => {
+      setChartError(err.message);
+      setChartLoading(false);
+    });
+  }, [validMint, mintInput, timeframe]);
 
   const refreshReserves = async (mintOverride?: string) => {
     const mintValue = (mintOverride ?? mintInput).trim();
@@ -811,21 +848,131 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
             )}
 
             {/* Chart stage */}
-            <div className="p-4">
-              <div className="flex items-center gap-2 mb-3 text-xs text-white/50">
-                <span className="w-2 h-2 rounded-full bg-[#00FF41] inline-block" />
-                {selectedSymbol} / SOL · {timeframe} · devnet
-              </div>
-              {/* LiveMarketChart would be imported here when available in design-reference */}
-              <div className="h-64 flex items-center justify-center rounded-lg bg-white/[0.02] border border-white/5">
-                <div className="text-center text-white/30">
-                  <div className="text-4xl mb-2">📈</div>
-                  <p className="text-sm">
-                    {validMint ? `${selectedSymbol} / SOL` : "Select a token to view chart"}
-                  </p>
-                  <p className="text-xs mt-1">{timeframe} · {chartMode}</p>
+            <div className="p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs text-white/50">
+                  <span className="w-2 h-2 rounded-full bg-[#00FF41] inline-block animate-pulse" />
+                  {selectedSymbol} / SOL · {timeframe} · devnet
                 </div>
+                {chartLoading && (
+                  <span className="text-xs text-white/30 flex items-center gap-1">
+                    <RefreshCw size={10} className="animate-spin" /> Loading
+                  </span>
+                )}
               </div>
+
+              {/* Price chart */}
+              {!validMint ? (
+                <div className="h-52 flex items-center justify-center rounded-lg bg-white/[0.02] border border-white/5">
+                  <p className="text-white/30 text-sm">Select a token to view chart</p>
+                </div>
+              ) : chartError ? (
+                <div className="h-52 flex items-center justify-center rounded-lg bg-white/[0.02] border border-white/5">
+                  <div className="text-center">
+                    <p className="text-red-400/70 text-xs mb-1">No chart data</p>
+                    <p className="text-white/25 text-xs">{chartError.slice(0, 80)}</p>
+                  </div>
+                </div>
+              ) : chartCandles.length === 0 && !chartLoading ? (
+                <div className="h-52 flex items-center justify-center rounded-lg bg-white/[0.02] border border-white/5">
+                  <p className="text-white/30 text-sm">No candle data yet — trade to populate</p>
+                </div>
+              ) : (
+                <div className="h-52">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart
+                      data={chartCandles.map(c => ({
+                        t: new Date(c.time * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                        price: Number(c.close),
+                        vol: Number(c.volume),
+                        bullish: Number(c.close) >= Number(c.open),
+                      }))}
+                      margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#00FF41" stopOpacity={0.25} />
+                          <stop offset="95%" stopColor="#00FF41" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="t" tick={{ fill: "rgba(255,255,255,0.25)", fontSize: 9 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                      <YAxis
+                        dataKey="price"
+                        tick={{ fill: "rgba(255,255,255,0.25)", fontSize: 9 }}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(v: number) => v < 0.000001 ? v.toExponential(1) : v.toFixed(6)}
+                        width={60}
+                        domain={["auto", "auto"]}
+                        yAxisId="price"
+                      />
+                      <YAxis dataKey="vol" yAxisId="vol" hide domain={["auto", "auto"]} />
+                      <Tooltip
+                        contentStyle={{ background: "rgba(10,10,20,0.97)", border: "1px solid rgba(0,255,65,0.2)", borderRadius: 8, color: "#fff", fontSize: 11 }}
+                        formatter={(value: unknown, name: string) => {
+                          const v = Number(value);
+                          if (name === "price") return [v < 0.000001 ? v.toExponential(2) : v.toFixed(8), "Price"];
+                          return [formatCompact(v, 2), "Volume"];
+                        }}
+                        labelStyle={{ color: "rgba(255,255,255,0.5)" }}
+                      />
+                      {showVolume && (
+                        <Bar dataKey="vol" yAxisId="vol" fill="rgba(0,255,65,0.12)" radius={[2, 2, 0, 0]} maxBarSize={8} />
+                      )}
+                      <Area
+                        type="monotone"
+                        dataKey="price"
+                        yAxisId="price"
+                        stroke="#00FF41"
+                        strokeWidth={1.5}
+                        fill="url(#cg)"
+                        dot={false}
+                        activeDot={{ r: 4, fill: "#00FF41", stroke: "rgba(0,255,65,0.3)", strokeWidth: 4 }}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              {/* Live trade feed */}
+              {chartTrades.length > 0 && (
+                <div className="border-t border-white/5 pt-3">
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-2">Live trades</p>
+                  <div className="space-y-1 max-h-36 overflow-y-auto pr-1 custom-scrollbar">
+                    {chartTrades.map((trade, i) => {
+                      const isBuy = trade.side === "buy";
+                      const sol = Number(trade.sol_amount);
+                      const price = Number(trade.price_sol);
+                      const timeStr = new Date(trade.block_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+                      return (
+                        <div key={trade.signature + i} className="flex items-center justify-between text-xs py-0.5">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="w-7 text-center text-[10px] font-bold py-0.5 rounded"
+                              style={{
+                                color: isBuy ? "#00FF41" : "#FF3C6B",
+                                background: isBuy ? "rgba(0,255,65,0.1)" : "rgba(255,60,107,0.1)",
+                              }}
+                            >
+                              {isBuy ? "BUY" : "SELL"}
+                            </span>
+                            <span className="text-white/60 font-mono">
+                              {price < 0.000001 ? price.toExponential(2) : price.toFixed(8)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-white/40">
+                            <span className="font-mono">{sol.toFixed(4)} SOL</span>
+                            <span className="text-[10px] text-white/20">{timeStr}</span>
+                            <a href={`https://solscan.io/tx/${trade.signature}?cluster=devnet`} target="_blank" rel="noreferrer" className="hover:text-[#00FF41]">
+                              <ExternalLink size={9} />
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </GlassPanel>
 

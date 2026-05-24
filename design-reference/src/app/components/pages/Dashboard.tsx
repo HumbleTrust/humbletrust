@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { ArrowUpRight, TrendingUp, Wallet, Activity, Clock, ExternalLink, RefreshCw } from "lucide-react";
+import { ArrowUpRight, TrendingUp, Wallet, Activity, Clock, ExternalLink, RefreshCw, Rocket, ArrowLeftRight, Compass, Award } from "lucide-react";
 import { GlassPanel } from "../GlassPanel";
 import { motion } from "motion/react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
@@ -84,10 +84,10 @@ export function Dashboard({ onTabChange }: DashboardProps) {
   }, [connected, publicKey?.toBase58()]);
 
   const quickActions = [
-    { label: "Trade", tab: "trade" },
-    { label: "Launch", tab: "launch" },
-    { label: "Discover", tab: "discover" },
-    { label: "NFT Badge", tab: "nft" },
+    { label: "Trade", tab: "trade", icon: ArrowLeftRight, desc: "Buy & sell on curve", color: "#00FF41" },
+    { label: "Launch", tab: "launch", icon: Rocket, desc: "Create protected token", color: "#B026FF" },
+    { label: "Discover", tab: "discover", icon: Compass, desc: "Browse tokens", color: "#00D4FF" },
+    { label: "NFT Badge", tab: "nft", icon: Award, desc: "Mint certificate NFT", color: "#FFD700" },
   ];
 
   return (
@@ -167,16 +167,26 @@ export function Dashboard({ onTabChange }: DashboardProps) {
         <GlassPanel className="p-6">
           <h3 className="text-lg font-bold text-white mb-4">Quick Actions</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {quickActions.map(({ label, tab }) => (
-              <button
+            {quickActions.map(({ label, tab, icon: Icon, desc, color }) => (
+              <motion.button
                 key={tab}
                 onClick={() => onTabChange(tab)}
-                className="px-6 py-4 rounded-lg bg-white/5 border border-white/10 hover:border-neon-green/50 hover:bg-neon-green/5 transition-all duration-300 group"
+                whileHover={{ scale: 1.02, y: -2 }}
+                whileTap={{ scale: 0.97 }}
+                className="flex flex-col items-start gap-3 p-4 rounded-lg bg-white/5 border border-white/10 hover:border-white/20 transition-all duration-300 group text-left"
+                style={{ "--hover-color": color } as React.CSSProperties}
               >
-                <span className="text-white/70 group-hover:text-neon-green transition-colors font-medium">
-                  {label}
-                </span>
-              </button>
+                <div
+                  className="w-10 h-10 rounded-lg flex items-center justify-center"
+                  style={{ background: `${color}18`, border: `1px solid ${color}30` }}
+                >
+                  <Icon className="w-5 h-5" style={{ color }} />
+                </div>
+                <div>
+                  <p className="font-semibold text-white text-sm group-hover:text-white transition-colors">{label}</p>
+                  <p className="text-xs text-white/40 mt-0.5">{desc}</p>
+                </div>
+              </motion.button>
             ))}
           </div>
         </GlassPanel>

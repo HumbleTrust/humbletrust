@@ -464,33 +464,40 @@ export function LaunchPage() {
     ticks?: string[];
     unit?: string;
     title?: string;
-  }) => (
-    <div className="mb-4">
-      <div className="flex items-center justify-between mb-2">
-        <label className="text-sm font-medium text-white/70">{label}</label>
-        <span className="text-sm font-bold text-[#00FF41] font-mono">
-          {value}{unit}
-        </span>
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        title={title}
-        onChange={(e) => onChange(+e.target.value)}
-        className="w-full h-1.5 rounded-full appearance-none bg-white/10 accent-[#00FF41] cursor-pointer"
-      />
-      {ticks && (
-        <div className="flex justify-between mt-1">
-          {ticks.map((t) => (
-            <span key={t} className="text-xs text-white/30">{t}</span>
-          ))}
+  }) => {
+    const pct = ((value - min) / (max - min)) * 100;
+    const trackStyle = {
+      background: `linear-gradient(to right, #00FF41 ${pct}%, rgba(255,255,255,0.1) ${pct}%)`,
+    };
+    return (
+      <div className="mb-5">
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-medium text-white/70">{label}</label>
+          <span className="text-sm font-bold text-[#00FF41] font-mono px-2 py-0.5 rounded bg-[#00FF41]/10 border border-[#00FF41]/20">
+            {value}{unit}
+          </span>
         </div>
-      )}
-    </div>
-  );
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          title={title}
+          onChange={(e) => onChange(+e.target.value)}
+          className="ht-slider w-full cursor-pointer"
+          style={trackStyle}
+        />
+        {ticks && (
+          <div className="flex justify-between mt-1.5">
+            {ticks.map((t) => (
+              <span key={t} className="text-xs text-white/30">{t}</span>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
