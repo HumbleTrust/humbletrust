@@ -17,6 +17,10 @@ test-ledger/
 !app/public/*.json
 !vercel.json
 !app/public/*.svg
+!design-reference/src/lib/solana/idl.json
+!design-reference/src/lib/solana/idl_v2.json
+!app/src/lib/idl.json
+!app/src/lib/idl_v2.json
 id.json
 wallet.json
 keypair.json
