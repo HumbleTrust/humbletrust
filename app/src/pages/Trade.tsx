@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAnchorWallet, useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { AnchorProvider } from "@coral-xyz/anchor";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { withFallbackRpc } from "../lib/rpc";
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import {
   AlertTriangle,
@@ -226,7 +227,10 @@ export const Trade = ({ goDiscover }: { goDiscover: () => void }) => {
     setTokenPickerBusy(true);
     setTokenPickerError(null);
     try {
-      const parsed = await connection.getParsedTokenAccountsByOwner(wallet.publicKey, { programId: TOKEN_PROGRAM_ID });
+      const pk = wallet.publicKey;
+      const parsed = await withFallbackRpc((conn) =>
+        conn.getParsedTokenAccountsByOwner(pk, { programId: TOKEN_PROGRAM_ID }),
+      );
       const byMint = new Map<string, WalletTokenOption>();
       parsed.value.forEach(({ account }) => {
         const info = (account.data as any).parsed?.info;

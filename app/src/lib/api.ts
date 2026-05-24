@@ -26,6 +26,7 @@ export interface ApiToken {
   airdrop_percent?: number | null;
   burn_option?: number | null;
   certificate_mint?: string | null;
+  logo_uri?: string | null;
 }
 
 export interface ApiTrade {

@@ -29,6 +29,7 @@ const savedToApi = (t: SavedToken): ApiToken => ({
   trades_count: 0,
   created_at: new Date(t.createdAt).toISOString(),
   certificate_mint: t.certificateMint ?? null,
+  logo_uri: t.logo ?? null,
 });
 
 export const Discover = ({ openToken }: { openToken: (mint: string) => void }) => {
@@ -134,7 +135,7 @@ export const Discover = ({ openToken }: { openToken: (mint: string) => void }) =
           return (
             <div key={t.mint} className="tok-card-real token-card-click" onClick={() => openToken(t.mint)}>
               <div className="tok-card-top">
-                <HexLogo label={t.symbol || t.mint.slice(0, 3)} size={56} variant={Number(t.trust_score) >= 85 ? "gradient" : "green"} />
+                <HexLogo src={t.logo_uri ?? undefined} label={t.symbol || t.mint.slice(0, 3)} size={56} variant={Number(t.trust_score) >= 85 ? "gradient" : "green"} />
                 <div className="tok-card-meta">
                   <div className="tok-card-name">
                     {t.name || "Token"}
