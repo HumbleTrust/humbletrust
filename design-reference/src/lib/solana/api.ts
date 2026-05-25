@@ -101,6 +101,11 @@ export const getTokenOhlcv = (mint: string, timeframe: string, limit = 500) =>
     `/tokens/${mint}/ohlcv?tf=${encodeURIComponent(timeframe)}&limit=${limit}`
   );
 
+export const syncTokenTrades = (mint: string, limit = 100) =>
+  fetch(`${API_BASE}/tokens/${mint}/sync_trades?limit=${limit}`, { method: "POST" })
+    .then(r => r.json() as Promise<{ synced: number; total_sigs?: number; message?: string; error?: string }>)
+    .catch(e => ({ synced: 0, error: e.message }));
+
 export const recordTrade = (
   mint: string,
   data: {

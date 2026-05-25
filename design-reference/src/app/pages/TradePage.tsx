@@ -15,7 +15,7 @@ import {
   TrendingUp,
   Zap,
 } from "lucide-react";
-import { getTokenTrades, recordTrade, type ApiTrade } from "../../lib/solana/api";
+import { getTokenTrades, recordTrade, syncTokenTrades, type ApiTrade } from "../../lib/solana/api";
 import { LightweightTradeChart } from "../components/LightweightTradeChart";
 import {
   PROGRAM_ID_V2_PK,
@@ -186,6 +186,8 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   const [chartTrades, setChartTrades] = useState<ApiTrade[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const chartAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -291,6 +293,22 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       .then((res) => { setChartTrades(res.trades ?? []); setChartLoading(false); })
       .catch((err: Error) => { if (!silent) setChartError(err.message); setChartLoading(false); });
   }, []);
+
+  const runSyncTrades = useCallback(async (mint: string) => {
+    setSyncing(true);
+    setSyncMsg(null);
+    const result = await syncTokenTrades(mint, 200);
+    setSyncing(false);
+    if (result.error) {
+      setSyncMsg(`Sync error: ${result.error}`);
+    } else if (result.synced === 0) {
+      setSyncMsg(result.message || "No new trades found on-chain");
+    } else {
+      setSyncMsg(`Synced ${result.synced} trade${result.synced !== 1 ? "s" : ""} from chain`);
+      fetchChartTrades(mint);
+    }
+    setTimeout(() => setSyncMsg(null), 5000);
+  }, [fetchChartTrades]);
 
   useEffect(() => {
     if (!validMint) { setChartTrades([]); setChartError(null); return; }
@@ -884,15 +902,25 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                   {validMint && !chartLoading && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setChartLoading(true);
-                        getTokenTrades(mintInput.trim(), 200)
-                          .then(r => { setChartTrades(r.trades ?? []); setChartLoading(false); })
-                          .catch(() => setChartLoading(false));
-                      }}
+                      onClick={() => fetchChartTrades(mintInput.trim())}
                       className="text-white/30 hover:text-white/60"
+                      title="Refresh"
                     >
                       <RefreshCw size={11} />
+                    </button>
+                  )}
+                  {validMint && (
+                    <button
+                      type="button"
+                      disabled={syncing}
+                      onClick={() => runSyncTrades(mintInput.trim())}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border border-[#00FF41]/20 text-[#00FF41]/60 hover:text-[#00FF41] hover:border-[#00FF41]/50 transition-all disabled:opacity-40"
+                      title="Sync historical trades from blockchain"
+                    >
+                      {syncing
+                        ? <><RefreshCw size={9} className="animate-spin" /> Syncing…</>
+                        : <><RefreshCw size={9} /> Sync chain</>
+                      }
                     </button>
                   )}
                 </div>
@@ -938,6 +966,18 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                   />
                 );
               })()}
+
+              {/* Sync feedback */}
+              {syncMsg && (
+                <div className={cn(
+                  "text-[10px] font-mono px-2 py-1 rounded",
+                  syncMsg.includes("error") || syncMsg.includes("Error")
+                    ? "text-red-400 bg-red-500/10"
+                    : "text-[#00FF41] bg-[#00FF41]/10"
+                )}>
+                  {syncMsg}
+                </div>
+              )}
 
               {/* Stats bar */}
               {chartTrades.length > 0 && (() => {
