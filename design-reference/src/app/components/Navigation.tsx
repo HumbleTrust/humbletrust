@@ -2,10 +2,11 @@ import {
   Home, LayoutDashboard, Rocket, Compass, ArrowLeftRight, LineChart,
   Wallet, BarChart2, Award, Settings, Shield,
 } from "lucide-react";
+import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { motion } from "motion/react";
 import { cn } from "./ui/utils";
+import { MobileWalletSheet } from "./MobileWalletSheet";
 
 interface NavigationProps {
   activeTab: string;
@@ -27,7 +28,7 @@ const navItems = [
 
 export function Navigation({ activeTab, onTabChange }: NavigationProps) {
   const wallet = useWallet();
-  const { setVisible } = useWalletModal();
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const walletLabel = wallet.connected && wallet.publicKey
     ? wallet.publicKey.toBase58().slice(0, 4) + "..." + wallet.publicKey.toBase58().slice(-4)
@@ -121,25 +122,28 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
         {/* Wallet Button */}
         <div className="p-4 border-t border-white/10">
           <motion.button
-            onClick={() => setVisible(true)}
+            onClick={() => setSheetOpen(true)}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             className={cn(
-              "w-full px-4 py-3 rounded-lg font-medium transition-all duration-300 text-sm",
+              "w-full px-4 py-3 rounded-lg font-medium transition-all duration-300 text-sm flex items-center justify-center gap-2",
               wallet.connected
                 ? "bg-white/5 border border-white/10 text-white/80 hover:bg-white/10"
                 : "bg-gradient-to-r from-[#00FF41] to-[#00cc33] text-black hover:shadow-[0_0_20px_rgba(0,255,65,0.4)]"
             )}
           >
+            {wallet.connected && <span className="w-2 h-2 rounded-full bg-[#00FF41] inline-block shrink-0" />}
             {walletLabel}
           </motion.button>
         </div>
       </motion.div>
 
+      <MobileWalletSheet open={sheetOpen} onClose={() => setSheetOpen(false)} />
+
       {/* Mobile Bottom Nav */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 backdrop-blur-xl bg-[rgba(10,10,15,0.95)] border-t border-white/10 z-30">
         <nav className="flex justify-around items-center p-2">
-          {navItems.slice(0, 5).map(({ id, label, icon: Icon }) => {
+          {navItems.slice(0, 4).map(({ id, label, icon: Icon }) => {
             const isActive = activeTab === id;
             return (
               <motion.button
@@ -156,6 +160,26 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
               </motion.button>
             );
           })}
+
+          {/* Wallet connect button */}
+          <motion.button
+            onClick={() => setSheetOpen(true)}
+            whileTap={{ scale: 0.92 }}
+            className="relative flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all"
+          >
+            <div className="relative">
+              <Wallet
+                className={cn("w-5 h-5", wallet.connected ? "text-[#00FF41]" : "text-white/50")}
+                style={wallet.connected ? { filter: "drop-shadow(0 0 4px rgba(0,255,65,0.7))" } : undefined}
+              />
+              {wallet.connected && (
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#00FF41] border border-black" />
+              )}
+            </div>
+            <span className={cn("text-xs", wallet.connected ? "text-[#00FF41]" : "text-white/50")}>
+              {wallet.connected ? walletLabel : "Connect"}
+            </span>
+          </motion.button>
         </nav>
       </div>
     </>
