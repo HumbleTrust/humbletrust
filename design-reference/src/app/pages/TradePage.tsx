@@ -15,7 +15,7 @@ import {
   TrendingUp,
   Zap,
 } from "lucide-react";
-import { getTokenTrades, type ApiTrade } from "../../lib/solana/api";
+import { getTokenTrades, recordTrade, type ApiTrade } from "../../lib/solana/api";
 import { LightweightTradeChart } from "../components/LightweightTradeChart";
 import {
   PROGRAM_ID_V2_PK,
@@ -134,6 +134,17 @@ const toRawTokenAmount = (amount: string, decimals = 9) => {
 
 const rawTokenAmountFromUi = (amount: number, decimals = 9) =>
   toRawTokenAmount(formatTokenAmount(Math.max(0, amount), decimals), decimals);
+
+const getConfirmedBlockTime = async (
+  connection: import("@solana/web3.js").Connection,
+  signature: string
+): Promise<string> => {
+  try {
+    const tx = await connection.getTransaction(signature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+    if (tx?.blockTime) return new Date(tx.blockTime * 1000).toISOString();
+  } catch { /* fallback */ }
+  return new Date().toISOString();
+};
 
 export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   const wallet = useWallet();
@@ -348,7 +359,19 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       const minTokensOut = rawTokenAmountFromUi(estimatedTokens * (1 - slippageBps / 10_000), selectedDecimals);
       const { signature } = await buyOnCurveV2(program, anchorWallet.publicKey, mint, ata, Number(solAmount), minTokensOut);
       setTxSig(signature);
+      const blockTime = await getConfirmedBlockTime(connection, signature);
+      void recordTrade(mintInput.trim(), {
+        signature,
+        trader: anchorWallet.publicKey.toBase58(),
+        side: "buy",
+        source: "curve",
+        token_amount: estimatedTokens,
+        sol_amount: solIn,
+        price_sol: currentPrice,
+        block_time: blockTime,
+      });
       await Promise.all([refreshReserves(), loadWalletTokens()]);
+      fetchChartTrades(mintInput.trim(), true);
     } catch (e: any) {
       setTradeError(friendlyError(e.message || String(e)));
     } finally {
@@ -373,7 +396,19 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
         toRawTokenAmount(tokensAmount, selectedDecimals), minSolOutLamports
       );
       setTxSig(signature);
+      const blockTime = await getConfirmedBlockTime(connection, signature);
+      void recordTrade(mintInput.trim(), {
+        signature,
+        trader: anchorWallet.publicKey.toBase58(),
+        side: "sell",
+        source: "curve",
+        token_amount: tokensIn,
+        sol_amount: estimatedSol,
+        price_sol: currentPrice,
+        block_time: blockTime,
+      });
       await Promise.all([refreshReserves(), loadWalletTokens()]);
+      fetchChartTrades(mintInput.trim(), true);
     } catch (e: any) {
       setTradeError(friendlyError(e.message || String(e)));
     } finally {
@@ -892,7 +927,15 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                   timeframe === "5m" ? 300 : timeframe === "1h" ? 3600 : 60;
 
                 return (
-                  <LightweightTradeChart trades={chartTrades} periodSec={periodSec} height={208} />
+                  <LightweightTradeChart
+                    trades={chartTrades}
+                    periodSec={periodSec}
+                    height={260}
+                    showVolume={showVolume}
+                    showSma20={indicators.sma20}
+                    showSma50={indicators.sma50}
+                    showEma20={indicators.ema20}
+                  />
                 );
               })()}
 
@@ -911,38 +954,61 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                 );
               })()}
 
-              {/* Live trade feed */}
+              {/* Trade history table */}
               {chartTrades.length > 0 && (
-                <div className="border-t border-white/5 pt-3">
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-2">All trades</p>
-                  <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+                <div className="border-t border-white/10 pt-3">
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-2">Trade history</p>
+                  {/* Header */}
+                  <div className="grid grid-cols-[52px_1fr_90px_90px_70px_24px] gap-1 px-1 pb-1 text-[10px] font-mono text-white/25 uppercase border-b border-white/5">
+                    <span>Side</span>
+                    <span>Price (SOL)</span>
+                    <span className="text-right">SOL</span>
+                    <span className="text-right">Tokens</span>
+                    <span className="text-right">Time</span>
+                    <span />
+                  </div>
+                  <div className="space-y-0 max-h-52 overflow-y-auto pr-1 mt-1">
                     {[...chartTrades]
                       .sort((a, b) => new Date(b.block_time).getTime() - new Date(a.block_time).getTime())
                       .map((trade, i) => {
                         const isBuy = trade.side === "buy";
                         const sol = Number(trade.sol_amount);
+                        const tokens = Number(trade.token_amount);
                         const price = Number(trade.price_sol);
                         const timeStr = new Date(trade.block_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
                         return (
-                          <div key={trade.signature + i} className="flex items-center justify-between text-xs py-0.5">
-                            <div className="flex items-center gap-2">
-                              <span
-                                className="w-8 text-center text-[10px] font-bold py-0.5 rounded shrink-0"
-                                style={{ color: isBuy ? "#00FF41" : "#FF3C6B", background: isBuy ? "rgba(0,255,65,0.1)" : "rgba(255,60,107,0.1)" }}
-                              >
-                                {isBuy ? "BUY" : "SELL"}
-                              </span>
-                              <span className="text-white/60 font-mono text-[10px]">
-                                {price < 0.000001 ? price.toExponential(2) : price.toFixed(9)}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2 text-white/40">
-                              <span className="font-mono">{sol.toFixed(4)} SOL</span>
-                              <span className="text-[10px] text-white/20">{timeStr}</span>
-                              <a href={`https://solscan.io/tx/${trade.signature}?cluster=devnet`} target="_blank" rel="noreferrer" className="hover:text-[#00FF41]">
-                                <ExternalLink size={9} />
-                              </a>
-                            </div>
+                          <div
+                            key={trade.signature + i}
+                            className="grid grid-cols-[52px_1fr_90px_90px_70px_24px] gap-1 px-1 py-1 text-[11px] font-mono rounded hover:bg-white/[0.03] items-center"
+                            style={{ borderLeft: `2px solid ${isBuy ? "rgba(0,255,65,0.4)" : "rgba(255,60,107,0.4)"}` }}
+                          >
+                            <span
+                              className="text-[10px] font-bold px-1.5 py-0.5 rounded text-center"
+                              style={{
+                                color: isBuy ? "#00FF41" : "#FF3C6B",
+                                background: isBuy ? "rgba(0,255,65,0.1)" : "rgba(255,60,107,0.1)"
+                              }}
+                            >
+                              {isBuy ? "BUY" : "SELL"}
+                            </span>
+                            <span className="text-white/60 truncate">
+                              {price < 0.000001 ? price.toExponential(3) : price.toFixed(9)}
+                            </span>
+                            <span className={cn("text-right", isBuy ? "text-[#00FF41]/80" : "text-[#FF3C6B]/80")}>
+                              {sol < 0.001 ? sol.toFixed(6) : sol.toFixed(4)}
+                            </span>
+                            <span className="text-white/40 text-right">
+                              {tokens > 0 ? (tokens >= 1_000_000 ? `${(tokens / 1_000_000).toFixed(2)}M` : tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}K` : tokens.toFixed(2)) : "—"}
+                            </span>
+                            <span className="text-white/25 text-right text-[10px]">{timeStr}</span>
+                            <a
+                              href={`https://solscan.io/tx/${trade.signature}?cluster=devnet`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-white/20 hover:text-[#00FF41] flex justify-center"
+                            >
+                              <ExternalLink size={9} />
+                            </a>
                           </div>
                         );
                       })}

@@ -11,9 +11,20 @@ const ALLOWED_ORIGINS = [
   'http://localhost:3000',
 ];
 
+const isAllowedOrigin = (origin) => {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  // Allow any Vercel preview deploy for this project
+  if (/^https:\/\/humbletrust(-[a-z0-9]+)*\.vercel\.app$/.test(origin)) return true;
+  return false;
+};
+
 const setCors = (req, res) => {
   const origin = req.headers.origin;
-  res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]);
+  const allowed = isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0];
+  res.setHeader('Access-Control-Allow-Origin', allowed);
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Vary', 'Origin');
 };
 

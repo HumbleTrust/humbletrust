@@ -101,6 +101,25 @@ export const getTokenOhlcv = (mint: string, timeframe: string, limit = 500) =>
     `/tokens/${mint}/ohlcv?tf=${encodeURIComponent(timeframe)}&limit=${limit}`
   );
 
+export const recordTrade = (
+  mint: string,
+  data: {
+    signature: string;
+    trader: string;
+    side: "buy" | "sell";
+    source?: "curve" | "raydium";
+    token_amount: number;
+    sol_amount: number;
+    price_sol: number;
+    block_time?: string;
+  }
+) =>
+  fetch(`${API_BASE}/tokens/${mint}/record_trade`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  }).then((r) => r.json().catch(() => ({}))).catch(() => ({}));
+
 export const chartWsUrl = (mint: string, timeframe: string) => {
   if (API_BASE_URL) {
     const base = new URL(API_BASE_URL);
