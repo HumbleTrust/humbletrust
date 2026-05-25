@@ -98,11 +98,11 @@ export const getTokenTrades = (mint: string, limit = 100) =>
 
 export const getTokenOhlcv = (mint: string, timeframe: string, limit = 500) =>
   request<{ candles: ApiCandle[]; timeframe: string }>(
-    `/tokens/${mint}/ohlcv?tf=${encodeURIComponent(timeframe)}&limit=${limit}`
+    `/tokens/${mint}/trades?format=ohlcv&tf=${encodeURIComponent(timeframe)}&limit=${limit}`
   );
 
 export const syncTokenTrades = (mint: string, limit = 100) =>
-  fetch(`${API_BASE}/tokens/${mint}/sync_trades?limit=${limit}`, { method: "POST" })
+  fetch(`${API_BASE}/tokens/${mint}/trades?action=sync&limit=${limit}`, { method: "POST" })
     .then(r => r.json() as Promise<{ synced: number; total_sigs?: number; message?: string; error?: string }>)
     .catch(e => ({ synced: 0, error: e.message }));
 
@@ -119,7 +119,7 @@ export const recordTrade = (
     block_time?: string;
   }
 ) =>
-  fetch(`${API_BASE}/tokens/${mint}/record_trade`, {
+  fetch(`${API_BASE}/tokens/${mint}/trades`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
