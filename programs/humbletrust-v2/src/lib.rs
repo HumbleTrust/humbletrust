@@ -218,11 +218,11 @@ pub mod humbletrust_v2 {
             meta.planned_burn_amount = planned_burn_amount;
             meta.total_burned = planned_burn_amount;
             meta.initial_sol_lamports = initial_sol_lamports;
-            meta.migration_threshold_lamports = MIGRATION_THRESHOLD_SOL_LAMPORTS;
+            meta.migration_threshold_lamports = migration_threshold_lamports();
             meta.migration_reward_lamports = MIGRATION_REWARD_LAMPORTS;
             meta.platform_fee_bps = PLATFORM_FEE_BPS;
             meta.creator_fee_bps = CREATOR_FEE_BPS;
-            meta.unlock_time = now + (lock_days as i64 * SECONDS_PER_DAY);
+            meta.unlock_time = now + (lock_days as i64 * seconds_per_day());
             meta.created_at = now;
             meta.lock_days = lock_days;
             meta.burn_option = burn_option;
@@ -559,7 +559,7 @@ pub mod humbletrust_v2 {
         require!(matches!(action, 1 | 2 | 3), HumbleV2Error::InvalidAction);
         require!(!done, HumbleV2Error::VestingTrancheDone);
 
-        let days_elapsed = ((now - created_at) / SECONDS_PER_DAY).max(0) as u16;
+        let days_elapsed = ((now - created_at) / seconds_per_day()).max(0) as u16;
         let (required_day, numerator, denominator) = match tranche {
             1 => (30u16, 33u64, 100u64),
             2 => (60u16, 33u64, 100u64),
@@ -714,7 +714,7 @@ pub mod humbletrust_v2 {
             HumbleV2Error::InsufficientVaultBalance
         );
 
-        let days_elapsed = ((now - created_at) / SECONDS_PER_DAY).max(0) as u64;
+        let days_elapsed = ((now - created_at) / seconds_per_day()).max(0) as u64;
         let unlocked_pct = if days_elapsed >= 90 {
             100
         } else if days_elapsed >= 60 {
@@ -1484,7 +1484,7 @@ pub mod humbletrust_v2 {
         trade.amount = amount;
         trade.buy_time = buy_time;
         trade.sell_time = now;
-        trade.is_valid_volume = now - buy_time >= SECONDS_PER_DAY;
+        trade.is_valid_volume = now - buy_time >= seconds_per_day();
         trade.suspected_wash = suspected_wash;
         trade.bump = ctx.bumps.trade_record;
 
@@ -1561,7 +1561,7 @@ pub mod humbletrust_v2 {
             HumbleV2Error::AirdropNotEligible
         );
         require!(
-            last_airdrop_time == 0 || now - last_airdrop_time >= SECONDS_PER_MONTH,
+            last_airdrop_time == 0 || now - last_airdrop_time >= seconds_per_month(),
             HumbleV2Error::AirdropTooEarly
         );
 
@@ -1701,7 +1701,10 @@ pub mod humbletrust_v2 {
         lock_days: u16,
     ) -> Result<()> {
         require!(lp_amount > 0, HumbleV2Error::InvalidAmount);
-        require!(lock_days >= 30, HumbleV2Error::InvalidLockDays);
+        require!(
+            if cfg!(feature = "test-mode") { lock_days >= 1 } else { lock_days >= 30 },
+            HumbleV2Error::InvalidLockDays
+        );
         require!(
             ctx.accounts.creator_lp_account.amount >= lp_amount,
             HumbleV2Error::InsufficientVaultBalance
@@ -1732,7 +1735,7 @@ pub mod humbletrust_v2 {
         lp_lock.is_premium = ctx.accounts.token_metadata.is_premium;
         lp_lock.lp_amount = lp_amount;
         lp_lock.lock_days = lock_days;
-        lp_lock.unlock_time = now + (lock_days as i64 * SECONDS_PER_DAY);
+        lp_lock.unlock_time = now + (lock_days as i64 * seconds_per_day());
         lp_lock.locked_at = now;
         lp_lock.last_claim_time = 0;
         lp_lock.total_fees_claimed_lamports = 0;
@@ -1773,7 +1776,7 @@ pub mod humbletrust_v2 {
             HumbleV2Error::Unauthorized
         );
         require!(
-            lp_lock.last_claim_time == 0 || now - lp_lock.last_claim_time >= LP_CLAIM_COOLDOWN,
+            lp_lock.last_claim_time == 0 || now - lp_lock.last_claim_time >= seconds_per_month(),
             HumbleV2Error::AirdropTooEarly
         );
 
@@ -3358,7 +3361,8 @@ fn validate_launch_inputs(
     require!(!symbol.is_empty(), HumbleV2Error::SymbolTooShort);
     require!(symbol.len() <= 5, HumbleV2Error::SymbolTooLong);
     require!(
-        (30..=360).contains(&lock_days),
+        if cfg!(feature = "test-mode") { (1..=360).contains(&lock_days) }
+        else { (30..=360).contains(&lock_days) },
         HumbleV2Error::InvalidLockDays
     );
     require!(
@@ -3431,6 +3435,22 @@ fn mint_to_vault<'info>(
         ),
         amount,
     )
+}
+
+// In test-mode each "day unit" = 60 seconds, so lock_days=10 → 10 minutes.
+// In test-mode each "month unit" = 300 seconds (5 minutes) for airdrop/LP cooldowns.
+// These fns are compiled out of all non-test builds.
+fn seconds_per_day() -> i64 {
+    if cfg!(feature = "test-mode") { 60 } else { SECONDS_PER_DAY }
+}
+
+fn seconds_per_month() -> i64 {
+    if cfg!(feature = "test-mode") { 300 } else { SECONDS_PER_MONTH }
+}
+
+// In test-mode migration threshold is 5 SOL instead of 50 SOL.
+fn migration_threshold_lamports() -> u64 {
+    if cfg!(feature = "test-mode") { 5_000_000_000 } else { MIGRATION_THRESHOLD_SOL_LAMPORTS }
 }
 
 fn raydium_cpmm_program_id() -> Pubkey {
@@ -3927,7 +3947,7 @@ fn refresh_dynamic_score(meta: &mut TokenMetadataV2, now: i64) {
     );
     let mut score = base.trust_score as i16;
 
-    let age_days = ((now - meta.created_at) / SECONDS_PER_DAY).max(0) as u16;
+    let age_days = ((now - meta.created_at) / seconds_per_day()).max(0) as u16;
     score += match age_days {
         30.. => 8,
         14..=29 => 5,
