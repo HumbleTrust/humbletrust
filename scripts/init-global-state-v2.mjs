@@ -44,7 +44,7 @@ console.log(
 );
 
 // Load IDL
-const idl = JSON.parse(readFileSync("app/src/lib/idl_v2.json", "utf8"));
+const idl = JSON.parse(readFileSync("web/src/lib/solana/idl_v2.json", "utf8"));
 
 // Build provider
 const wallet = new anchor.Wallet(adminKeypair);

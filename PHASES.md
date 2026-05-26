@@ -176,7 +176,7 @@ Required before mainnet:
 - Full v2 test suite.
 - Program audit.
 - Squads multisig for upgrade authority.
-- Backend/indexer for Discover and analytics.
+- API/indexer for Discover and analytics.
 - Production RPC provider and monitoring.
 - Incident response process.
 - Clear mainnet launch checklist.

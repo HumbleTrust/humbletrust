@@ -5,7 +5,6 @@ test-ledger/
 
 # Legacy / removed directories
 /app/
-/web/
 /backend/
 /migrations/
 /nft-reference.html
@@ -23,8 +22,8 @@ test-ledger/
 !*/package-lock.json
 !*/tsconfig.json
 !vercel.json
-!design-reference/src/lib/solana/idl.json
-!design-reference/src/lib/solana/idl_v2.json
+!web/src/lib/solana/idl.json
+!web/src/lib/solana/idl_v2.json
 id.json
 wallet.json
 keypair.json

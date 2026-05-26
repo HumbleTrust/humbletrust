@@ -2,7 +2,7 @@
 
 HumbleTrust is not just a token launchpad. It is a Solana Trust & Safety layer with a protected launchpad as the first enforced product surface.
 
-The current devnet build includes a v2 launch flow with PDA-based token distribution, initial SOL bonding-curve liquidity, creator vesting, burn options, metadata creation, live TrustScore calculation, backend indexing, real OHLCV chart plumbing, and an integrated devnet trade screen.
+The current devnet build includes a v2 launch flow with PDA-based token distribution, initial SOL bonding-curve liquidity, creator vesting, burn options, metadata creation, live TrustScore calculation, Vercel API indexing, real OHLCV chart plumbing, and an integrated devnet trade screen.
 
 **Production frontend:** https://humbletrust.vercel.app
 **GitHub:** https://github.com/HumbleTrust/humbletrust
@@ -72,21 +72,19 @@ See the explicit split in [`DEVNET_MAINNET_READINESS.md`](./DEVNET_MAINNET_READI
   - MAX button for sell amount
   - 0.5% / 1% / 3% / custom slippage guard
   - Solscan links
-  - TradingView Lightweight Charts connected to backend OHLCV/WebSocket
+  - TradingView Lightweight Charts connected to `/api/tokens/:mint/trades`
 - Launch Certificate NFT minting after v2 launch
-- Discover page reads indexed launches from `/backend` instead of browser localStorage.
+- Discover page reads indexed launches from `/api/tokens` instead of browser localStorage.
 - Token Detail page shows indexed TrustScore breakdown, OHLCV chart, recent trades, migration status, and certificate link.
 - About/Home pages now describe HumbleTrust as trust and safety infrastructure, not only a launchpad.
 
-### Backend / Trust Layer API
+### API / Trust Layer Surface
 
-The `/backend` package is the first real Trust Layer surface:
+The root `/api` package is the first deployed Trust Layer surface:
 
-- listens to HumbleTrust v2 Anchor events;
-- watches known Raydium CPMM pools after migration;
 - writes `tokens`, `trades`, `ohlcv`, and `wallets` to Postgres/Supabase;
-- serves `GET /tokens`, `GET /tokens/:mint`, `GET /tokens/:mint/trades`, `GET /tokens/:mint/ohlcv`, `GET /wallet/:address/reputation`;
-- serves live chart updates at `ws(s)://<backend>/chart/<mint>?tf=1m`.
+- serves `GET /api/tokens`, `GET /api/tokens/:mint`, and `GET/POST /api/tokens/:mint/trades`;
+- stores badge metadata and token registration records through Vercel serverless functions.
 
 ## TrustScore v2
 
@@ -121,9 +119,9 @@ These items are not complete yet and should not be presented as production-ready
 | --- | --- | --- |
 | Raydium CPMM migration | Real CPMM CPI builders and account validation are added | Verify end-to-end devnet pool create/deposit/migration transaction |
 | Launch Certificate NFT | Token-2022 NonTransferable mint + certificate PDA is live after v2 launch | Add richer artwork/collection metadata and profile display |
-| Creator reputation | Backend wallet table computes simple real reputation from indexed launches/trades/complaints | Build creator profile UI and abuse-resistant graph signals |
-| Discover indexing | Backend `/tokens` is wired to frontend | Deploy backend/Supabase and backfill historical devnet launches |
-| Chart data | Backend OHLCV + WebSocket + Lightweight Charts are wired | Add Raydium vault-delta parser precision and top traders/holders |
+| Creator reputation | API groundwork can store launch/trade history | Build creator profile UI and abuse-resistant graph signals |
+| Discover indexing | API `/api/tokens` is wired to frontend | Deploy Supabase tables and backfill historical devnet launches |
+| Chart data | API OHLCV route + Lightweight Charts are wired | Add Raydium vault-delta parser precision and top traders/holders |
 | Mainnet readiness | Devnet alpha only | Add full tests, audit prep, multisig authority, monitoring, and production RPC plan |
 
 ## Recommended Work Order
@@ -140,27 +138,25 @@ These items are not complete yet and should not be presented as production-ready
 ### Frontend
 
 ```bash
-cd app
+cd web
 npm install
 npm run dev
 npm run build
 ```
 
-Set `VITE_API_BASE_URL` to the backend URL for Vercel or local testing:
+Set `VITE_API_BASE_URL` only when using an external API host. Leave it empty on Vercel to use the repository `/api` functions:
 
 ```bash
-VITE_API_BASE_URL=http://localhost:8787
+VITE_API_BASE_URL=http://localhost:3000/api
 ```
 
-### Backend / indexer
+### API
 
 ```bash
-cd backend
-cp .env.example .env
-npm install
-npm run db:migrate
-npm run dev
+cd api
 ```
+
+The API routes are Vercel serverless functions and are deployed from the root `api/` directory.
 
 ### Anchor program
 
@@ -184,14 +180,16 @@ humbletrust/
   Cargo.toml
   PHASES.md
   SECURITY.md
-  app/
+  web/
     src/
       pages/
       lib/
-  backend/
-    src/
+  api/
   programs/
     humbletrust/
+    humbletrust-v2/
+  scripts/
+  supabase/
   tests/
 ```
 

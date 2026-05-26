@@ -1,7 +1,7 @@
 {
-  "buildCommand": "cd ../design-reference && npm install && npm run build",
-  "outputDirectory": "../design-reference/dist",
-  "installCommand": "echo skip-root-install",
+  "buildCommand": "npm run build --prefix web",
+  "outputDirectory": "web/dist",
+  "installCommand": "npm install && npm install --prefix web",
   "framework": null,
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/" }

@@ -19,7 +19,7 @@ In scope:
 - v1 legacy devnet program: `Gcz7NMtCqKdvzh53DF1ecoEYe7Hma9kWwdtCmmeBaxRi`
 - v2 active devnet program: `FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr`
 - Frontend application: https://humbletrust.vercel.app
-- Repository code under `programs/`, `app/`, `migrations/`, and `tests/`
+- Repository code under `programs/`, `web/`, `api/`, `supabase/migrations/`, and `tests/`
 
 Out of scope:
 
@@ -55,7 +55,7 @@ Mainnet deployment is blocked until the v2 test suite, audit, multisig authority
 | v2 five-vault model | Locked, creator, curve liquidity, circulation, and airdrop supply are separated |
 | Curve treasury PDA | Initial SOL goes to `curve_treasury_sol`, not to creator and not directly to Raydium |
 | LP destination | v2 migration state routes LP to `lp_lock_vault`; creator should never receive LP |
-| Supply validation | Backend and frontend validate supply sum, allocation ranges, and `Q + R >= 50` |
+| Supply validation | API and frontend validate supply sum, allocation ranges, and `Q + R >= 50` |
 | Creator allocation cap | Creator allocation is capped at 5% |
 | Airdrop allocation cap | Airdrop allocation is capped at 5% |
 | Burn option | Burn applies only to Locked Vault and does not break curve/circulation liquidity |

@@ -20,40 +20,25 @@ visible in Phantom / Solana Explorer).
 
 ```
 humbletrust/
-├── app/                        # Vite + React 18 frontend + Vercel serverless API
+├── web/                        # Vite + React 18 frontend
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── ZodiacBadgeCard.tsx   ← shared NFT card UI component
-│   │   │   ├── BadgeModal.tsx        ← badge mint modal (needs NFT flow update)
-│   │   │   ├── Navbar.tsx
+│   │   │   ├── Navigation.tsx
 │   │   │   └── ...
 │   │   ├── pages/
-│   │   │   ├── NFT.tsx              ← /nft marketing page (uses ZodiacBadgeCard)
-│   │   │   ├── Launch.tsx           ← token launch form
-│   │   │   ├── Trade.tsx
-│   │   │   ├── Market.tsx
+│   │   │   ├── NftPage.tsx          ← /nft marketing + badge minting
+│   │   │   ├── LaunchPage.tsx       ← token launch form
+│   │   │   ├── TradePage.tsx
+│   │   │   ├── MarketPage.tsx
 │   │   │   └── ...
 │   │   ├── lib/
-│   │   │   └── mintBadgeNft.ts      ← TODO: Metaplex Umi client-side mint
+│   │   │   └── solana/
 │   │   └── main.tsx
-│   ├── api/                          # Vercel serverless functions (Node.js CJS)
-│   │   ├── _lib/
-│   │   │   ├── db.js                ← Supabase client (singleton)
-│   │   │   └── validate.js          ← isValidWallet, setCors, rate limiting
-│   │   ├── badges/
-│   │   │   ├── _zodiac.js           ← getZodiac(date), getAuraColor(wallet)
-│   │   │   ├── eligibility.js       ← GET /api/badges/eligibility?wallet=
-│   │   │   ├── image.js             ← GET /api/badges/image?zodiac=&element=&aura=&edition=  (SVG)
-│   │   │   ├── mint.js              ← POST /api/badges/mint  (DB only, no on-chain yet)
-│   │   │   ├── sold.js              ← POST /api/badges/sold  (webhook/admin)
-│   │   │   └── index.js             ← GET /api/badges  (list)
-│   │   │   ── metadata.js           ← TODO: GET /api/badges/metadata (NFT JSON)
-│   │   │   ── prepare.js            ← TODO: POST /api/badges/prepare (reserve edition)
-│   │   │   ── confirm.js            ← TODO: POST /api/badges/confirm (store mint address)
-│   │   └── tokens/
-│   │       ├── index.js
-│   │       └── [mint].js
 │   └── package.json
+├── api/                         # Vercel serverless functions (Node.js CJS)
+│   ├── _lib/
+│   ├── badges/
+│   └── tokens/
 ├── programs/
 │   └── humbletrust-v2/src/lib.rs    ← Anchor smart contract (deployed on devnet)
 ├── supabase/
@@ -146,7 +131,7 @@ status       text                 -- 'active' | 'sold' | 'cooldown'
 ### What is NOT done yet (TODO)
 These three API files need to be created:
 
-**`app/api/badges/metadata.js`**
+**`api/badges/metadata.js`**
 ```
 GET /api/badges/metadata?zodiac=Aries&element=Fire&aura=FF7A2F&edition=1
 Returns standard Metaplex NFT metadata JSON:
@@ -160,7 +145,7 @@ Returns standard Metaplex NFT metadata JSON:
 }
 ```
 
-**`app/api/badges/prepare.js`**
+**`api/badges/prepare.js`**
 ```
 POST /api/badges/prepare  { wallet }
 1. Checks eligibility (same logic as mint.js)
@@ -169,7 +154,7 @@ POST /api/badges/prepare  { wallet }
    where metadata_uri = "{appUrl}/api/badges/metadata?zodiac=...&edition=N"
 ```
 
-**`app/api/badges/confirm.js`**
+**`api/badges/confirm.js`**
 ```
 POST /api/badges/confirm  { wallet, badge_mint, tx_signature }
 1. Validates wallet + badge_mint are valid Solana addresses
@@ -178,7 +163,7 @@ POST /api/badges/confirm  { wallet, badge_mint, tx_signature }
 
 And one TypeScript lib file:
 
-**`app/src/lib/mintBadgeNft.ts`**
+**`web/src/lib/solana/mintBadgeNft.ts`**
 ```typescript
 // Uses Metaplex Umi + walletAdapterIdentity to create a Metaplex NFT on devnet
 // Flow:
@@ -199,8 +184,7 @@ And update to `BadgeModal.tsx`:
 
 ## ZodiacBadgeCard component
 
-`app/src/components/ZodiacBadgeCard.tsx` — the canonical card UI.
-**Do not duplicate this component.** Import from here in all pages and modals.
+`web/src/app/pages/NftPage.tsx` currently contains the canonical Zodiac badge card UI and badge mint modal.
 
 Exports:
 - `ZodiacBadgeCard` — main component props: `{ zodiac, element, aura, edition, season? }`
@@ -214,10 +198,9 @@ Exports:
 ## Git
 
 **Main branch:** `main`
-**Active feature branch:** `claude/review-phases-prompt-Kh3kH`
+**Active branch:** `main`
 
-All new work goes to `claude/review-phases-prompt-Kh3kH`.
-After feature complete, PR to `main`.
+Create feature branches from `main` for new work, then merge back after testing.
 
 ---
 
@@ -236,7 +219,7 @@ VITE_PROGRAM_ID=FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr
 
 ## API conventions
 
-All API routes are Vercel serverless functions in `app/api/` using **CommonJS** (`require`/`module.exports`).
+All API routes are Vercel serverless functions in `api/` using **CommonJS** (`require`/`module.exports`).
 - Use `setCors(req, res)` from `../_lib/validate.js` at the top of every handler
 - Use `getClient()` from `../_lib/db.js` for Supabase
 - Use `isValidWallet(addr)` for all wallet address inputs
@@ -244,7 +227,7 @@ All API routes are Vercel serverless functions in `app/api/` using **CommonJS** 
 
 ---
 
-## Design tokens (CSS vars in `app/src/index.css`)
+## Design tokens (CSS vars in `web/src/styles/index.css`)
 
 ```
 --bg:           #05070F   main background

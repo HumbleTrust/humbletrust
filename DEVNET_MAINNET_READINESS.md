@@ -17,18 +17,18 @@ DEVNET is the current active product stage. It is suitable for public demos, bui
 | Protected launchpad | DEVNET ready | Fixed 1B supply, five vaults, initial SOL treasury, burn, metadata, mint authority revoke |
 | TrustScore primitive | DEVNET ready | Allocation-based TrustScore stored on-chain |
 | Bonding curve | DEVNET ready | Buy/sell, 1% fee, anti-bot delay, PDA reserves |
-| Frontend | DEVNET ready | Launch, trade, token picker, MAX sell, slippage guard, backend Discover, Token Detail, real chart component |
+| Frontend | DEVNET ready | Launch, trade, token picker, MAX sell, slippage guard, API-backed Discover, Token Detail, real chart component |
 | Launch certificate | DEVNET ready | Token-2022 NonTransferable certificate linked to launch PDA |
 | Raydium migration | CPMM CPI code added, devnet transaction verification pending | Uses official Raydium CPMM IDs and manual CPI builders. Must pass real pool create/deposit tests before investor demo claims |
-| Discover/indexing | Backend added | `/backend` indexes Anchor events into Postgres and exposes `/tokens` |
-| Chart data | Backend added | OHLCV aggregation + WebSocket `/chart/:mint`; frontend uses Lightweight Charts |
+| Discover/indexing | API added | `/api/tokens` reads indexed launches from Supabase/Postgres |
+| Chart data | API added | OHLCV aggregation through `/api/tokens/:mint/trades`; frontend uses Lightweight Charts |
 
 ### DEVNET Gaps To Close
 
 1. Run a real devnet Raydium CPMM create/deposit transaction through `create_instant_raydium_pool_v2`.
 2. Run a real devnet migration transaction after treasury threshold using the same CPI account set.
 3. Add full v2 tests for buy, sell, fees, anti-bot, slippage, certificate, reputation, and migration guard.
-4. Deploy `/backend` with Supabase/Postgres and set `VITE_API_BASE_URL` on Vercel.
+4. Deploy Supabase/Postgres tables and keep Vercel `/api` environment variables current.
 5. Improve token metadata reliability and certificate metadata display.
 6. Add creator profile UI from indexed wallet reputation.
 
@@ -77,7 +77,7 @@ High until the blockers above are closed.
 
 ### DEVNET Score
 
-**7/10** as a devnet MVP codebase after backend + real chart wiring.
+**7/10** as a devnet MVP codebase after API + real chart wiring.
 
 Strengths:
 
@@ -90,7 +90,7 @@ Strengths:
 
 Weaknesses:
 
-- Backend must be deployed and kept online.
+- Vercel API and Supabase must be deployed and kept online.
 - Raydium CPI code still needs real devnet pool/account verification.
 - TrustScore is still mostly launch-parameter based.
 - Tests are incomplete.
