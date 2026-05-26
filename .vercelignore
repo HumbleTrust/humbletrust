@@ -13,9 +13,3 @@ node_modules
 *.swp
 .env
 .env.*
-web/src
-web/public
-web/next.config.mjs
-web/tailwind.config.ts
-web/postcss.config.mjs
-web/tsconfig.json
