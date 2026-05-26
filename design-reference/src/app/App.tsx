@@ -1,4 +1,28 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Component, type ReactNode, type ErrorInfo } from "react";
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(_: Error, info: ErrorInfo) { console.error("App crash:", info.componentStack); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center gap-4 p-8">
+          <div className="text-[#00FF41] text-4xl">⚠</div>
+          <h2 className="text-lg font-bold">Something went wrong</h2>
+          <p className="text-white/50 text-sm text-center max-w-sm">{(this.state.error as Error).message}</p>
+          <button
+            onClick={() => this.setState({ error: null })}
+            className="mt-2 px-4 py-2 rounded bg-[#00FF41]/20 border border-[#00FF41]/40 text-[#00FF41] text-sm"
+          >
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import { HomePage } from "./pages/HomePage";
 import { WalletProvider } from "../lib/WalletProvider";
 import { HexagonBackground } from "./components/HexagonBackground";
@@ -44,14 +68,18 @@ export default function App() {
   };
 
   return (
-    <WalletProvider>
-      <div className="min-h-screen bg-black text-white relative overflow-hidden">
-        <HexagonBackground />
-        <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
-        <main className="relative z-10 md:ml-64 p-6 pb-24 md:pb-6">
-          <div className="max-w-[1400px] mx-auto">{renderPage()}</div>
-        </main>
-      </div>
-    </WalletProvider>
+    <ErrorBoundary>
+      <WalletProvider>
+        <div className="min-h-screen bg-black text-white relative overflow-hidden">
+          <HexagonBackground />
+          <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
+          <main className="relative z-10 md:ml-64 p-6 pb-24 md:pb-6">
+            <ErrorBoundary>
+              <div className="max-w-[1400px] mx-auto">{renderPage()}</div>
+            </ErrorBoundary>
+          </main>
+        </div>
+      </WalletProvider>
+    </ErrorBoundary>
   );
 }

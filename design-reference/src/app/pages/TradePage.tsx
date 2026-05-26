@@ -205,6 +205,13 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
     []
   );
 
+  // Declare validMint early so it can be used in useEffect deps below
+  const validMint = useMemo(() => {
+    const s = mintInput.trim();
+    if (s.length < 32 || s.length > 44) return false;
+    try { new PublicKey(s); return true; } catch { return false; }
+  }, [mintInput]);
+
   useEffect(() => {
     let mounted = true;
     isProgramExecutable(connection, PROGRAM_ID_V2_PK)
@@ -281,11 +288,6 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
     [currentPrice, priceAfterSell]
   );
 
-  const validMint = useMemo(() => {
-    const s = mintInput.trim();
-    if (s.length < 32 || s.length > 44) return false;
-    try { new PublicKey(s); return true; } catch { return false; }
-  }, [mintInput]);
   const selectedMint = mintInput.trim();
   const canUseCurve = v2Available === true;
   const isMainnet = tokenInfo?.network === "mainnet-beta";

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { ApiToken, ApiTrade, getToken, getTokens, getTokenTrades } from "../../lib/solana/api";
 import { listTokens, SavedToken } from "../../lib/solana/image";
 import { GlassPanel } from "../components/GlassPanel";
+import { LightweightTradeChart } from "../components/LightweightTradeChart";
 import { cn } from "../components/ui/utils";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -114,16 +115,13 @@ const TokenDetailView = ({ mint, onBack }: TokenDetailViewProps) => {
             <span className="w-px h-4 bg-white/10 mx-1" />
             <span className="text-xs text-white/40">Real OHLCV</span>
           </div>
-          <div className="p-4">
-            {/* LiveMarketChart would render here when available */}
-            <div className="h-72 flex items-center justify-center rounded-lg bg-white/[0.02] border border-white/5">
-              <div className="text-center text-white/30">
-                <div className="text-4xl mb-2">📈</div>
-                <p className="text-sm">{token?.symbol || mint.slice(0, 6)} / SOL</p>
-                <p className="text-xs mt-1">1m · OHLCV</p>
-              </div>
-            </div>
-          </div>
+          <LightweightTradeChart
+            trades={trades}
+            periodSec={60}
+            height={288}
+            showVolume={true}
+            mode="candles"
+          />
         </GlassPanel>
 
         {/* Score card */}
