@@ -173,6 +173,7 @@ module.exports = async (req, res) => {
       return await handleGetTrades(mint, req, res);
     }
     if (req.method === "POST") {
+      console.log("[trades:POST] action=", req.query.action, "mint:", mint?.slice(0, 8), "body-keys:", Object.keys(req.body || {}));
       if (req.query.action === "sync") return await handleSyncTrades(mint, req, res);
       return await handleRecordTrade(mint, req, res);
     }
