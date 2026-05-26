@@ -68,6 +68,22 @@ const request = async <T>(path: string): Promise<T> => {
   }
 };
 
+const readJson = async <T>(response: Response): Promise<T> => {
+  const text = await response.text();
+  let body: any = {};
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      throw new Error(text.slice(0, 180));
+    }
+  }
+  if (!response.ok) {
+    throw new Error(body?.error || `HTTP ${response.status}`);
+  }
+  return body as T;
+};
+
 export const registerToken = (data: {
   mint: string;
   creator: string;
@@ -85,7 +101,7 @@ export const registerToken = (data: {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
-  }).then((r) => r.json());
+  }).then((r) => readJson<{ ok?: boolean; error?: string }>(r));
 
 export const getTokens = (limit = 100) =>
   request<{ tokens: ApiToken[] }>(`/tokens?limit=${limit}`);
@@ -103,7 +119,7 @@ export const getTokenOhlcv = (mint: string, timeframe: string, limit = 500) =>
 
 export const syncTokenTrades = (mint: string, limit = 100) =>
   fetch(`${API_BASE}/tokens/${mint}/trades?action=sync&limit=${limit}`, { method: "POST" })
-    .then(r => r.json() as Promise<{ synced: number; total_sigs?: number; message?: string; error?: string }>)
+    .then((r) => readJson<{ synced: number; total_sigs?: number; message?: string; error?: string }>(r))
     .catch(e => ({ synced: 0, error: e.message }));
 
 export const recordTrade = (
@@ -123,7 +139,9 @@ export const recordTrade = (
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
-  }).then((r) => r.json().catch(() => ({}))).catch(() => ({}));
+  })
+    .then((r) => readJson<{ ok?: boolean; error?: string }>(r))
+    .catch((e) => ({ error: e.message }));
 
 export const chartWsUrl = (mint: string, timeframe: string) => {
   if (API_BASE_URL) {

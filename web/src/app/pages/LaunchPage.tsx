@@ -86,6 +86,13 @@ function HexLogo({
 const inputCls =
   "w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#00FF41]/50";
 
+const DEVNET_TEST_MODE = true;
+const V2_MIN_LOCK_UNITS = DEVNET_TEST_MODE ? 1 : 30;
+const v2LockUnit = DEVNET_TEST_MODE ? "m" : "d";
+const v2LockLabel = DEVNET_TEST_MODE ? "Lock minutes (1–360)" : "Lock days (30–360)";
+const v2LockTicks = DEVNET_TEST_MODE ? ["1", "180", "360"] : ["30", "180", "360"];
+const v2ScheduleUnit = DEVNET_TEST_MODE ? "Minute" : "Day";
+
 // ── Score color helpers ───────────────────────────────────────────────────────
 function getScoreColor(score: number, isV2: boolean) {
   if (isV2) {
@@ -133,6 +140,8 @@ export function LaunchPage() {
   const [certError, setCertError] = useState<string | null>(null);
   const [certMint, setCertMint] = useState<string | null>(null);
   const [certSignature, setCertSignature] = useState<string | null>(null);
+  const [dbSaved, setDbSaved] = useState(false);
+  const [dbError, setDbError] = useState<string | null>(null);
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [launchMode, setLaunchMode] = useState<LaunchMode>("checking");
   const [programStatusError, setProgramStatusError] = useState<string | null>(null);
@@ -142,7 +151,7 @@ export function LaunchPage() {
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
   const [lockPercent, setLockPercent] = useState(40);
-  const [lockDays, setLockDays] = useState(90);
+  const [lockDays, setLockDays] = useState(DEVNET_TEST_MODE ? 1 : 90);
   const [burn, setBurn] = useState<25 | 50>(50);
   const [creatorAlloc, setCreatorAlloc] = useState(3);
   const [curveLiquidity, setCurveLiquidity] = useState(35);
@@ -186,6 +195,7 @@ export function LaunchPage() {
     if (launchMode === "v2") {
       setAirdrop((value) => Math.min(value, 5));
       setCreatorAlloc((value) => Math.min(value, 5));
+      setLockDays((value) => Math.max(V2_MIN_LOCK_UNITS, value));
     }
   }, [launchMode]);
 
@@ -331,6 +341,7 @@ export function LaunchPage() {
   const handleLaunch = async () => {
     if (!anchorWallet || !wallet.connected) { alert("Connect wallet first"); return; }
     setBusy(true); setError(null); setResult(null);
+    setDbSaved(false); setDbError(null);
     setCertDone(false); setCertError(null); setCertMint(null); setCertSignature(null);
     try {
       const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
@@ -365,16 +376,33 @@ export function LaunchPage() {
       saveToken(savedToken);
       setResult({ signature, mint: mintStr });
 
-      registerToken({
-        mint: mintStr,
-        creator: anchorWallet.publicKey.toBase58(),
-        name, symbol, signature,
-        launchScore: trustScore,
-        lockPercent,
-        burnOption: burn,
-        tier,
-        logoUri: logoDataUrl || null,
-      }).catch(() => {});
+      const registerInNetwork = async (certificateMint?: string | null) => {
+        try {
+          const response = await registerToken({
+            mint: mintStr,
+            creator: anchorWallet.publicKey.toBase58(),
+            name, symbol, signature,
+            launchScore: trustScore,
+            lockPercent,
+            burnOption: burn,
+            tier,
+            certificateMint,
+            logoUri: logoDataUrl || null,
+          });
+          if (response?.error) throw new Error(response.error);
+          setDbSaved(true);
+          setDbError(null);
+          return true;
+        } catch (e: any) {
+          const message = e?.message || String(e);
+          console.error("[registerToken]", message);
+          setDbSaved(false);
+          setDbError(message);
+          return false;
+        }
+      };
+
+      await registerInNetwork();
 
       if (useV2) {
         const cert = await mintCertificateForMint(mintStr, name);
@@ -388,17 +416,7 @@ export function LaunchPage() {
             certificateSignature,
           });
           setResult({ signature, mint: mintStr, certificateMint, certificateSignature });
-          registerToken({
-            mint: mintStr,
-            creator: anchorWallet.publicKey.toBase58(),
-            name, symbol, signature,
-            launchScore: trustScore,
-            lockPercent,
-            burnOption: burn,
-            tier,
-            certificateMint,
-            logoUri: logoDataUrl || null,
-          }).catch(() => {});
+          await registerInNetwork(certificateMint);
         }
       }
     } catch (e: any) {
@@ -656,12 +674,12 @@ export function LaunchPage() {
                 unit="%"
               />
               <SliderGroup
-                label="Lock days (30–360)"
-                min={30} max={360}
+                label={isV2Launch ? v2LockLabel : "Lock days (30–360)"}
+                min={isV2Launch ? V2_MIN_LOCK_UNITS : 30} max={360}
                 value={lockDays}
                 onChange={setLockDays}
-                ticks={["30", "180", "360"]}
-                unit="d"
+                ticks={isV2Launch ? v2LockTicks : ["30", "180", "360"]}
+                unit={isV2Launch ? v2LockUnit : "d"}
               />
 
               {/* Burn option */}
@@ -858,6 +876,14 @@ export function LaunchPage() {
                 >
                   View on Solscan <ExternalLink size={12} />
                 </a>
+                {dbSaved && (
+                  <p className="text-[#00FF41] text-xs mt-3">✓ Indexed in the network database</p>
+                )}
+                {dbError && (
+                  <p className="text-yellow-400 text-xs mt-3 break-words">
+                    Network database index failed: {dbError}
+                  </p>
+                )}
                 {certBusy && (
                   <div className="flex items-center gap-2 mt-3 text-blue-300 text-xs">
                     <Loader size={12} className="animate-spin" /> Minting Launch Certificate NFT...
@@ -1085,7 +1111,7 @@ export function LaunchPage() {
               <div className="space-y-1.5 text-sm">
                 {isV2Launch ? (
                   <>
-                    <ScoreRow label={`Lock duration (${lockDays}d)`} val={trustBreakdown.days} max={25} />
+                    <ScoreRow label={`Lock duration (${lockDays}${v2LockUnit})`} val={trustBreakdown.days} max={25} />
                     <ScoreRow label={`Lock percent (${lockPercent}%)`} val={trustBreakdown.lock} max={20} />
                     <ScoreRow label={`Creator % (${creatorAlloc}%)`} val={trustBreakdown.creator} max={15} />
                     <ScoreRow label={`Curve liquidity (${curveLiquidity}%)`} val={trustBreakdown.curve} max={10} />
@@ -1118,9 +1144,9 @@ export function LaunchPage() {
               <div className="text-xs text-white/50 leading-loose">
                 {isV2Launch ? (
                   <>
-                    <p>Day 30: 33% of creator vault ({(creatorAlloc * 0.33).toFixed(2)}% of supply)</p>
-                    <p>Day 60: 33% of creator vault ({(creatorAlloc * 0.33).toFixed(2)}% of supply)</p>
-                    <p>Day 90: 34% of creator vault ({(creatorAlloc * 0.34).toFixed(2)}% of supply)</p>
+                    <p>{v2ScheduleUnit} 30: 33% of creator vault ({(creatorAlloc * 0.33).toFixed(2)}% of supply)</p>
+                    <p>{v2ScheduleUnit} 60: 33% of creator vault ({(creatorAlloc * 0.33).toFixed(2)}% of supply)</p>
+                    <p>{v2ScheduleUnit} 90: 34% of creator vault ({(creatorAlloc * 0.34).toFixed(2)}% of supply)</p>
                   </>
                 ) : (
                   <>

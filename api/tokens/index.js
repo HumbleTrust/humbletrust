@@ -26,7 +26,10 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === "POST") {
-      const { mint, creator, name, symbol, signature, launchScore, lockPercent, burnOption, certificateMint, tier } = req.body || {};
+      const {
+        mint, creator, name, symbol, signature, launchScore, lockPercent,
+        burnOption, certificateMint, tier, logoUri, logo_uri
+      } = req.body || {};
 
       if (!mint || !creator) return res.status(400).json({ error: "mint and creator required" });
       if (!isValidWallet(mint)) return res.status(400).json({ error: "invalid mint address" });
@@ -50,6 +53,7 @@ module.exports = async (req, res) => {
         lock_percent: lockPercent || null,
         burn_option: burnOption || null,
         certificate_mint: certificateMint || null,
+        logo_uri: logoUri || logo_uri || null,
         tier: tierValue,
         updated_at: new Date().toISOString(),
       }, { onConflict: "mint", ignoreDuplicates: false });

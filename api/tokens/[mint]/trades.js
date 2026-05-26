@@ -7,7 +7,6 @@
  * POST /api/tokens/:mint/trades?action=sync   → backfill from Solana RPC
  */
 
-const { Connection, PublicKey } = require("@solana/web3.js");
 const { getClient } = require("../../_lib/db");
 const { isValidWallet, setCors } = require("../../_lib/validate");
 
@@ -20,7 +19,14 @@ const TF_SECONDS = {
   "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400,
 };
 
+let web3;
+function getWeb3() {
+  if (!web3) web3 = require("@solana/web3.js");
+  return web3;
+}
+
 function derivePdas(mint) {
+  const { PublicKey } = getWeb3();
   const mintPk    = new PublicKey(mint);
   const programPk = new PublicKey(PROGRAM_ID_V2);
   const enc = s => Buffer.from(s);
@@ -91,6 +97,7 @@ async function handleRecordTrade(mint, req, res) {
 }
 
 async function handleSyncTrades(mint, req, res) {
+  const { Connection } = getWeb3();
   const limit = Math.min(Number(req.query.limit) || 100, 500);
   const conn  = new Connection(RPC_ENDPOINT, "confirmed");
   const { curveTreasurySol, curvePoolVault } = derivePdas(mint);

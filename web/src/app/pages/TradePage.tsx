@@ -529,18 +529,23 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       const { signature } = await buyOnCurveV2(program, anchorWallet.publicKey, mint, ata, Number(solAmount), minTokensOut);
       setTxSig(signature);
       const blockTime = await getConfirmedBlockTime(connection, signature);
+      const indexedTrade = await recordTrade(mintInput.trim(), {
+        signature,
+        trader: anchorWallet.publicKey.toBase58(),
+        side: "buy",
+        source: "curve",
+        token_amount: estimatedTokens,
+        sol_amount: solIn,
+        price_sol: currentPrice,
+        block_time: blockTime,
+      });
+      if (indexedTrade?.error) {
+        console.error("[recordTrade:buy]", indexedTrade.error);
+        setChartError(`Trade saved on-chain, but chart history did not index: ${indexedTrade.error}`);
+      } else {
+        setChartError(null);
+      }
       await Promise.all([
-        recordTrade(mintInput.trim(), {
-          signature,
-          trader: anchorWallet.publicKey.toBase58(),
-          side: "buy",
-          source: "curve",
-          token_amount: estimatedTokens,
-          sol_amount: solIn,
-          price_sol: currentPrice,
-          block_time: blockTime,
-        }).then(r => { if (r?.error) console.error("[recordTrade:buy]", r.error); })
-          .catch(e => console.error("[recordTrade:buy]", e)),
         refreshReserves(),
         loadWalletTokens(),
       ]);
@@ -571,18 +576,23 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       );
       setTxSig(signature);
       const blockTime = await getConfirmedBlockTime(connection, signature);
+      const indexedTrade = await recordTrade(mintInput.trim(), {
+        signature,
+        trader: anchorWallet.publicKey.toBase58(),
+        side: "sell",
+        source: "curve",
+        token_amount: tokensIn,
+        sol_amount: estimatedSol,
+        price_sol: currentPrice,
+        block_time: blockTime,
+      });
+      if (indexedTrade?.error) {
+        console.error("[recordTrade:sell]", indexedTrade.error);
+        setChartError(`Trade saved on-chain, but chart history did not index: ${indexedTrade.error}`);
+      } else {
+        setChartError(null);
+      }
       await Promise.all([
-        recordTrade(mintInput.trim(), {
-          signature,
-          trader: anchorWallet.publicKey.toBase58(),
-          side: "sell",
-          source: "curve",
-          token_amount: tokensIn,
-          sol_amount: estimatedSol,
-          price_sol: currentPrice,
-          block_time: blockTime,
-        }).then(r => { if (r?.error) console.error("[recordTrade:sell]", r.error); })
-          .catch(e => console.error("[recordTrade:sell]", e)),
         refreshReserves(),
         loadWalletTokens(),
       ]);
@@ -1270,6 +1280,15 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                   </div>
                 );
 
+                if (chartError) return (
+                  <div className="h-52 flex items-center justify-center rounded-lg bg-red-500/[0.04] border border-red-500/15">
+                    <div className="text-center max-w-md px-4">
+                      <p className="text-red-300 text-sm mb-1">Chart history unavailable</p>
+                      <p className="text-red-300/60 text-xs break-words">{chartError}</p>
+                    </div>
+                  </div>
+                );
+
                 const hasData = chartTrades.filter(t => Number(t.price_sol) > 0).length > 0;
                 if (!hasData) return (
                   <div className="h-52 flex items-center justify-center rounded-lg bg-white/[0.02] border border-white/5">
@@ -1576,6 +1595,20 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
               )}
 
               {migrationError && <div className="text-red-400 text-xs mt-2">{migrationError}</div>}
+            </GlassPanel>
+          )}
+
+          {!isMainnet && canUseCurve && validMint && !migrationState && (
+            <GlassPanel className="p-4 border-yellow-500/20 bg-yellow-500/5">
+              <div className="flex gap-3">
+                <AlertTriangle size={16} className="text-yellow-400 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-semibold text-yellow-400 text-sm mb-1">No v2 launch data for this mint</div>
+                  <div className="text-white/50 text-xs leading-relaxed">
+                    Launch or select a HumbleTrust v2 devnet token to show migration progress, Raydium actions, and LP controls.
+                  </div>
+                </div>
+              </div>
             </GlassPanel>
           )}
         </motion.div>
