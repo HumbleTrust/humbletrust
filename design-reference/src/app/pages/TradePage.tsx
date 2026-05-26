@@ -963,6 +963,8 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                     showSma20={indicators.sma20}
                     showSma50={indicators.sma50}
                     showEma20={indicators.ema20}
+                    showRsi={indicators.rsi}
+                    mode={chartMode}
                   />
                 );
               })()}
