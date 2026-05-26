@@ -756,6 +756,7 @@ pub mod humbletrust_v2 {
             .circulation_amount
             .checked_add(amount)
             .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        refresh_dynamic_score(meta, now);
 
         emit!(CirculationAddedV2 {
             mint: meta.mint,
@@ -1173,6 +1174,8 @@ pub mod humbletrust_v2 {
             .amount
             .checked_sub(init_token_amount)
             .unwrap_or(ctx.accounts.curve_pool_vault.amount);
+        meta.trust_score = meta.trust_score.saturating_add(8).min(100);
+        refresh_dynamic_score(meta, now);
 
         let lp_lock = &mut ctx.accounts.lp_lock_vault;
         lp_lock.token_mint = meta.mint;
@@ -1367,6 +1370,8 @@ pub mod humbletrust_v2 {
         meta.migrated_at = now;
         meta.curve_sol_reserve_lamports = ctx.accounts.curve_treasury_sol.current_sol_lamports;
         meta.curve_token_reserve_amount = 0;
+        meta.trust_score = meta.trust_score.saturating_add(8).min(100);
+        refresh_dynamic_score(meta, now);
 
         let lp_lock = &mut ctx.accounts.lp_lock_vault;
         lp_lock.token_mint = meta.mint;
@@ -1596,6 +1601,7 @@ pub mod humbletrust_v2 {
         meta.last_airdrop_time = now;
         meta.total_airdrops_executed = meta.total_airdrops_executed.saturating_add(1);
         meta.min_score_this_month = meta.trust_score;
+        refresh_dynamic_score(meta, now);
 
         emit!(AirdropEpochExecutedV2 {
             mint: meta.mint,
@@ -1734,6 +1740,13 @@ pub mod humbletrust_v2 {
         lp_lock.lp_vault_bump = ctx.bumps.lp_vault;
         lp_lock.lp_fee_pool_bump = ctx.bumps.lp_fee_pool;
 
+        let lp_bonus: u8 = if lock_days >= 180 { 10 } else if lock_days >= 90 { 5 } else { 0 };
+        if lp_bonus > 0 {
+            let meta = &mut ctx.accounts.token_metadata;
+            meta.trust_score = meta.trust_score.saturating_add(lp_bonus).min(100);
+            refresh_dynamic_score(meta, now);
+        }
+
         let pool = &mut ctx.accounts.lp_fee_pool;
         pool.token_mint = ctx.accounts.token_mint.key();
         pool.bump = ctx.bumps.lp_fee_pool;
@@ -1813,23 +1826,26 @@ pub mod humbletrust_v2 {
 
     pub fn unlock_lp_tokens_v2(ctx: Context<UnlockLpTokensV2>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
-        let lp_lock = &mut ctx.accounts.lp_lock;
 
         require_keys_eq!(
-            lp_lock.creator,
+            ctx.accounts.lp_lock.creator,
             ctx.accounts.creator.key(),
             HumbleV2Error::Unauthorized
         );
         require!(
-            now >= lp_lock.unlock_time,
+            now >= ctx.accounts.lp_lock.unlock_time,
             HumbleV2Error::TokensStillLocked
         );
-        require!(lp_lock.lp_amount > 0, HumbleV2Error::InsufficientVaultBalance);
+        require!(
+            ctx.accounts.lp_lock.lp_amount > 0,
+            HumbleV2Error::InsufficientVaultBalance
+        );
 
-        let amount = lp_lock.lp_amount;
-        let token_mint_key = lp_lock.token_mint;
+        let amount = ctx.accounts.lp_lock.lp_amount;
+        let token_mint_key = ctx.accounts.lp_lock.token_mint;
         // lp_vault's token authority was set to lp_lock PDA during lock_lp_tokens_v2
-        let bump_seed = [lp_lock.bump];
+        let bump = ctx.accounts.lp_lock.bump;
+        let bump_seed = [bump];
         let signer_seeds: &[&[u8]] = &[b"lp_lock_v2", token_mint_key.as_ref(), &bump_seed];
         let signer = &[signer_seeds];
 
@@ -1846,7 +1862,7 @@ pub mod humbletrust_v2 {
             amount,
         )?;
 
-        lp_lock.lp_amount = 0;
+        ctx.accounts.lp_lock.lp_amount = 0;
 
         Ok(())
     }
@@ -2641,6 +2657,7 @@ pub struct LockLpTokensV2<'info> {
     pub creator: Signer<'info>,
 
     #[account(
+        mut,
         seeds = [b"token_metadata_v2", token_mint.key().as_ref()],
         bump = token_metadata.bump
     )]
