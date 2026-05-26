@@ -9,10 +9,13 @@ import {
   ArrowDown,
   Clock,
   ExternalLink,
+  Lock,
   Maximize2,
   Minimize2,
   RefreshCw,
+  Rocket,
   TrendingUp,
+  Unlock,
   Zap,
 } from "lucide-react";
 import { getTokenTrades, recordTrade, syncTokenTrades, type ApiTrade } from "../../lib/solana/api";
@@ -22,10 +25,20 @@ import { LightweightTradeChart } from "../components/LightweightTradeChart";
 import {
   PROGRAM_ID_V2_PK,
   buyOnCurveV2,
+  claimLpFeesV2,
+  fetchLpLockState,
+  fetchMigrationState,
+  findLpLockV2Pda,
+  findRaydiumCpmmPdas,
   findV2Pdas,
   getProgramV2,
   isProgramExecutable,
+  lockLpTokensV2,
+  migrateToRaydiumV2,
   sellOnCurveV2,
+  unlockLpTokensV2,
+  type LpLockState,
+  type MigrationState,
 } from "../../lib/solana/program";
 import { listTokens } from "../../lib/solana/image";
 import { motion } from "motion/react";
@@ -199,6 +212,15 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   const [jupiterQuoting, setJupiterQuoting] = useState(false);
   const tokenInfoRef = useRef<TokenInfo | null>(null);
 
+  // Migration state (devnet curve tokens only)
+  const [migrationState, setMigrationState] = useState<MigrationState | null>(null);
+  const [lpLockState, setLpLockState]       = useState<LpLockState | null>(null);
+  const [migrationBusy, setMigrationBusy]   = useState(false);
+  const [lpLockBusy, setLpLockBusy]         = useState(false);
+  const [lpLockDays, setLpLockDays]         = useState("1");
+  const [lpLockAmt, setLpLockAmt]           = useState("");
+  const [migrationError, setMigrationError] = useState<string | null>(null);
+
   // Separate mainnet RPC connection for Jupiter swaps
   const mainnetConnection = useMemo(
     () => new Connection("https://api.mainnet-beta.solana.com", "confirmed"),
@@ -228,6 +250,13 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       .catch(() => {});
     return () => { mounted = false; };
   }, [wallet.publicKey, connection, txSig]);
+
+  // Auto-load migration state when mint changes (devnet curve only)
+  useEffect(() => {
+    if (!validMint || !canUseCurve) { setMigrationState(null); setLpLockState(null); return; }
+    void refreshMigrationState();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [validMint, mintInput, canUseCurve]);
 
   // Keep ref in sync for use inside fetchChartTrades closure
   useEffect(() => { tokenInfoRef.current = tokenInfo; }, [tokenInfo]);
@@ -417,10 +446,25 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
     }
   };
 
+  const refreshMigrationState = useCallback(async (mintOverride?: string) => {
+    const mintValue = (mintOverride ?? mintInput).trim();
+    if (!canUseCurve || mintValue.length < 32) return;
+    try {
+      const mint = new PublicKey(mintValue);
+      const [ms, ls] = await Promise.all([
+        fetchMigrationState(connection, mint),
+        fetchLpLockState(connection, mint),
+      ]);
+      setMigrationState(ms);
+      setLpLockState(ls);
+    } catch { /* silent */ }
+  }, [mintInput, canUseCurve, connection]);
+
   const selectWalletToken = (token: WalletTokenOption) => {
     setMintInput(token.mint);
     setTokenPickerOpen(false);
     void refreshReserves(token.mint);
+    void refreshMigrationState(token.mint);
   };
 
   const setMaxSellAmount = () => {
@@ -546,6 +590,80 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       setTradeError(friendlyError(e.message || String(e)));
     } finally {
       setBusy(null);
+    }
+  };
+
+  const runMigrate = async () => {
+    if (!anchorWallet || !wallet.connected || !validMint) return;
+    setMigrationBusy(true); setMigrationError(null);
+    try {
+      const mint = new PublicKey(mintInput.trim());
+      const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
+      const program = getProgramV2(provider);
+      const { signature } = await migrateToRaydiumV2(program, anchorWallet.publicKey, mint);
+      setTxSig(signature);
+      await refreshMigrationState();
+    } catch (e: any) {
+      setMigrationError(friendlyError(e.message || String(e)));
+    } finally {
+      setMigrationBusy(false);
+    }
+  };
+
+  const runLockLp = async () => {
+    if (!anchorWallet || !wallet.connected || !validMint || !migrationState?.isMigrated) return;
+    const lpMintStr = lpLockState?.lpMint ?? findRaydiumCpmmPdas(new PublicKey(mintInput.trim())).lpMint.toBase58();
+    setLpLockBusy(true); setMigrationError(null);
+    try {
+      const mint  = new PublicKey(mintInput.trim());
+      const lpMint = new PublicKey(lpMintStr);
+      const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
+      const program  = getProgramV2(provider);
+      const lpAmtRaw = Math.floor(Number(lpLockAmt) * 1e9);
+      if (lpAmtRaw <= 0) throw new Error("Enter LP amount to lock");
+      const days = Math.max(1, Math.floor(Number(lpLockDays)));
+      const { signature } = await lockLpTokensV2(program, anchorWallet.publicKey, mint, lpMint, lpAmtRaw, days);
+      setTxSig(signature);
+      await refreshMigrationState();
+    } catch (e: any) {
+      setMigrationError(friendlyError(e.message || String(e)));
+    } finally {
+      setLpLockBusy(false);
+    }
+  };
+
+  const runClaimLpFees = async () => {
+    if (!anchorWallet || !wallet.connected || !validMint) return;
+    setLpLockBusy(true); setMigrationError(null);
+    try {
+      const mint = new PublicKey(mintInput.trim());
+      const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
+      const program  = getProgramV2(provider);
+      const { signature } = await claimLpFeesV2(program, anchorWallet.publicKey, mint);
+      setTxSig(signature);
+      await refreshMigrationState();
+    } catch (e: any) {
+      setMigrationError(friendlyError(e.message || String(e)));
+    } finally {
+      setLpLockBusy(false);
+    }
+  };
+
+  const runUnlockLp = async () => {
+    if (!anchorWallet || !wallet.connected || !validMint || !lpLockState) return;
+    setLpLockBusy(true); setMigrationError(null);
+    try {
+      const mint   = new PublicKey(mintInput.trim());
+      const lpMint = new PublicKey(lpLockState.lpMint);
+      const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
+      const program  = getProgramV2(provider);
+      const { signature } = await unlockLpTokensV2(program, anchorWallet.publicKey, mint, lpMint);
+      setTxSig(signature);
+      await refreshMigrationState();
+    } catch (e: any) {
+      setMigrationError(friendlyError(e.message || String(e)));
+    } finally {
+      setLpLockBusy(false);
     }
   };
 
@@ -1329,6 +1447,136 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
             </button>
             {reserveError && <div className="text-red-400 text-xs mt-2">{reserveError}</div>}
           </GlassPanel>}
+
+          {/* ── Migration progress (devnet curve only) ── */}
+          {!isMainnet && canUseCurve && validMint && migrationState && (
+            <GlassPanel className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 font-bold text-white text-sm">
+                  <Rocket size={14} className={migrationState.isMigrated ? "text-[#00FF41]" : "text-yellow-400"} />
+                  {migrationState.isMigrated ? "Migrated to Raydium" : "Raydium Migration"}
+                </div>
+                {!migrationState.isMigrated && (
+                  <span className="text-white/40 text-xs font-mono">
+                    {(migrationState.currentSolLamports / LAMPORTS_PER_SOL).toFixed(3)} / {(migrationState.thresholdLamports / LAMPORTS_PER_SOL).toFixed(1)} SOL
+                  </span>
+                )}
+              </div>
+
+              {!migrationState.isMigrated ? (
+                <>
+                  {/* Progress bar */}
+                  <div className="w-full h-2 bg-white/10 rounded-full mb-3 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${migrationState.progressPct.toFixed(1)}%`,
+                        background: migrationState.progressPct >= 100
+                          ? "linear-gradient(90deg, #00FF41, #00cc33)"
+                          : "linear-gradient(90deg, #facc15, #f59e0b)",
+                      }}
+                    />
+                  </div>
+                  <div className="text-white/40 text-xs mb-3">
+                    {migrationState.progressPct.toFixed(1)}% — reach 100% to open Raydium CPMM pool
+                  </div>
+                  <button
+                    onClick={runMigrate}
+                    disabled={migrationState.progressPct < 100 || migrationBusy || !wallet.connected}
+                    className="w-full py-2.5 rounded-lg font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{
+                      background: migrationState.progressPct >= 100
+                        ? "linear-gradient(135deg, #00FF41, #00cc33)"
+                        : "rgba(255,255,255,0.05)",
+                      color: migrationState.progressPct >= 100 ? "#000" : "rgba(255,255,255,0.4)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                    }}
+                  >
+                    {migrationBusy
+                      ? "Migrating…"
+                      : migrationState.progressPct >= 100
+                        ? "🚀 Trigger Migration · Earn 0.1 SOL"
+                        : `Needs ${((migrationState.thresholdLamports - migrationState.currentSolLamports) / LAMPORTS_PER_SOL).toFixed(2)} more SOL`}
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/* Migrated state */}
+                  <div className="text-xs font-mono text-white/50 mb-3 break-all">
+                    Pool: {migrationState.raydiumPool.slice(0, 8)}…{migrationState.raydiumPool.slice(-6)}
+                  </div>
+                  <a
+                    href={`https://raydium.io/liquidity/increase/?mode=add&pool_id=${migrationState.raydiumPool}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 mb-4"
+                  >
+                    View pool on Raydium <ExternalLink size={10} />
+                  </a>
+
+                  {/* LP Lock section */}
+                  {lpLockState ? (
+                    <div className="bg-white/5 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
+                        <Lock size={11} className="text-yellow-400" />
+                        LP Locked
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div><span className="text-white/40">Amount</span><br /><span className="font-mono">{(lpLockState.lpAmount / 1e9).toFixed(4)}</span></div>
+                        <div><span className="text-white/40">Lock days</span><br /><span className="font-mono">{lpLockState.lockDays}</span></div>
+                        <div><span className="text-white/40">Unlocks</span><br /><span className="font-mono">{new Date(lpLockState.unlockTime * 1000).toLocaleDateString()}</span></div>
+                        <div><span className="text-white/40">Fees claimed</span><br /><span className="font-mono">{(lpLockState.totalFeesClaimed / LAMPORTS_PER_SOL).toFixed(4)} SOL</span></div>
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={runClaimLpFees}
+                          disabled={lpLockBusy || !wallet.connected}
+                          className="flex-1 py-2 rounded-lg bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 text-xs font-semibold hover:bg-yellow-500/25 disabled:opacity-40 transition-all"
+                        >
+                          {lpLockBusy ? "…" : "Claim Fees"}
+                        </button>
+                        {Date.now() / 1000 >= lpLockState.unlockTime && (
+                          <button
+                            onClick={runUnlockLp}
+                            disabled={lpLockBusy || !wallet.connected}
+                            className="flex-1 py-2 rounded-lg bg-[#00FF41]/15 border border-[#00FF41]/30 text-[#00FF41] text-xs font-semibold hover:bg-[#00FF41]/25 disabled:opacity-40 transition-all"
+                          >
+                            <Unlock size={10} className="inline mr-1" />Unlock LP
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : wallet.connected && (
+                    <div className="space-y-2">
+                      <div className="text-xs text-white/40 font-semibold">Lock your LP tokens</div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="number" placeholder="LP amount" min={0.001} step={0.001}
+                          value={lpLockAmt}
+                          onChange={e => setLpLockAmt(e.target.value)}
+                          className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-xs focus:border-[#00FF41]/50 focus:outline-none"
+                        />
+                        <input
+                          type="number" placeholder="Days (min 1)" min={1} max={360}
+                          value={lpLockDays}
+                          onChange={e => setLpLockDays(e.target.value)}
+                          className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-xs focus:border-[#00FF41]/50 focus:outline-none"
+                        />
+                      </div>
+                      <button
+                        onClick={runLockLp}
+                        disabled={lpLockBusy || !lpLockAmt}
+                        className="w-full py-2 rounded-lg bg-[#00FF41]/10 border border-[#00FF41]/30 text-[#00FF41] text-xs font-semibold hover:bg-[#00FF41]/20 disabled:opacity-40 transition-all"
+                      >
+                        <Lock size={10} className="inline mr-1" />{lpLockBusy ? "Locking…" : "Lock LP Tokens"}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {migrationError && <div className="text-red-400 text-xs mt-2">{migrationError}</div>}
+            </GlassPanel>
+          )}
         </motion.div>
       </div>
 

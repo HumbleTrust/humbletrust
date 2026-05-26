@@ -1,4 +1,4 @@
-import { Program, AnchorProvider, BN, Idl } from "@coral-xyz/anchor";
+import { Program, AnchorProvider, BN, Idl, BorshAccountsCoder } from "@coral-xyz/anchor";
 import { PublicKey, Keypair, SystemProgram, SYSVAR_RENT_PUBKEY, Connection, LAMPORTS_PER_SOL, Transaction } from "@solana/web3.js";
 import {
   AuthorityType,
@@ -564,5 +564,297 @@ export const findLaunchCertPda = (tokenMint: PublicKey) =>
     [Buffer.from("launch_cert"), tokenMint.toBuffer()],
     PROGRAM_ID_PK
   );
+
+// ─── Raydium CPMM ────────────────────────────────────────────────────────────
+
+export const WSOL_MINT          = new PublicKey("So11111111111111111111111111111111111111112");
+export const RAYDIUM_CPMM_DEVNET      = new PublicKey("DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb");
+export const RAYDIUM_DEVNET_AUTHORITY = new PublicKey("CXniRufdq5xL8t8jZAPxsPZDpuudwuJSPWnbcD5Y5Nxq");
+export const RAYDIUM_DEVNET_POOL_FEE  = new PublicKey("3oE58BKVt8KuYkGxx8zBojugnymWmBiyafWgMrnb6eYy");
+export const TOKEN_2022_PROGRAM_PK    = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPF5SJEMi4xg92qGZJzk");
+export const ASSOC_TOKEN_PROGRAM_PK   = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+
+export const findRaydiumMigrationAuthorityV2Pda = (mint: PublicKey) =>
+  PublicKey.findProgramAddressSync(
+    [Buffer.from("raydium_migration_authority_v2"), mint.toBuffer()],
+    PROGRAM_ID_V2_PK
+  );
+
+export const findLpLockV2Pda = (tokenMint: PublicKey) =>
+  PublicKey.findProgramAddressSync(
+    [Buffer.from("lp_lock_v2"), tokenMint.toBuffer()],
+    PROGRAM_ID_V2_PK
+  );
+
+export const findLpVaultV2Pda = (tokenMint: PublicKey) =>
+  PublicKey.findProgramAddressSync(
+    [Buffer.from("lp_vault_v2"), tokenMint.toBuffer()],
+    PROGRAM_ID_V2_PK
+  );
+
+export const findLpFeePoolV2Pda = (tokenMint: PublicKey) =>
+  PublicKey.findProgramAddressSync(
+    [Buffer.from("lp_fee_pool_v2"), tokenMint.toBuffer()],
+    PROGRAM_ID_V2_PK
+  );
+
+function sortMintsForRaydium(a: PublicKey, b: PublicKey): [PublicKey, PublicKey] {
+  return a.toBuffer().compare(b.toBuffer()) < 0 ? [a, b] : [b, a];
+}
+
+export const findRaydiumCpmmPdas = (tokenMint: PublicKey, programId = RAYDIUM_CPMM_DEVNET) => {
+  const [token0, token1] = sortMintsForRaydium(WSOL_MINT, tokenMint);
+  const [ammConfig] = PublicKey.findProgramAddressSync(
+    [Buffer.from("amm_config"), new BN(0).toArrayLike(Buffer, "le", 2)],
+    programId
+  );
+  const [poolState] = PublicKey.findProgramAddressSync(
+    [Buffer.from("pool"), ammConfig.toBuffer(), token0.toBuffer(), token1.toBuffer()],
+    programId
+  );
+  const [lpMint] = PublicKey.findProgramAddressSync(
+    [Buffer.from("pool_lp_mint"), poolState.toBuffer()],
+    programId
+  );
+  const [token0Vault] = PublicKey.findProgramAddressSync(
+    [Buffer.from("pool_vault"), poolState.toBuffer(), token0.toBuffer()],
+    programId
+  );
+  const [token1Vault] = PublicKey.findProgramAddressSync(
+    [Buffer.from("pool_vault"), poolState.toBuffer(), token1.toBuffer()],
+    programId
+  );
+  const [observationState] = PublicKey.findProgramAddressSync(
+    [Buffer.from("observation"), poolState.toBuffer()],
+    programId
+  );
+  return { ammConfig, poolState, lpMint, token0Vault, token1Vault, observationState, token0, token1 };
+};
+
+// ─── Migration state (read-only, no wallet needed) ───────────────────────────
+
+export interface MigrationState {
+  thresholdLamports: number;
+  currentSolLamports: number;
+  isMigrated: boolean;
+  raydiumPool: string;
+  migratedAt: number;
+  progressPct: number;
+}
+
+export const fetchMigrationState = async (
+  connection: Connection,
+  mint: PublicKey
+): Promise<MigrationState | null> => {
+  try {
+    const pdas = findV2Pdas(mint);
+    const coder = new BorshAccountsCoder(idlV2Json as Idl);
+    const [metaInfo, treasuryInfo] = await Promise.all([
+      connection.getAccountInfo(pdas.tokenMetadata),
+      connection.getAccountInfo(pdas.curveTreasurySol),
+    ]);
+    if (!metaInfo) return null;
+    const meta = coder.decode("TokenMetadataV2", metaInfo.data) as any;
+
+    // CurveTreasurySol: 8 discriminator + 32 mint + 32 creator + 8 initial + 8 current
+    let currentSolLamports = 0;
+    if (treasuryInfo && treasuryInfo.data.length >= 88) {
+      const view = new DataView(treasuryInfo.data.buffer, treasuryInfo.data.byteOffset);
+      currentSolLamports = Number(view.getBigUint64(80, true));
+    }
+
+    const threshold = Number(meta.migrationThresholdLamports ?? meta.migration_threshold_lamports ?? 0);
+    return {
+      thresholdLamports: threshold,
+      currentSolLamports,
+      isMigrated: !!(meta.isMigrated ?? meta.is_migrated),
+      raydiumPool: (meta.raydiumPool ?? meta.raydium_pool ?? PublicKey.default).toBase58?.() ?? PublicKey.default.toBase58(),
+      migratedAt: Number(meta.migratedAt ?? meta.migrated_at ?? 0),
+      progressPct: threshold > 0 ? Math.min(100, (currentSolLamports / threshold) * 100) : 0,
+    };
+  } catch {
+    return null;
+  }
+};
+
+// ─── LP lock state ────────────────────────────────────────────────────────────
+
+export interface LpLockState {
+  lpMint: string;
+  lpAmount: number;
+  lockDays: number;
+  unlockTime: number;
+  lockedAt: number;
+  lastClaimTime: number;
+  totalFeesClaimed: number;
+}
+
+export const fetchLpLockState = async (
+  connection: Connection,
+  tokenMint: PublicKey
+): Promise<LpLockState | null> => {
+  try {
+    const [lpLockPda] = findLpLockV2Pda(tokenMint);
+    const coder = new BorshAccountsCoder(idlV2Json as Idl);
+    const info = await connection.getAccountInfo(lpLockPda);
+    if (!info) return null;
+    const lock = coder.decode("LpLockV2", info.data) as any;
+    return {
+      lpMint: (lock.lpMint ?? lock.lp_mint).toBase58(),
+      lpAmount: Number(lock.lpAmount ?? lock.lp_amount ?? 0),
+      lockDays: Number(lock.lockDays ?? lock.lock_days ?? 0),
+      unlockTime: Number(lock.unlockTime ?? lock.unlock_time ?? 0),
+      lockedAt: Number(lock.lockedAt ?? lock.locked_at ?? 0),
+      lastClaimTime: Number(lock.lastClaimTime ?? lock.last_claim_time ?? 0),
+      totalFeesClaimed: Number(lock.totalFeesClaimed ?? lock.total_fees_claimed_lamports ?? 0),
+    };
+  } catch {
+    return null;
+  }
+};
+
+// ─── Migration + LP instructions ─────────────────────────────────────────────
+
+export const migrateToRaydiumV2 = async (
+  program: Program,
+  triggerer: PublicKey,
+  mint: PublicKey,
+  payerBufferLamports = 15_000_000
+) => {
+  const pdas = findV2Pdas(mint);
+  const ray = findRaydiumCpmmPdas(mint);
+  const [migrationAuthority] = findRaydiumMigrationAuthorityV2Pda(mint);
+  const provider = program.provider as AnchorProvider;
+
+  const migrationTokenAccount = getAssociatedTokenAddressSync(mint, migrationAuthority, true);
+  const migrationWsolAccount  = getAssociatedTokenAddressSync(WSOL_MINT, migrationAuthority, true);
+  const raydiumUserLpToken    = getAssociatedTokenAddressSync(ray.lpMint, migrationAuthority, true);
+
+  const preInstructions = [];
+  const [tokInfo, wsolInfo] = await Promise.all([
+    provider.connection.getAccountInfo(migrationTokenAccount),
+    provider.connection.getAccountInfo(migrationWsolAccount),
+  ]);
+  if (!tokInfo)  preInstructions.push(createAssociatedTokenAccountInstruction(triggerer, migrationTokenAccount, migrationAuthority, mint));
+  if (!wsolInfo) preInstructions.push(createAssociatedTokenAccountInstruction(triggerer, migrationWsolAccount,  migrationAuthority, WSOL_MINT));
+
+  const tx = await program.methods
+    .migrateToRaydiumV2(
+      PublicKey.default,
+      new BN(1),
+      new BN(payerBufferLamports),
+      new BN(0)
+    )
+    .accounts({
+      triggerer,
+      tokenMetadata:           pdas.tokenMetadata,
+      mint,
+      curvePoolVault:          pdas.curvePoolVault,
+      curveTreasurySol:        pdas.curveTreasurySol,
+      lpLockVault:             pdas.lpLockVault,
+      raydiumMigrationAuthority: migrationAuthority,
+      migrationTokenAccount,
+      migrationWsolAccount,
+      wsolMint:                WSOL_MINT,
+      raydiumProgram:          RAYDIUM_CPMM_DEVNET,
+      raydiumAmmConfig:        ray.ammConfig,
+      raydiumAuthority:        RAYDIUM_DEVNET_AUTHORITY,
+      raydiumPoolState:        ray.poolState,
+      raydiumLpMint:           ray.lpMint,
+      raydiumUserLpToken,
+      raydiumToken0Vault:      ray.token0Vault,
+      raydiumToken1Vault:      ray.token1Vault,
+      raydiumCreatePoolFee:    RAYDIUM_DEVNET_POOL_FEE,
+      raydiumObservationState: ray.observationState,
+      tokenProgram:            TOKEN_PROGRAM_ID,
+      tokenProgram2022:        TOKEN_2022_PROGRAM_PK,
+      associatedTokenProgram:  ASSOC_TOKEN_PROGRAM_PK,
+      systemProgram:           SystemProgram.programId,
+      rent:                    SYSVAR_RENT_PUBKEY,
+    })
+    .preInstructions(preInstructions)
+    .rpc();
+
+  return { signature: tx, poolState: ray.poolState };
+};
+
+export const lockLpTokensV2 = async (
+  program: Program,
+  creator: PublicKey,
+  tokenMint: PublicKey,
+  lpMint: PublicKey,
+  lpAmount: number,
+  lockDays: number
+) => {
+  const pdas     = findV2Pdas(tokenMint);
+  const [lpLock] = findLpLockV2Pda(tokenMint);
+  const [lpVault]   = findLpVaultV2Pda(tokenMint);
+  const [lpFeePool] = findLpFeePoolV2Pda(tokenMint);
+  const creatorLpAccount = getAssociatedTokenAddressSync(lpMint, creator, false);
+
+  const tx = await program.methods
+    .lockLpTokensV2(new BN(lpAmount), lockDays)
+    .accounts({
+      creator,
+      tokenMetadata: pdas.tokenMetadata,
+      tokenMint,
+      lpMint,
+      creatorLpAccount,
+      lpLock,
+      lpVault,
+      lpFeePool,
+      tokenProgram:  TOKEN_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+      rent:          SYSVAR_RENT_PUBKEY,
+    })
+    .rpc();
+  return { signature: tx, lpLock, lpVault };
+};
+
+export const claimLpFeesV2 = async (
+  program: Program,
+  creator: PublicKey,
+  tokenMint: PublicKey
+) => {
+  const [lpLock]    = findLpLockV2Pda(tokenMint);
+  const [lpFeePool] = findLpFeePoolV2Pda(tokenMint);
+  const tx = await program.methods
+    .claimLpFeesV2()
+    .accounts({
+      creator, lpLock, lpFeePool,
+      feeWallet: FEE_WALLET_PK,
+      rewardsSolWallet: creator,
+    })
+    .rpc();
+  return { signature: tx };
+};
+
+export const unlockLpTokensV2 = async (
+  program: Program,
+  creator: PublicKey,
+  tokenMint: PublicKey,
+  lpMint: PublicKey
+) => {
+  const [lpLock] = findLpLockV2Pda(tokenMint);
+  const [lpVault] = findLpVaultV2Pda(tokenMint);
+  const creatorLpAccount = getAssociatedTokenAddressSync(lpMint, creator, false);
+  const tx = await program.methods
+    .unlockLpTokensV2()
+    .accounts({
+      creator, lpLock, lpVault, creatorLpAccount,
+      tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .rpc();
+  return { signature: tx };
+};
+
+export const initGlobalStateV2 = async (program: Program, authority: PublicKey) => {
+  const [globalState] = findGlobalStateV2Pda();
+  const tx = await program.methods
+    .initGlobalStateV2()
+    .accounts({ authority, globalState, systemProgram: SystemProgram.programId })
+    .rpc();
+  return { signature: tx, globalState };
+};
 
 export { BN, PublicKey, Keypair };
