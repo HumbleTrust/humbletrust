@@ -1044,6 +1044,24 @@ pub mod humbletrust_v2 {
             ctx.accounts.token_metadata.raydium_pool == Pubkey::default(),
             HumbleV2Error::RaydiumPoolAlreadyCreated
         );
+        // #1-a: must reach migration threshold before opening a Raydium pool
+        require!(
+            ctx.accounts.curve_treasury_sol.current_sol_lamports
+                >= ctx.accounts.token_metadata.migration_threshold_lamports,
+            HumbleV2Error::MigrationThresholdNotMet
+        );
+        // #1-b: init_sol_lamports must equal all available curve SOL (minus payer buffer)
+        //       prevents creator from cherry-picking how much SOL to move
+        let available_sol = ctx
+            .accounts
+            .curve_treasury_sol
+            .current_sol_lamports
+            .checked_sub(payer_buffer_lamports)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        require!(
+            init_sol_lamports == available_sol,
+            HumbleV2Error::InvalidAmount
+        );
 
         validate_raydium_cpmm_common(
             &ctx.accounts.raydium_program,
@@ -1144,6 +1162,10 @@ pub mod humbletrust_v2 {
 
         let meta = &mut ctx.accounts.token_metadata;
         meta.raydium_pool = ctx.accounts.raydium_pool_state.key();
+        // #1-c: mark migrated so this instruction cannot be called a second time
+        meta.is_migrated = true;
+        meta.migration_trigger = ctx.accounts.creator.key();
+        meta.migrated_at = now;
         meta.curve_sol_reserve_lamports = ctx.accounts.curve_treasury_sol.current_sol_lamports;
         meta.curve_token_reserve_amount = ctx
             .accounts
@@ -1785,6 +1807,46 @@ pub mod humbletrust_v2 {
             rewards_share,
             timestamp: now,
         });
+
+        Ok(())
+    }
+
+    pub fn unlock_lp_tokens_v2(ctx: Context<UnlockLpTokensV2>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let lp_lock = &mut ctx.accounts.lp_lock;
+
+        require_keys_eq!(
+            lp_lock.creator,
+            ctx.accounts.creator.key(),
+            HumbleV2Error::Unauthorized
+        );
+        require!(
+            now >= lp_lock.unlock_time,
+            HumbleV2Error::TokensStillLocked
+        );
+        require!(lp_lock.lp_amount > 0, HumbleV2Error::InsufficientVaultBalance);
+
+        let amount = lp_lock.lp_amount;
+        let token_mint_key = lp_lock.token_mint;
+        // lp_vault's token authority was set to lp_lock PDA during lock_lp_tokens_v2
+        let bump_seed = [lp_lock.bump];
+        let signer_seeds: &[&[u8]] = &[b"lp_lock_v2", token_mint_key.as_ref(), &bump_seed];
+        let signer = &[signer_seeds];
+
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.lp_vault.to_account_info(),
+                    to: ctx.accounts.creator_lp_account.to_account_info(),
+                    authority: ctx.accounts.lp_lock.to_account_info(),
+                },
+                signer,
+            ),
+            amount,
+        )?;
+
+        lp_lock.lp_amount = 0;
 
         Ok(())
     }
@@ -2653,6 +2715,35 @@ pub struct ClaimLpFeesV2<'info> {
     /// CHECK: DAO/rewards wallet, any pubkey accepted
     #[account(mut)]
     pub rewards_sol_wallet: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct UnlockLpTokensV2<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"lp_lock_v2", lp_lock.token_mint.as_ref()],
+        bump = lp_lock.bump
+    )]
+    pub lp_lock: Account<'info, LpLockV2>,
+
+    #[account(
+        mut,
+        seeds = [b"lp_vault_v2", lp_lock.token_mint.as_ref()],
+        bump = lp_lock.lp_vault_bump
+    )]
+    pub lp_vault: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        constraint = creator_lp_account.owner == creator.key() @ HumbleV2Error::InvalidTokenAccountOwner,
+        constraint = creator_lp_account.mint == lp_lock.lp_mint @ HumbleV2Error::InvalidMintForTokenAccount
+    )]
+    pub creator_lp_account: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]
@@ -3802,9 +3893,8 @@ fn price_lamports_per_token(sol_reserve: u64, token_reserve: u64) -> Result<u64>
 fn rewards_multiplier_bps(score: u8) -> u16 {
     match score {
         81..=100 => 20_000,
-        66..=80 => 15_000,
-        51..=65 => 10_000,
-        _ => 10_000,
+        51..=80  => 15_000,
+        _        => 10_000,
     }
 }
 

@@ -2230,9 +2230,8 @@ fn calculate_initial_trust_score(
 fn rewards_multiplier_bps(score: u8) -> u16 {
     match score {
         81..=100 => 20_000,
-        66..=80 => 15_000,
-        51..=65 => 10_000,
-        _ => 10_000,
+        51..=80  => 15_000,
+        _        => 10_000,
     }
 }
 
