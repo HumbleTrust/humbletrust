@@ -484,18 +484,21 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       const { signature } = await buyOnCurveV2(program, anchorWallet.publicKey, mint, ata, Number(solAmount), minTokensOut);
       setTxSig(signature);
       const blockTime = await getConfirmedBlockTime(connection, signature);
-      recordTrade(mintInput.trim(), {
-        signature,
-        trader: anchorWallet.publicKey.toBase58(),
-        side: "buy",
-        source: "curve",
-        token_amount: estimatedTokens,
-        sol_amount: solIn,
-        price_sol: currentPrice,
-        block_time: blockTime,
-      }).then(r => { if (r?.error) console.error("[recordTrade:buy]", r.error); })
-        .catch(e => console.error("[recordTrade:buy]", e));
-      await Promise.all([refreshReserves(), loadWalletTokens()]);
+      await Promise.all([
+        recordTrade(mintInput.trim(), {
+          signature,
+          trader: anchorWallet.publicKey.toBase58(),
+          side: "buy",
+          source: "curve",
+          token_amount: estimatedTokens,
+          sol_amount: solIn,
+          price_sol: currentPrice,
+          block_time: blockTime,
+        }).then(r => { if (r?.error) console.error("[recordTrade:buy]", r.error); })
+          .catch(e => console.error("[recordTrade:buy]", e)),
+        refreshReserves(),
+        loadWalletTokens(),
+      ]);
       fetchChartTrades(mintInput.trim(), true);
     } catch (e: any) {
       setTradeError(friendlyError(e.message || String(e)));
@@ -523,18 +526,21 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       );
       setTxSig(signature);
       const blockTime = await getConfirmedBlockTime(connection, signature);
-      recordTrade(mintInput.trim(), {
-        signature,
-        trader: anchorWallet.publicKey.toBase58(),
-        side: "sell",
-        source: "curve",
-        token_amount: tokensIn,
-        sol_amount: estimatedSol,
-        price_sol: currentPrice,
-        block_time: blockTime,
-      }).then(r => { if (r?.error) console.error("[recordTrade:sell]", r.error); })
-        .catch(e => console.error("[recordTrade:sell]", e));
-      await Promise.all([refreshReserves(), loadWalletTokens()]);
+      await Promise.all([
+        recordTrade(mintInput.trim(), {
+          signature,
+          trader: anchorWallet.publicKey.toBase58(),
+          side: "sell",
+          source: "curve",
+          token_amount: tokensIn,
+          sol_amount: estimatedSol,
+          price_sol: currentPrice,
+          block_time: blockTime,
+        }).then(r => { if (r?.error) console.error("[recordTrade:sell]", r.error); })
+          .catch(e => console.error("[recordTrade:sell]", e)),
+        refreshReserves(),
+        loadWalletTokens(),
+      ]);
       fetchChartTrades(mintInput.trim(), true);
     } catch (e: any) {
       setTradeError(friendlyError(e.message || String(e)));
