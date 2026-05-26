@@ -234,6 +234,10 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
     try { new PublicKey(s); return true; } catch { return false; }
   }, [mintInput]);
 
+  const selectedMint = mintInput.trim();
+  const canUseCurve = v2Available === true;
+  const isMainnet = tokenInfo?.network === "mainnet-beta";
+
   useEffect(() => {
     let mounted = true;
     isProgramExecutable(connection, PROGRAM_ID_V2_PK)
@@ -317,9 +321,6 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
     [currentPrice, priceAfterSell]
   );
 
-  const selectedMint = mintInput.trim();
-  const canUseCurve = v2Available === true;
-  const isMainnet = tokenInfo?.network === "mainnet-beta";
   // Show DexScreener embed for mainnet DEX tokens and graduated pump.fun tokens
   const showDexChart = !!(tokenInfo?.dexPairAddress && (tokenInfo.source === "mainnet" || tokenInfo.complete === true));
   const canTrade = wallet.connected && busy === null && validMint && (isMainnet || canUseCurve);
