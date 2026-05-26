@@ -11,6 +11,7 @@ name = "humbletrust"
 [features]
 default = []
 cpi = ["no-entrypoint"]
+test-mode = []
 no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
