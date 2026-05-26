@@ -9,13 +9,10 @@ import {
   ArrowDown,
   Clock,
   ExternalLink,
-  Lock,
   Maximize2,
   Minimize2,
   RefreshCw,
-  Rocket,
   TrendingUp,
-  Unlock,
   Zap,
 } from "lucide-react";
 import { getTokenTrades, recordTrade, syncTokenTrades, type ApiTrade } from "../../lib/solana/api";
@@ -25,25 +22,10 @@ import { LightweightTradeChart } from "../components/LightweightTradeChart";
 import {
   PROGRAM_ID_V2_PK,
   buyOnCurveV2,
-  claimLpFeesV2,
-  fetchCreatorLockState,
-  fetchLpLockState,
-  fetchCurveTradeFromTransaction,
-  fetchMigrationState,
-  findLpLockV2Pda,
-  findRaydiumCpmmPdas,
   findV2Pdas,
   getProgramV2,
   isProgramExecutable,
-  lockLpTokensV2,
-  migrateToRaydiumV2,
   sellOnCurveV2,
-  unlockLpTokensV2,
-  unlockLockedTokensV2,
-  useVestingTrancheV2,
-  type CreatorLockState,
-  type LpLockState,
-  type MigrationState,
 } from "../../lib/solana/program";
 import { listTokens } from "../../lib/solana/image";
 import { motion } from "motion/react";
@@ -217,20 +199,6 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   const [jupiterQuoting, setJupiterQuoting] = useState(false);
   const tokenInfoRef = useRef<TokenInfo | null>(null);
 
-  // Migration state (devnet curve tokens only)
-  const [migrationState, setMigrationState] = useState<MigrationState | null>(null);
-  const [lpLockState, setLpLockState]       = useState<LpLockState | null>(null);
-  const [migrationBusy, setMigrationBusy]   = useState(false);
-  const [lpLockBusy, setLpLockBusy]         = useState(false);
-  const [lpLockDays, setLpLockDays]         = useState("1");
-  const [lpLockAmt, setLpLockAmt]           = useState("");
-  const [migrationError, setMigrationError] = useState<string | null>(null);
-
-  // Creator lock / vesting state
-  const [creatorLockState, setCreatorLockState] = useState<CreatorLockState | null>(null);
-  const [creatorLockBusy, setCreatorLockBusy]   = useState(false);
-  const [creatorLockError, setCreatorLockError] = useState<string | null>(null);
-
   // Separate mainnet RPC connection for Jupiter swaps
   const mainnetConnection = useMemo(
     () => new Connection("https://api.mainnet-beta.solana.com", "confirmed"),
@@ -243,10 +211,6 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
     if (s.length < 32 || s.length > 44) return false;
     try { new PublicKey(s); return true; } catch { return false; }
   }, [mintInput]);
-
-  const selectedMint = mintInput.trim();
-  const canUseCurve = v2Available === true;
-  const isMainnet = tokenInfo?.network === "mainnet-beta";
 
   useEffect(() => {
     let mounted = true;
@@ -264,20 +228,6 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       .catch(() => {});
     return () => { mounted = false; };
   }, [wallet.publicKey, connection, txSig]);
-
-  // Auto-load migration state when mint changes (devnet curve only)
-  useEffect(() => {
-    if (!validMint || !canUseCurve) { setMigrationState(null); setLpLockState(null); return; }
-    void refreshMigrationState();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [validMint, mintInput, canUseCurve]);
-
-  // Auto-load creator lock/vesting state when mint changes
-  useEffect(() => {
-    if (!validMint || !canUseCurve) { setCreatorLockState(null); return; }
-    void refreshCreatorLockState();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [validMint, mintInput, canUseCurve]);
 
   // Keep ref in sync for use inside fetchChartTrades closure
   useEffect(() => { tokenInfoRef.current = tokenInfo; }, [tokenInfo]);
@@ -338,8 +288,9 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
     [currentPrice, priceAfterSell]
   );
 
-  // Show DexScreener embed for mainnet DEX tokens and graduated pump.fun tokens
-  const showDexChart = !!(tokenInfo?.dexPairAddress && (tokenInfo.source === "mainnet" || tokenInfo.complete === true));
+  const selectedMint = mintInput.trim();
+  const canUseCurve = v2Available === true;
+  const isMainnet = tokenInfo?.network === "mainnet-beta";
   const canTrade = wallet.connected && busy === null && validMint && (isMainnet || canUseCurve);
   const solscanUrl = validMint
     ? isMainnet
@@ -464,34 +415,10 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
     }
   };
 
-  const refreshMigrationState = useCallback(async (mintOverride?: string) => {
-    const mintValue = (mintOverride ?? mintInput).trim();
-    if (!canUseCurve || mintValue.length < 32) return;
-    try {
-      const mint = new PublicKey(mintValue);
-      const [ms, ls] = await Promise.all([
-        fetchMigrationState(connection, mint),
-        fetchLpLockState(connection, mint),
-      ]);
-      setMigrationState(ms);
-      setLpLockState(ls);
-    } catch { /* silent */ }
-  }, [mintInput, canUseCurve, connection]);
-
-  const refreshCreatorLockState = useCallback(async (mintOverride?: string) => {
-    const mintValue = (mintOverride ?? mintInput).trim();
-    if (!canUseCurve || mintValue.length < 32) return;
-    try {
-      const cls = await fetchCreatorLockState(connection, new PublicKey(mintValue));
-      setCreatorLockState(cls);
-    } catch { /* silent */ }
-  }, [mintInput, canUseCurve, connection]);
-
   const selectWalletToken = (token: WalletTokenOption) => {
     setMintInput(token.mint);
     setTokenPickerOpen(false);
     void refreshReserves(token.mint);
-    void refreshMigrationState(token.mint);
   };
 
   const setMaxSellAmount = () => {
@@ -555,27 +482,18 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       const { signature } = await buyOnCurveV2(program, anchorWallet.publicKey, mint, ata, Number(solAmount), minTokensOut);
       setTxSig(signature);
       const blockTime = await getConfirmedBlockTime(connection, signature);
-      const chainTrade = await fetchCurveTradeFromTransaction(connection, signature, mint, "buy");
-      const indexedTrade = await recordTrade(mintInput.trim(), {
+      recordTrade(mintInput.trim(), {
         signature,
-        trader: chainTrade?.trader ?? anchorWallet.publicKey.toBase58(),
-        side: chainTrade?.side ?? "buy",
-        source: chainTrade?.source ?? "curve",
-        token_amount: chainTrade?.token_amount ?? estimatedTokens,
-        sol_amount: chainTrade?.sol_amount ?? solIn,
-        price_sol: chainTrade?.price_sol ?? nextPrice,
-        block_time: chainTrade?.block_time ?? blockTime,
-      });
-      if (indexedTrade?.error) {
-        console.error("[recordTrade:buy]", indexedTrade.error);
-        setChartError(`Trade saved on-chain, but chart history did not index: ${indexedTrade.error}`);
-      } else {
-        setChartError(null);
-      }
-      await Promise.all([
-        refreshReserves(),
-        loadWalletTokens(),
-      ]);
+        trader: anchorWallet.publicKey.toBase58(),
+        side: "buy",
+        source: "curve",
+        token_amount: estimatedTokens,
+        sol_amount: solIn,
+        price_sol: currentPrice,
+        block_time: blockTime,
+      }).then(r => { if (r?.error) console.error("[recordTrade:buy]", r.error); })
+        .catch(e => console.error("[recordTrade:buy]", e));
+      await Promise.all([refreshReserves(), loadWalletTokens()]);
       fetchChartTrades(mintInput.trim(), true);
     } catch (e: any) {
       setTradeError(friendlyError(e.message || String(e)));
@@ -603,140 +521,23 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       );
       setTxSig(signature);
       const blockTime = await getConfirmedBlockTime(connection, signature);
-      const chainTrade = await fetchCurveTradeFromTransaction(connection, signature, mint, "sell");
-      const indexedTrade = await recordTrade(mintInput.trim(), {
+      recordTrade(mintInput.trim(), {
         signature,
-        trader: chainTrade?.trader ?? anchorWallet.publicKey.toBase58(),
-        side: chainTrade?.side ?? "sell",
-        source: chainTrade?.source ?? "curve",
-        token_amount: chainTrade?.token_amount ?? tokensIn,
-        sol_amount: chainTrade?.sol_amount ?? estimatedSol,
-        price_sol: chainTrade?.price_sol ?? priceAfterSell,
-        block_time: chainTrade?.block_time ?? blockTime,
-      });
-      if (indexedTrade?.error) {
-        console.error("[recordTrade:sell]", indexedTrade.error);
-        setChartError(`Trade saved on-chain, but chart history did not index: ${indexedTrade.error}`);
-      } else {
-        setChartError(null);
-      }
-      await Promise.all([
-        refreshReserves(),
-        loadWalletTokens(),
-      ]);
+        trader: anchorWallet.publicKey.toBase58(),
+        side: "sell",
+        source: "curve",
+        token_amount: tokensIn,
+        sol_amount: estimatedSol,
+        price_sol: currentPrice,
+        block_time: blockTime,
+      }).then(r => { if (r?.error) console.error("[recordTrade:sell]", r.error); })
+        .catch(e => console.error("[recordTrade:sell]", e));
+      await Promise.all([refreshReserves(), loadWalletTokens()]);
       fetchChartTrades(mintInput.trim(), true);
     } catch (e: any) {
       setTradeError(friendlyError(e.message || String(e)));
     } finally {
       setBusy(null);
-    }
-  };
-
-  const runMigrate = async () => {
-    if (!anchorWallet || !wallet.connected || !validMint) return;
-    setMigrationBusy(true); setMigrationError(null);
-    try {
-      const mint = new PublicKey(mintInput.trim());
-      const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
-      const program = getProgramV2(provider);
-      const { signature } = await migrateToRaydiumV2(program, anchorWallet.publicKey, mint);
-      setTxSig(signature);
-      await refreshMigrationState();
-    } catch (e: any) {
-      setMigrationError(friendlyError(e.message || String(e)));
-    } finally {
-      setMigrationBusy(false);
-    }
-  };
-
-  const runLockLp = async () => {
-    if (!anchorWallet || !wallet.connected || !validMint || !migrationState?.isMigrated) return;
-    const lpMintStr = lpLockState?.lpMint ?? findRaydiumCpmmPdas(new PublicKey(mintInput.trim())).lpMint.toBase58();
-    setLpLockBusy(true); setMigrationError(null);
-    try {
-      const mint  = new PublicKey(mintInput.trim());
-      const lpMint = new PublicKey(lpMintStr);
-      const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
-      const program  = getProgramV2(provider);
-      const lpAmtRaw = Math.floor(Number(lpLockAmt) * 1e9);
-      if (lpAmtRaw <= 0) throw new Error("Enter LP amount to lock");
-      const days = Math.max(1, Math.floor(Number(lpLockDays)));
-      const { signature } = await lockLpTokensV2(program, anchorWallet.publicKey, mint, lpMint, lpAmtRaw, days);
-      setTxSig(signature);
-      await refreshMigrationState();
-    } catch (e: any) {
-      setMigrationError(friendlyError(e.message || String(e)));
-    } finally {
-      setLpLockBusy(false);
-    }
-  };
-
-  const runClaimLpFees = async () => {
-    if (!anchorWallet || !wallet.connected || !validMint) return;
-    setLpLockBusy(true); setMigrationError(null);
-    try {
-      const mint = new PublicKey(mintInput.trim());
-      const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
-      const program  = getProgramV2(provider);
-      const { signature } = await claimLpFeesV2(program, anchorWallet.publicKey, mint);
-      setTxSig(signature);
-      await refreshMigrationState();
-    } catch (e: any) {
-      setMigrationError(friendlyError(e.message || String(e)));
-    } finally {
-      setLpLockBusy(false);
-    }
-  };
-
-  const runUnlockLp = async () => {
-    if (!anchorWallet || !wallet.connected || !validMint || !lpLockState) return;
-    setLpLockBusy(true); setMigrationError(null);
-    try {
-      const mint   = new PublicKey(mintInput.trim());
-      const lpMint = new PublicKey(lpLockState.lpMint);
-      const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
-      const program  = getProgramV2(provider);
-      const { signature } = await unlockLpTokensV2(program, anchorWallet.publicKey, mint, lpMint);
-      setTxSig(signature);
-      await refreshMigrationState();
-    } catch (e: any) {
-      setMigrationError(friendlyError(e.message || String(e)));
-    } finally {
-      setLpLockBusy(false);
-    }
-  };
-
-  const runUnlockTokens = async () => {
-    if (!anchorWallet || !wallet.connected || !validMint) return;
-    setCreatorLockBusy(true); setCreatorLockError(null);
-    try {
-      const mint = new PublicKey(mintInput.trim());
-      const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
-      const program  = getProgramV2(provider);
-      const { signature } = await unlockLockedTokensV2(program, anchorWallet.publicKey, mint);
-      setTxSig(signature);
-      await refreshCreatorLockState();
-    } catch (e: any) {
-      setCreatorLockError(friendlyError(e.message || String(e)));
-    } finally {
-      setCreatorLockBusy(false);
-    }
-  };
-
-  const runVestingTranche = async (tranche: number) => {
-    if (!anchorWallet || !wallet.connected || !validMint) return;
-    setCreatorLockBusy(true); setCreatorLockError(null);
-    try {
-      const mint = new PublicKey(mintInput.trim());
-      const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
-      const program  = getProgramV2(provider);
-      const { signature } = await useVestingTrancheV2(program, anchorWallet.publicKey, mint, tranche, 1, connection);
-      setTxSig(signature);
-      await refreshCreatorLockState();
-    } catch (e: any) {
-      setCreatorLockError(friendlyError(e.message || String(e)));
-    } finally {
-      setCreatorLockBusy(false);
     }
   };
 
@@ -1190,7 +991,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
           <GlassPanel className={cn("overflow-hidden", fullChart && "fixed inset-4 z-50")}>
             {/* Chart topbar */}
             <div className="flex items-center gap-1 px-3 py-2 border-b border-white/10 bg-white/[0.02] flex-wrap">
-              {!showDexChart && TIMEFRAMES.map((tf) => (
+              {TIMEFRAMES.map((tf) => (
                 <button
                   type="button"
                   key={tf}
@@ -1205,8 +1006,8 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                   {tf}
                 </button>
               ))}
-              {!showDexChart && <span className="w-px h-4 bg-white/10 mx-1" />}
-              {!showDexChart && (["candles", "line", "area"] as ChartMode[]).map((m) => (
+              <span className="w-px h-4 bg-white/10 mx-1" />
+              {(["candles", "line", "area"] as ChartMode[]).map((m) => (
                 <button
                   key={m}
                   type="button"
@@ -1221,28 +1022,23 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                   {m}
                 </button>
               ))}
-              {!showDexChart && <span className="w-px h-4 bg-white/10 mx-1" />}
-              {!showDexChart && (
-                <button
-                  type="button"
-                  className={cn(
-                    "px-2.5 py-1 rounded text-xs transition-all",
-                    showIndicators
-                      ? "bg-[#B026FF]/15 text-[#B026FF]"
-                      : "text-white/40 hover:text-white/70"
-                  )}
-                  onClick={() => setShowIndicators((v) => !v)}
-                >
-                  fx Indicators
-                </button>
-              )}
-              {showDexChart && (
-                <span className="text-xs text-white/30 font-mono">DexScreener · live chart</span>
-              )}
-              <span className="w-px h-4 bg-white/10 mx-1 ml-auto" />
+              <span className="w-px h-4 bg-white/10 mx-1" />
               <button
                 type="button"
-                className="p-1.5 rounded text-white/40 hover:text-white/70 transition-all"
+                className={cn(
+                  "px-2.5 py-1 rounded text-xs transition-all",
+                  showIndicators
+                    ? "bg-[#B026FF]/15 text-[#B026FF]"
+                    : "text-white/40 hover:text-white/70"
+                )}
+                onClick={() => setShowIndicators((v) => !v)}
+              >
+                fx Indicators
+              </button>
+              <span className="w-px h-4 bg-white/10 mx-1" />
+              <button
+                type="button"
+                className="p-1.5 rounded text-white/40 hover:text-white/70 transition-all ml-auto"
                 title={fullChart ? "Exit full" : "Expand"}
                 onClick={() => setFullChart((v) => !v)}
               >
@@ -1251,7 +1047,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
             </div>
 
             {/* Indicator options */}
-            {showIndicators && !showDexChart && (
+            {showIndicators && (
               <div className="flex items-center gap-4 px-3 py-2 border-b border-white/10 bg-white/[0.02] flex-wrap">
                 <label className="flex items-center gap-1.5 text-xs text-white/60 cursor-pointer">
                   <input type="checkbox" className="accent-[#00FF41]" checked={showVolume} onChange={(e) => setShowVolume(e.target.checked)} />
@@ -1316,7 +1112,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                 </div>
               </div>
 
-              {/* Chart — DexScreener embed for mainnet/graduated, custom for devnet/bonding curve */}
+              {/* Trade-based price chart */}
               {(() => {
                 if (!validMint) return (
                   <div className="h-52 flex items-center justify-center rounded-lg bg-white/[0.02] border border-white/5">
@@ -1324,30 +1120,9 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                   </div>
                 );
 
-                // Mainnet DEX tokens and graduated pump.fun → DexScreener live chart
-                if (showDexChart) return (
-                  <iframe
-                    key={tokenInfo!.dexPairAddress}
-                    src={`https://dexscreener.com/solana/${tokenInfo!.dexPairAddress}?embed=1&theme=dark&info=0&trades=0`}
-                    className="w-full rounded-lg border border-white/10"
-                    style={{ height: 340 }}
-                    title={`${selectedSymbol}/SOL`}
-                    allow="clipboard-write"
-                  />
-                );
-
                 if (chartLoading) return (
                   <div className="h-52 flex items-center justify-center rounded-lg bg-white/[0.02] border border-white/5">
                     <RefreshCw size={18} className="animate-spin text-white/20" />
-                  </div>
-                );
-
-                if (chartError) return (
-                  <div className="h-52 flex items-center justify-center rounded-lg bg-red-500/[0.04] border border-red-500/15">
-                    <div className="text-center max-w-md px-4">
-                      <p className="text-red-300 text-sm mb-1">Chart history unavailable</p>
-                      <p className="text-red-300/60 text-xs break-words">{chartError}</p>
-                    </div>
                   </div>
                 );
 
@@ -1529,247 +1304,6 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
             </button>
             {reserveError && <div className="text-red-400 text-xs mt-2">{reserveError}</div>}
           </GlassPanel>}
-
-          {/* ── Migration progress (devnet curve only) ── */}
-          {!isMainnet && canUseCurve && validMint && migrationState && (
-            <GlassPanel className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2 font-bold text-white text-sm">
-                  <Rocket size={14} className={migrationState.isMigrated ? "text-[#00FF41]" : "text-yellow-400"} />
-                  {migrationState.isMigrated ? "Migrated to Raydium" : "Raydium Migration"}
-                </div>
-                {!migrationState.isMigrated && (
-                  <span className="text-white/40 text-xs font-mono">
-                    {(migrationState.currentSolLamports / LAMPORTS_PER_SOL).toFixed(3)} / {(migrationState.thresholdLamports / LAMPORTS_PER_SOL).toFixed(1)} SOL
-                  </span>
-                )}
-              </div>
-
-              {!migrationState.isMigrated ? (
-                <>
-                  {/* Progress bar */}
-                  <div className="w-full h-2 bg-white/10 rounded-full mb-3 overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${migrationState.progressPct.toFixed(1)}%`,
-                        background: migrationState.progressPct >= 100
-                          ? "linear-gradient(90deg, #00FF41, #00cc33)"
-                          : "linear-gradient(90deg, #facc15, #f59e0b)",
-                      }}
-                    />
-                  </div>
-                  <div className="text-white/40 text-xs mb-3">
-                    {migrationState.progressPct.toFixed(1)}% — reach 100% to open Raydium CPMM pool
-                  </div>
-                  <button
-                    onClick={runMigrate}
-                    disabled={migrationState.progressPct < 100 || migrationBusy || !wallet.connected}
-                    className="w-full py-2.5 rounded-lg font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{
-                      background: migrationState.progressPct >= 100
-                        ? "linear-gradient(135deg, #00FF41, #00cc33)"
-                        : "rgba(255,255,255,0.05)",
-                      color: migrationState.progressPct >= 100 ? "#000" : "rgba(255,255,255,0.4)",
-                      border: "1px solid rgba(255,255,255,0.1)",
-                    }}
-                  >
-                    {migrationBusy
-                      ? "Migrating…"
-                      : migrationState.progressPct >= 100
-                        ? "🚀 Trigger Migration · Earn 0.1 SOL"
-                        : `Needs ${((migrationState.thresholdLamports - migrationState.currentSolLamports) / LAMPORTS_PER_SOL).toFixed(2)} more SOL`}
-                  </button>
-                </>
-              ) : (
-                <>
-                  {/* Migrated state */}
-                  <div className="text-xs font-mono text-white/50 mb-3 break-all">
-                    Pool: {migrationState.raydiumPool.slice(0, 8)}…{migrationState.raydiumPool.slice(-6)}
-                  </div>
-                  <a
-                    href={`https://raydium.io/liquidity/increase/?mode=add&pool_id=${migrationState.raydiumPool}`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 mb-4"
-                  >
-                    View pool on Raydium <ExternalLink size={10} />
-                  </a>
-
-                  {/* LP Lock section */}
-                  {lpLockState ? (
-                    <div className="bg-white/5 rounded-lg p-3 space-y-2">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
-                        <Lock size={11} className="text-yellow-400" />
-                        LP Locked
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div><span className="text-white/40">Amount</span><br /><span className="font-mono">{(lpLockState.lpAmount / 1e9).toFixed(4)}</span></div>
-                        <div><span className="text-white/40">Lock days</span><br /><span className="font-mono">{lpLockState.lockDays}</span></div>
-                        <div><span className="text-white/40">Unlocks</span><br /><span className="font-mono">{new Date(lpLockState.unlockTime * 1000).toLocaleDateString()}</span></div>
-                        <div><span className="text-white/40">Fees claimed</span><br /><span className="font-mono">{(lpLockState.totalFeesClaimed / LAMPORTS_PER_SOL).toFixed(4)} SOL</span></div>
-                      </div>
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          onClick={runClaimLpFees}
-                          disabled={lpLockBusy || !wallet.connected}
-                          className="flex-1 py-2 rounded-lg bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 text-xs font-semibold hover:bg-yellow-500/25 disabled:opacity-40 transition-all"
-                        >
-                          {lpLockBusy ? "…" : "Claim Fees"}
-                        </button>
-                        {Date.now() / 1000 >= lpLockState.unlockTime && (
-                          <button
-                            onClick={runUnlockLp}
-                            disabled={lpLockBusy || !wallet.connected}
-                            className="flex-1 py-2 rounded-lg bg-[#00FF41]/15 border border-[#00FF41]/30 text-[#00FF41] text-xs font-semibold hover:bg-[#00FF41]/25 disabled:opacity-40 transition-all"
-                          >
-                            <Unlock size={10} className="inline mr-1" />Unlock LP
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ) : wallet.connected && (
-                    <div className="space-y-2">
-                      <div className="text-xs text-white/40 font-semibold">Lock your LP tokens</div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <input
-                          type="number" placeholder="LP amount" min={0.001} step={0.001}
-                          value={lpLockAmt}
-                          onChange={e => setLpLockAmt(e.target.value)}
-                          className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-xs focus:border-[#00FF41]/50 focus:outline-none"
-                        />
-                        <input
-                          type="number" placeholder="Days (min 1)" min={1} max={360}
-                          value={lpLockDays}
-                          onChange={e => setLpLockDays(e.target.value)}
-                          className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-xs focus:border-[#00FF41]/50 focus:outline-none"
-                        />
-                      </div>
-                      <button
-                        onClick={runLockLp}
-                        disabled={lpLockBusy || !lpLockAmt}
-                        className="w-full py-2 rounded-lg bg-[#00FF41]/10 border border-[#00FF41]/30 text-[#00FF41] text-xs font-semibold hover:bg-[#00FF41]/20 disabled:opacity-40 transition-all"
-                      >
-                        <Lock size={10} className="inline mr-1" />{lpLockBusy ? "Locking…" : "Lock LP Tokens"}
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {migrationError && <div className="text-red-400 text-xs mt-2">{migrationError}</div>}
-            </GlassPanel>
-          )}
-
-          {!isMainnet && canUseCurve && validMint && !migrationState && (
-            <GlassPanel className="p-4 border-yellow-500/20 bg-yellow-500/5">
-              <div className="flex gap-3">
-                <AlertTriangle size={16} className="text-yellow-400 shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-semibold text-yellow-400 text-sm mb-1">No v2 launch data for this mint</div>
-                  <div className="text-white/50 text-xs leading-relaxed">
-                    Launch or select a HumbleTrust v2 devnet token to show migration progress, Raydium actions, and LP controls.
-                  </div>
-                </div>
-              </div>
-            </GlassPanel>
-          )}
-
-          {/* ── Creator lock / vesting controls ── */}
-          {!isMainnet && canUseCurve && validMint && creatorLockState &&
-           wallet.publicKey?.toBase58() === creatorLockState.creator && (() => {
-            const now = Math.floor(Date.now() / 1000);
-            const SECS_PER_DAY = 60; // test-mode: 1 day unit = 60s
-            const elapsed = now - creatorLockState.createdAt;
-            const elapsedDays = Math.floor(elapsed / SECS_PER_DAY);
-            const canUnlock = creatorLockState.isLocked && now >= creatorLockState.unlockTime;
-            const secsLeft = Math.max(0, creatorLockState.unlockTime - now);
-
-            const vestingStatus = (done: boolean, day: number) => {
-              if (done) return { label: "Claimed", color: "text-[#00FF41]", ready: false };
-              if (elapsedDays >= day) return { label: "Ready", color: "text-green-400", ready: true };
-              const s = Math.max(0, day * SECS_PER_DAY - elapsed);
-              const m = Math.floor(s / 60), sec = s % 60;
-              return { label: `${m}m ${sec}s`, color: "text-white/40", ready: false };
-            };
-            const t1 = vestingStatus(creatorLockState.vestingT1Done, 30);
-            const t2 = vestingStatus(creatorLockState.vestingT2Done, 60);
-            const t3 = vestingStatus(creatorLockState.vestingT3Done, 90);
-            const totalVesting = creatorLockState.creatorAllocationAmount / 1e9;
-
-            return (
-              <GlassPanel className="p-4 border-purple-500/20 bg-purple-500/5">
-                <div className="flex items-center gap-2 mb-3">
-                  <Lock size={14} className="text-purple-400" />
-                  <span className="text-sm font-semibold text-purple-300">Creator Controls</span>
-                  <button onClick={() => refreshCreatorLockState()} className="ml-auto text-white/30 hover:text-white/60 transition-colors">
-                    <RefreshCw size={12} />
-                  </button>
-                </div>
-
-                {/* Locked tokens */}
-                <div className="mb-3 p-3 rounded-lg bg-white/5 border border-white/10">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-white/50">Locked tokens (30%)</span>
-                    <span className={cn("text-xs font-mono", creatorLockState.isLocked ? "text-yellow-400" : "text-[#00FF41]")}>
-                      {creatorLockState.isLocked ? "🔒 Locked" : "🔓 Unlocked"}
-                    </span>
-                  </div>
-                  <div className="text-xs text-white/40 mb-2">
-                    {creatorLockState.isLocked
-                      ? canUnlock
-                        ? "Ready to unlock"
-                        : `Unlocks in ${Math.floor(secsLeft / 60)}m ${secsLeft % 60}s`
-                      : `Released: ${(creatorLockState.lockedAmountAfterBurn / 1e9).toLocaleString()} tokens`
-                    }
-                  </div>
-                  {creatorLockState.isLocked && (
-                    <button
-                      onClick={runUnlockTokens}
-                      disabled={!canUnlock || creatorLockBusy}
-                      className={cn(
-                        "w-full py-1.5 rounded-lg text-xs font-semibold transition-all",
-                        canUnlock && !creatorLockBusy
-                          ? "bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30"
-                          : "bg-white/5 text-white/20 cursor-not-allowed border border-white/5"
-                      )}
-                    >
-                      {creatorLockBusy ? "Unlocking…" : canUnlock ? "Unlock Locked Tokens" : "Not ready yet"}
-                    </button>
-                  )}
-                </div>
-
-                {/* Vesting tranches */}
-                {creatorLockState.creatorAllocationAmount > 0 && (
-                  <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                    <div className="text-xs text-white/50 mb-2">Creator vesting ({(totalVesting).toLocaleString()} tokens total)</div>
-                    <div className="space-y-2">
-                      {([
-                        { n: 1, pct: "33%", status: t1 },
-                        { n: 2, pct: "33%", status: t2 },
-                        { n: 3, pct: "34%", status: t3 },
-                      ] as const).map(({ n, pct, status }) => (
-                        <div key={n} className="flex items-center gap-2">
-                          <span className="text-xs text-white/40 w-16">T{n} · {pct}</span>
-                          <span className={cn("text-xs font-mono flex-1", status.color)}>{status.label}</span>
-                          {status.ready && (
-                            <button
-                              onClick={() => runVestingTranche(n)}
-                              disabled={creatorLockBusy}
-                              className="px-2 py-0.5 rounded text-xs bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 transition-all disabled:opacity-40"
-                            >
-                              {creatorLockBusy ? "…" : "Claim"}
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {creatorLockError && <div className="text-red-400 text-xs mt-2">{creatorLockError}</div>}
-              </GlassPanel>
-            );
-          })()}
         </motion.div>
       </div>
 
