@@ -301,7 +301,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
     setSyncing(false);
     if (result.error) {
       setSyncMsg(`Sync error: ${result.error}`);
-    } else if (result.synced === 0) {
+    } else if (!result.synced) {
       setSyncMsg(result.message || "No new trades found on-chain");
     } else {
       setSyncMsg(`Synced ${result.synced} trade${result.synced !== 1 ? "s" : ""} from chain`);
@@ -378,7 +378,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       const { signature } = await buyOnCurveV2(program, anchorWallet.publicKey, mint, ata, Number(solAmount), minTokensOut);
       setTxSig(signature);
       const blockTime = await getConfirmedBlockTime(connection, signature);
-      void recordTrade(mintInput.trim(), {
+      recordTrade(mintInput.trim(), {
         signature,
         trader: anchorWallet.publicKey.toBase58(),
         side: "buy",
@@ -387,7 +387,8 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
         sol_amount: solIn,
         price_sol: currentPrice,
         block_time: blockTime,
-      });
+      }).then(r => { if (r?.error) console.error("[recordTrade:buy]", r.error); })
+        .catch(e => console.error("[recordTrade:buy]", e));
       await Promise.all([refreshReserves(), loadWalletTokens()]);
       fetchChartTrades(mintInput.trim(), true);
     } catch (e: any) {
@@ -415,7 +416,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       );
       setTxSig(signature);
       const blockTime = await getConfirmedBlockTime(connection, signature);
-      void recordTrade(mintInput.trim(), {
+      recordTrade(mintInput.trim(), {
         signature,
         trader: anchorWallet.publicKey.toBase58(),
         side: "sell",
@@ -424,7 +425,8 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
         sol_amount: estimatedSol,
         price_sol: currentPrice,
         block_time: blockTime,
-      });
+      }).then(r => { if (r?.error) console.error("[recordTrade:sell]", r.error); })
+        .catch(e => console.error("[recordTrade:sell]", e));
       await Promise.all([refreshReserves(), loadWalletTokens()]);
       fetchChartTrades(mintInput.trim(), true);
     } catch (e: any) {

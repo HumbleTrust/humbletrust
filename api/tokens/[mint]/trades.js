@@ -32,6 +32,7 @@ function derivePdas(mint) {
 }
 
 async function handleGetTrades(mint, req, res) {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   const limit = Math.min(Number(req.query.limit) || 100, 500);
   const { data, error } = await getClient()
     .from("trades").select("*").eq("mint", mint)
@@ -72,15 +73,20 @@ async function handleRecordTrade(mint, req, res) {
   if (!trader || !isValidWallet(trader))   return res.status(400).json({ error: "invalid trader" });
   if (!["buy", "sell"].includes(side))     return res.status(400).json({ error: "side must be buy or sell" });
 
-  const { error } = await getClient().from("trades").upsert({
+  const row = {
     signature, mint, trader, side,
     source:       source || "curve",
     token_amount: Number(token_amount) || 0,
     sol_amount:   Number(sol_amount)   || 0,
     price_sol:    Number(price_sol)    || 0,
     block_time:   block_time ? new Date(block_time).toISOString() : new Date().toISOString(),
-  }, { onConflict: "signature", ignoreDuplicates: true });
-  if (error) throw error;
+  };
+  const { error } = await getClient().from("trades").upsert(row, { onConflict: "signature", ignoreDuplicates: true });
+  if (error) {
+    console.error("[trades:record] supabase error", error.message, "sig:", signature?.slice(0, 20));
+    throw error;
+  }
+  console.log("[trades:record] ok sig:", signature?.slice(0, 20), "mint:", mint?.slice(0, 8), "price:", row.price_sol);
   return res.status(201).json({ ok: true });
 }
 
