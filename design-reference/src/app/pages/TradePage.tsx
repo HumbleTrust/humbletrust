@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAnchorWallet, useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { AnchorProvider } from "@coral-xyz/anchor";
-import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { Connection, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { withFallbackRpc } from "../../lib/solana/rpc";
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import {
@@ -16,6 +16,8 @@ import {
   Zap,
 } from "lucide-react";
 import { getTokenTrades, recordTrade, syncTokenTrades, type ApiTrade } from "../../lib/solana/api";
+import { detectToken, fetchPumpFunTrades, type TokenInfo } from "../../lib/solana/external-trades";
+import { getJupiterQuote, executeJupiterSwap, SOL_MINT, type JupiterQuote } from "../../lib/solana/jupiter-swap";
 import { LightweightTradeChart } from "../components/LightweightTradeChart";
 import {
   PROGRAM_ID_V2_PK,
@@ -190,6 +192,19 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const chartAbortRef = useRef<AbortController | null>(null);
 
+  // External token detection (pump.fun / mainnet)
+  const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
+  const [tokenDetecting, setTokenDetecting] = useState(false);
+  const [jupiterQuote, setJupiterQuote] = useState<JupiterQuote | null>(null);
+  const [jupiterQuoting, setJupiterQuoting] = useState(false);
+  const tokenInfoRef = useRef<TokenInfo | null>(null);
+
+  // Separate mainnet RPC connection for Jupiter swaps
+  const mainnetConnection = useMemo(
+    () => new Connection("https://api.mainnet-beta.solana.com", "confirmed"),
+    []
+  );
+
   useEffect(() => {
     let mounted = true;
     isProgramExecutable(connection, PROGRAM_ID_V2_PK)
@@ -206,6 +221,45 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       .catch(() => {});
     return () => { mounted = false; };
   }, [wallet.publicKey, connection, txSig]);
+
+  // Keep ref in sync for use inside fetchChartTrades closure
+  useEffect(() => { tokenInfoRef.current = tokenInfo; }, [tokenInfo]);
+
+  // Auto-detect token source when a valid mint is entered
+  useEffect(() => {
+    if (!validMint) { setTokenInfo(null); setJupiterQuote(null); return; }
+    const mint = mintInput.trim();
+    let cancelled = false;
+    setTokenDetecting(true);
+    detectToken(mint)
+      .then(info => { if (!cancelled) { setTokenInfo(info); setTokenDetecting(false); } })
+      .catch(() => { if (!cancelled) { setTokenInfo(null); setTokenDetecting(false); } });
+    return () => { cancelled = true; };
+  }, [validMint, mintInput]);
+
+  // Fetch Jupiter quote for mainnet tokens (debounced 700ms)
+  useEffect(() => {
+    if (tokenInfo?.network !== "mainnet-beta" || !validMint) {
+      setJupiterQuote(null);
+      return;
+    }
+    setJupiterQuote(null);
+    const timer = setTimeout(async () => {
+      setJupiterQuoting(true);
+      try {
+        if (side === "buy") {
+          const lamports = Math.floor(parsePositive(solAmount, 0) * LAMPORTS_PER_SOL);
+          if (lamports > 0) setJupiterQuote(await getJupiterQuote(SOL_MINT, mintInput.trim(), lamports, slippageBps));
+        } else {
+          const dec = tokenInfo.decimals;
+          const units = Math.floor(parsePositive(tokensAmount, 0) * Math.pow(10, dec));
+          if (units > 0) setJupiterQuote(await getJupiterQuote(mintInput.trim(), SOL_MINT, units, slippageBps));
+        }
+      } catch { setJupiterQuote(null); }
+      setJupiterQuoting(false);
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [tokenInfo, side, solAmount, tokensAmount, mintInput, slippageBps, validMint]);
 
   const solIn = useMemo(() => parsePositive(solAmount, 0), [solAmount]);
   const tokensIn = useMemo(() => parsePositive(tokensAmount, 0), [tokensAmount]);
@@ -234,8 +288,14 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   }, [mintInput]);
   const selectedMint = mintInput.trim();
   const canUseCurve = v2Available === true;
-  const canTrade = canUseCurve && wallet.connected && busy === null && validMint;
-  const solscanUrl = validMint ? `https://solscan.io/token/${selectedMint}?cluster=devnet` : null;
+  const isMainnet = tokenInfo?.network === "mainnet-beta";
+  const canTrade = wallet.connected && busy === null && validMint && (isMainnet || canUseCurve);
+  const solscanUrl = validMint
+    ? isMainnet
+      ? `https://solscan.io/token/${selectedMint}`
+      : `https://solscan.io/token/${selectedMint}?cluster=devnet`
+    : null;
+  const pumpFunUrl = tokenInfo?.source === "pumpfun" ? `https://pump.fun/coin/${selectedMint}` : null;
 
   const savedTokenMap = useMemo(() => {
     const map = new Map<string, ReturnType<typeof listTokens>[number]>();
@@ -244,13 +304,15 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   }, [walletTokens]);
 
   const selectedWalletToken = walletTokens.find((t) => t.mint === selectedMint);
-  const selectedDecimals = selectedWalletToken?.decimals ?? 9;
-  const selectedSymbol = selectedWalletToken?.symbol || savedTokenMap.get(selectedMint)?.symbol || "TOKEN";
+  const selectedDecimals = isMainnet ? (tokenInfo?.decimals ?? 6) : (selectedWalletToken?.decimals ?? 9);
+  const selectedSymbol = tokenInfo?.symbol || selectedWalletToken?.symbol || savedTokenMap.get(selectedMint)?.symbol || "TOKEN";
   const sellBalanceExceeded = side === "sell" && !!selectedWalletToken && tokensIn > selectedWalletToken.balance;
   const sellBalanceMissing = side === "sell" && wallet.connected && validMint && !tokenPickerBusy && !selectedWalletToken;
   const canSubmitTrade = canTrade && (side === "buy"
     ? solIn > 0
-    : tokensIn > 0 && !!selectedWalletToken && !sellBalanceExceeded);
+    : isMainnet
+      ? parsePositive(tokensAmount, 0) > 0
+      : tokensIn > 0 && !!selectedWalletToken && !sellBalanceExceeded);
 
   const loadWalletTokens = useCallback(async () => {
     if (!wallet.publicKey) { setWalletTokens([]); return; }
@@ -289,8 +351,12 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
 
   const fetchChartTrades = useCallback((mint: string, silent = false) => {
     if (!silent) { setChartLoading(true); setChartError(null); }
-    getTokenTrades(mint, 500)
-      .then((res) => { setChartTrades(res.trades ?? []); setChartLoading(false); })
+    const source = tokenInfoRef.current?.source;
+    const fetcher: Promise<ApiTrade[]> = source === "pumpfun"
+      ? fetchPumpFunTrades(mint)
+      : getTokenTrades(mint, 500).then(r => r.trades ?? []);
+    fetcher
+      .then(trades => { setChartTrades(trades); setChartLoading(false); })
       .catch((err: Error) => { if (!silent) setChartError(err.message); setChartLoading(false); });
   }, []);
 
@@ -363,8 +429,44 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
     setSolAmount(String(+(available * frac).toFixed(6)));
   };
 
+  const runMainnetBuy = async () => {
+    if (!wallet.publicKey || !wallet.signTransaction) return;
+    setBusy("buy"); setTradeError(null); setTxSig(null);
+    try {
+      const lamports = Math.floor(parsePositive(solAmount, 0) * LAMPORTS_PER_SOL);
+      if (lamports <= 0) throw new Error("Enter a valid SOL amount");
+      const quote = jupiterQuote ?? await getJupiterQuote(SOL_MINT, selectedMint, lamports, slippageBps);
+      const sig = await executeJupiterSwap(wallet, mainnetConnection, quote);
+      setTxSig(sig);
+      setTimeout(() => fetchChartTrades(selectedMint, true), 3000);
+    } catch (e: any) {
+      setTradeError(friendlyError(e.message || String(e)));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const runMainnetSell = async () => {
+    if (!wallet.publicKey || !wallet.signTransaction) return;
+    setBusy("sell"); setTradeError(null); setTxSig(null);
+    try {
+      const dec = tokenInfo?.decimals ?? 6;
+      const units = Math.floor(parsePositive(tokensAmount, 0) * Math.pow(10, dec));
+      if (units <= 0) throw new Error("Enter a valid token amount");
+      const quote = jupiterQuote ?? await getJupiterQuote(selectedMint, SOL_MINT, units, slippageBps);
+      const sig = await executeJupiterSwap(wallet, mainnetConnection, quote);
+      setTxSig(sig);
+      setTimeout(() => fetchChartTrades(selectedMint, true), 3000);
+    } catch (e: any) {
+      setTradeError(friendlyError(e.message || String(e)));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const runBuy = async () => {
     if (!anchorWallet || !wallet.connected) return;
+    if (isMainnet) { return runMainnetBuy(); }
     setBusy("buy"); setTradeError(null); setTxSig(null);
     try {
       const deployed = await isProgramExecutable(connection, PROGRAM_ID_V2_PK);
@@ -399,6 +501,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
 
   const runSell = async () => {
     if (!anchorWallet || !wallet.connected) return;
+    if (isMainnet) { return runMainnetSell(); }
     setBusy("sell"); setTradeError(null); setTxSig(null);
     try {
       const deployed = await isProgramExecutable(connection, PROGRAM_ID_V2_PK);
@@ -505,15 +608,17 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-white font-semibold text-sm">
                 <Zap size={15} className="text-[#00FF41]" />
-                Mini Swap
+                Swap
               </div>
               <span className={cn(
                 "text-[10px] font-mono px-2 py-0.5 rounded-full border",
-                canUseCurve
-                  ? "border-[#00FF41]/30 text-[#00FF41] bg-[#00FF41]/10"
-                  : "border-yellow-500/30 text-yellow-400 bg-yellow-500/10"
+                isMainnet
+                  ? "border-orange-500/40 text-orange-400 bg-orange-500/10"
+                  : canUseCurve
+                    ? "border-[#00FF41]/30 text-[#00FF41] bg-[#00FF41]/10"
+                    : "border-yellow-500/30 text-yellow-400 bg-yellow-500/10"
               )}>
-                {canUseCurve ? "DEVNET" : "V2 PENDING"}
+                {isMainnet ? "MAINNET" : canUseCurve ? "DEVNET" : "V2 PENDING"}
               </span>
             </div>
 
@@ -577,6 +682,47 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                 </div>
               )}
             </div>
+
+            {/* Detected token info card (Jupiter-style) */}
+            {tokenDetecting && validMint && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.03] border border-white/10">
+                <div className="w-8 h-8 rounded-full bg-white/10 animate-pulse" />
+                <div className="flex-1 space-y-1">
+                  <div className="h-3 w-20 bg-white/10 rounded animate-pulse" />
+                  <div className="h-2 w-32 bg-white/5 rounded animate-pulse" />
+                </div>
+              </div>
+            )}
+            {!tokenDetecting && tokenInfo && (
+              <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/[0.04] border border-white/10">
+                <div className="w-8 h-8 rounded-full bg-white/10 border border-white/10 shrink-0 overflow-hidden flex items-center justify-center text-xs font-bold text-white/60">
+                  {tokenInfo.logoUri
+                    ? <img src={tokenInfo.logoUri} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                    : tokenInfo.symbol.slice(0, 2)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-white text-sm font-semibold truncate">{tokenInfo.name}</span>
+                    <span className="text-white/40 text-xs">{tokenInfo.symbol}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    {tokenInfo.source === "pumpfun" && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#00FF41]/10 text-[#00FF41] border border-[#00FF41]/20">pump.fun</span>
+                    )}
+                    {tokenInfo.source === "mainnet" && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-400/20">DEX</span>
+                    )}
+                    <span className="text-white/25 text-[10px] font-mono">{tokenInfo.mint.slice(0, 6)}...{tokenInfo.mint.slice(-4)}</span>
+                  </div>
+                </div>
+                {tokenInfo.priceUsd && (
+                  <div className="text-white/60 text-xs font-mono shrink-0">${tokenInfo.priceUsd}</div>
+                )}
+              </div>
+            )}
+            {!tokenDetecting && validMint && !tokenInfo && !isMainnet && (
+              <div className="text-[10px] text-white/30 px-1">HumbleTrust token (devnet)</div>
+            )}
 
             {/* Buy / Sell tabs */}
             <div className="flex gap-1 p-1 rounded-lg bg-white/5">
@@ -682,9 +828,24 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                 <span>To est.</span>
                 <span>{side === "buy" ? selectedSymbol : "SOL"}</span>
               </div>
-              <div className="text-white text-xl font-mono">
-                {side === "buy" ? formatCompact(estimatedTokens, 4) : formatCompact(estimatedSol, 6)}
+              <div className="text-white text-xl font-mono flex items-center gap-2">
+                {isMainnet ? (
+                  jupiterQuoting
+                    ? <span className="text-white/30 text-sm">Fetching quote…</span>
+                    : jupiterQuote
+                      ? side === "buy"
+                        ? formatCompact(Number(jupiterQuote.outAmount) / Math.pow(10, tokenInfo?.decimals ?? 6), 4)
+                        : formatCompact(Number(jupiterQuote.outAmount) / LAMPORTS_PER_SOL, 6)
+                      : <span className="text-white/30 text-sm">Enter amount</span>
+                ) : (
+                  side === "buy" ? formatCompact(estimatedTokens, 4) : formatCompact(estimatedSol, 6)
+                )}
               </div>
+              {isMainnet && jupiterQuote && (
+                <div className="text-white/30 text-[10px]">
+                  impact {Number(jupiterQuote.priceImpactPct).toFixed(2)}% · via Jupiter
+                </div>
+              )}
             </div>
 
             {/* Meta rows */}
@@ -750,16 +911,27 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
             </div>
 
             {/* Inline warnings */}
-            {activeImpact > 5 && (
+            {!isMainnet && activeImpact > 5 && (
               <div className="text-red-400 text-xs">
                 High price impact ({formatCompact(Math.abs(activeImpact), 1)}%). Consider reducing your trade size.
               </div>
             )}
-            {sellBalanceExceeded && (
+            {!isMainnet && sellBalanceExceeded && (
               <div className="text-red-400 text-xs">Sell amount exceeds wallet balance. Use MAX or lower the amount.</div>
             )}
-            {sellBalanceMissing && (
+            {!isMainnet && sellBalanceMissing && (
               <div className="text-red-400 text-xs">This mint is not in your connected wallet.</div>
+            )}
+
+            {/* Mainnet warning */}
+            {isMainnet && (
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-300 text-[11px] leading-relaxed">
+                <span className="shrink-0 mt-0.5">⚠️</span>
+                <span>
+                  <strong>Mainnet trade</strong> — real SOL from your mainnet wallet will be used.
+                  Routed via Jupiter. Make sure your wallet has mainnet SOL.
+                </span>
+              </div>
             )}
 
             {/* Action button */}
@@ -773,22 +945,32 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                   : "bg-gradient-to-r from-red-500 to-red-500/80 text-white hover:shadow-[0_0_24px_rgba(239,68,68,0.4)]"
               )}
             >
-              {busy === "buy" ? "Buying..." : busy === "sell" ? "Selling..." : side === "buy" ? "Buy on Curve" : "Sell on Curve"}
+              {busy === "buy" ? "Buying…" : busy === "sell" ? "Selling…"
+                : isMainnet
+                  ? side === "buy" ? `Buy ${selectedSymbol} via Jupiter` : `Sell ${selectedSymbol} via Jupiter`
+                  : side === "buy" ? "Buy on Curve" : "Sell on Curve"}
             </button>
 
             {/* Links */}
-            {solscanUrl && (
-              <a href={solscanUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-xs text-[#00FF41]/70 hover:text-[#00FF41]">
-                View on Solscan devnet <ExternalLink size={10} />
-              </a>
-            )}
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              {pumpFunUrl && (
+                <a href={pumpFunUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-xs text-[#00FF41]/70 hover:text-[#00FF41]">
+                  pump.fun <ExternalLink size={10} />
+                </a>
+              )}
+              {solscanUrl && (
+                <a href={solscanUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70">
+                  Solscan <ExternalLink size={10} />
+                </a>
+              )}
+            </div>
             {txSig && (
               <a
-                href={`https://solscan.io/tx/${txSig}?cluster=devnet`}
+                href={isMainnet ? `https://solscan.io/tx/${txSig}` : `https://solscan.io/tx/${txSig}?cluster=devnet`}
                 target="_blank" rel="noreferrer"
                 className="flex items-center gap-1.5 text-xs text-[#00FF41] font-mono bg-[#00FF41]/10 border border-[#00FF41]/20 rounded-lg px-3 py-2"
               >
-                Tx: {txSig.slice(0, 12)}... <ExternalLink size={10} />
+                Tx: {txSig.slice(0, 12)}… <ExternalLink size={10} />
               </a>
             )}
             {tradeError && <div className="text-red-400 text-xs">{tradeError}</div>}
@@ -891,7 +1073,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs text-white/50">
                   <span className="w-2 h-2 rounded-full bg-[#00FF41] inline-block animate-pulse" />
-                  {selectedSymbol} / SOL · devnet
+                  {selectedSymbol} / SOL · {isMainnet ? (tokenInfo?.source === "pumpfun" ? "pump.fun" : "mainnet") : "devnet"}
                 </div>
                 <div className="flex items-center gap-2">
                   {chartLoading && (
@@ -909,7 +1091,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                       <RefreshCw size={11} />
                     </button>
                   )}
-                  {validMint && (
+                  {validMint && !isMainnet && (
                     <button
                       type="button"
                       disabled={syncing}
@@ -1044,7 +1226,9 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                             </span>
                             <span className="text-white/25 text-right text-[10px]">{timeStr}</span>
                             <a
-                              href={`https://solscan.io/tx/${trade.signature}?cluster=devnet`}
+                              href={isMainnet
+                                ? `https://solscan.io/tx/${trade.signature}`
+                                : `https://solscan.io/tx/${trade.signature}?cluster=devnet`}
                               target="_blank"
                               rel="noreferrer"
                               className="text-white/20 hover:text-[#00FF41] flex justify-center"
@@ -1060,8 +1244,8 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
             </div>
           </GlassPanel>
 
-          {/* ── Live reserves ── */}
-          <GlassPanel className="p-4">
+          {/* ── Live reserves (devnet curve only) ── */}
+          {!isMainnet && <GlassPanel className="p-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
               {[
                 { label: "Curve price", value: formatPrice(currentPrice) },
@@ -1115,7 +1299,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
               {reserveSource === "chain" ? "Live devnet" : "Fetch live"}
             </button>
             {reserveError && <div className="text-red-400 text-xs mt-2">{reserveError}</div>}
-          </GlassPanel>
+          </GlassPanel>}
         </motion.div>
       </div>
 
