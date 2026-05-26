@@ -4,13 +4,13 @@ target/
 test-ledger/
 
 # Legacy / removed directories
-app/
-web/
-backend/
-migrations/
-nft-reference.html
-nft-reference-uniqueness.html
-CURSOR_PROMPT.md
+/app/
+/web/
+/backend/
+/migrations/
+/nft-reference.html
+/nft-reference-uniqueness.html
+/CURSOR_PROMPT.md
 
 # Solana keypairs (VERY IMPORTANT)
 *.json

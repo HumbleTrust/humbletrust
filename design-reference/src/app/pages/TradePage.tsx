@@ -291,6 +291,8 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   const selectedMint = mintInput.trim();
   const canUseCurve = v2Available === true;
   const isMainnet = tokenInfo?.network === "mainnet-beta";
+  // Show DexScreener embed for mainnet DEX tokens and graduated pump.fun tokens
+  const showDexChart = !!(tokenInfo?.dexPairAddress && (tokenInfo.source === "mainnet" || tokenInfo.complete === true));
   const canTrade = wallet.connected && busy === null && validMint && (isMainnet || canUseCurve);
   const solscanUrl = validMint
     ? isMainnet
@@ -991,7 +993,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
           <GlassPanel className={cn("overflow-hidden", fullChart && "fixed inset-4 z-50")}>
             {/* Chart topbar */}
             <div className="flex items-center gap-1 px-3 py-2 border-b border-white/10 bg-white/[0.02] flex-wrap">
-              {TIMEFRAMES.map((tf) => (
+              {!showDexChart && TIMEFRAMES.map((tf) => (
                 <button
                   type="button"
                   key={tf}
@@ -1006,8 +1008,8 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                   {tf}
                 </button>
               ))}
-              <span className="w-px h-4 bg-white/10 mx-1" />
-              {(["candles", "line", "area"] as ChartMode[]).map((m) => (
+              {!showDexChart && <span className="w-px h-4 bg-white/10 mx-1" />}
+              {!showDexChart && (["candles", "line", "area"] as ChartMode[]).map((m) => (
                 <button
                   key={m}
                   type="button"
@@ -1022,23 +1024,28 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                   {m}
                 </button>
               ))}
-              <span className="w-px h-4 bg-white/10 mx-1" />
+              {!showDexChart && <span className="w-px h-4 bg-white/10 mx-1" />}
+              {!showDexChart && (
+                <button
+                  type="button"
+                  className={cn(
+                    "px-2.5 py-1 rounded text-xs transition-all",
+                    showIndicators
+                      ? "bg-[#B026FF]/15 text-[#B026FF]"
+                      : "text-white/40 hover:text-white/70"
+                  )}
+                  onClick={() => setShowIndicators((v) => !v)}
+                >
+                  fx Indicators
+                </button>
+              )}
+              {showDexChart && (
+                <span className="text-xs text-white/30 font-mono">DexScreener · live chart</span>
+              )}
+              <span className="w-px h-4 bg-white/10 mx-1 ml-auto" />
               <button
                 type="button"
-                className={cn(
-                  "px-2.5 py-1 rounded text-xs transition-all",
-                  showIndicators
-                    ? "bg-[#B026FF]/15 text-[#B026FF]"
-                    : "text-white/40 hover:text-white/70"
-                )}
-                onClick={() => setShowIndicators((v) => !v)}
-              >
-                fx Indicators
-              </button>
-              <span className="w-px h-4 bg-white/10 mx-1" />
-              <button
-                type="button"
-                className="p-1.5 rounded text-white/40 hover:text-white/70 transition-all ml-auto"
+                className="p-1.5 rounded text-white/40 hover:text-white/70 transition-all"
                 title={fullChart ? "Exit full" : "Expand"}
                 onClick={() => setFullChart((v) => !v)}
               >
@@ -1047,7 +1054,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
             </div>
 
             {/* Indicator options */}
-            {showIndicators && (
+            {showIndicators && !showDexChart && (
               <div className="flex items-center gap-4 px-3 py-2 border-b border-white/10 bg-white/[0.02] flex-wrap">
                 <label className="flex items-center gap-1.5 text-xs text-white/60 cursor-pointer">
                   <input type="checkbox" className="accent-[#00FF41]" checked={showVolume} onChange={(e) => setShowVolume(e.target.checked)} />
@@ -1112,12 +1119,24 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                 </div>
               </div>
 
-              {/* Trade-based price chart */}
+              {/* Chart — DexScreener embed for mainnet/graduated, custom for devnet/bonding curve */}
               {(() => {
                 if (!validMint) return (
                   <div className="h-52 flex items-center justify-center rounded-lg bg-white/[0.02] border border-white/5">
                     <p className="text-white/30 text-sm">Select a token to view chart</p>
                   </div>
+                );
+
+                // Mainnet DEX tokens and graduated pump.fun → DexScreener live chart
+                if (showDexChart) return (
+                  <iframe
+                    key={tokenInfo!.dexPairAddress}
+                    src={`https://dexscreener.com/solana/${tokenInfo!.dexPairAddress}?embed=1&theme=dark&info=0&trades=0`}
+                    className="w-full rounded-lg border border-white/10"
+                    style={{ height: 340 }}
+                    title={`${selectedSymbol}/SOL`}
+                    allow="clipboard-write"
+                  />
                 );
 
                 if (chartLoading) return (

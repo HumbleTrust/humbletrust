@@ -15,8 +15,9 @@ export interface TokenInfo {
   virtualSolReserves?: number;
   virtualTokenReserves?: number;
   complete?: boolean;
-  // DexScreener price for display
+  // DexScreener data
   priceUsd?: string;
+  dexPairAddress?: string; // pair address for DexScreener chart embed
 }
 
 const PUMPFUN_BASE = "https://frontend-api.pump.fun";
@@ -37,8 +38,15 @@ async function fetchJson(url: string, ms = 6000): Promise<any> {
 }
 
 export async function detectToken(mint: string): Promise<TokenInfo | null> {
-  // 1. pump.fun API — fastest and most common for Solana memecoins
-  const pf = await fetchJson(`${PUMPFUN_BASE}/coins/${mint}`);
+  // Run pump.fun and DexScreener in parallel — use both results
+  const [pf, ds] = await Promise.all([
+    fetchJson(`${PUMPFUN_BASE}/coins/${mint}`),
+    fetchJson(`${DEXSCREENER_BASE}/${mint}`),
+  ]);
+
+  const dsPair = ds?.pairs?.[0];
+
+  // 1. pump.fun — bonding curve or graduated token
   if (pf?.mint) {
     return {
       mint,
@@ -51,22 +59,23 @@ export async function detectToken(mint: string): Promise<TokenInfo | null> {
       virtualSolReserves: pf.virtual_sol_reserves ? pf.virtual_sol_reserves / 1e9 : undefined,
       virtualTokenReserves: pf.virtual_token_reserves ? pf.virtual_token_reserves / 1e6 : undefined,
       complete: !!pf.complete,
+      priceUsd: dsPair?.priceUsd,
+      dexPairAddress: dsPair?.pairAddress,
     };
   }
 
-  // 2. DexScreener — covers Raydium, Orca, and most other Solana DEXes
-  const ds = await fetchJson(`${DEXSCREENER_BASE}/${mint}`);
-  const pair = ds?.pairs?.[0];
-  if (pair?.baseToken?.symbol) {
+  // 2. DexScreener — Raydium, Orca, and all other Solana DEXes
+  if (dsPair?.baseToken?.symbol) {
     return {
       mint,
-      name: pair.baseToken.name || "Unknown",
-      symbol: pair.baseToken.symbol || "???",
-      logoUri: pair.info?.imageUrl || undefined,
+      name: dsPair.baseToken.name || "Unknown",
+      symbol: dsPair.baseToken.symbol || "???",
+      logoUri: dsPair.info?.imageUrl || undefined,
       source: "mainnet",
       network: "mainnet-beta",
       decimals: 9,
-      priceUsd: pair.priceUsd,
+      priceUsd: dsPair.priceUsd,
+      dexPairAddress: dsPair.pairAddress,
     };
   }
 
