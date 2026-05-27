@@ -15,8 +15,13 @@ import { join } from "path";
 
 const require = createRequire(import.meta.url);
 const anchor = require("@coral-xyz/anchor");
-const { Connection, Keypair, PublicKey } = require("@solana/web3.js");
-const { TOKEN_PROGRAM_ID, getAssociatedTokenAddress } = require("@solana/spl-token");
+const { Connection, Keypair, PublicKey, Transaction } = require("@solana/web3.js");
+const {
+  TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddress,
+  createAssociatedTokenAccountInstruction,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+} = require("@solana/spl-token");
 
 const PROGRAM_ID_V2 = "FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr";
 const RPC = "https://api.devnet.solana.com";
@@ -124,6 +129,24 @@ if (action === "vesting") {
   console.log(`\n→ Calling use_vesting_tranche_v2 (tranche=${tranche}, action=send_to_circulation)...`);
 
   const creatorReceiveAccount = await getAssociatedTokenAddress(MINT, creatorKeypair.publicKey);
+
+  // Create creator ATA if it doesn't exist
+  const ataInfo = await connection.getAccountInfo(creatorReceiveAccount);
+  if (!ataInfo) {
+    console.log("  Creating creator ATA first...");
+    const createAtaTx = new Transaction().add(
+      createAssociatedTokenAccountInstruction(
+        creatorKeypair.publicKey,
+        creatorReceiveAccount,
+        creatorKeypair.publicKey,
+        MINT,
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+      )
+    );
+    const ataSig = await provider.sendAndConfirm(createAtaTx, [creatorKeypair]);
+    console.log("  ATA created:", ataSig);
+  }
 
   const tx = await program.methods
     .useVestingTrancheV2(tranche, vestingAction)
