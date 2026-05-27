@@ -86,12 +86,11 @@ function HexLogo({
 const inputCls =
   "w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#00FF41]/50";
 
-const DEVNET_TEST_MODE = true;
-const V2_MIN_LOCK_UNITS = DEVNET_TEST_MODE ? 1 : 30;
-const v2LockUnit = DEVNET_TEST_MODE ? "m" : "d";
-const v2LockLabel = DEVNET_TEST_MODE ? "Lock minutes (1–360)" : "Lock days (30–360)";
-const v2LockTicks = DEVNET_TEST_MODE ? ["1", "180", "360"] : ["30", "180", "360"];
-const v2ScheduleUnit = DEVNET_TEST_MODE ? "Minute" : "Day";
+const V2_MIN_LOCK_UNITS = 30;
+const v2LockUnit = "d";
+const v2LockLabel = "Lock days (30–360)";
+const v2LockTicks = ["30", "180", "360"];
+const v2ScheduleUnit = "Day";
 
 // ── Score color helpers ───────────────────────────────────────────────────────
 function getScoreColor(score: number, isV2: boolean) {
@@ -208,7 +207,7 @@ export function LaunchPage() {
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
   const [lockPercent, setLockPercent] = useState(40);
-  const [lockDays, setLockDays] = useState(DEVNET_TEST_MODE ? 1 : 90);
+  const [lockDays, setLockDays] = useState(90);
   const [burn, setBurn] = useState<25 | 50>(50);
   const [creatorAlloc, setCreatorAlloc] = useState(3);
   const [curveLiquidity, setCurveLiquidity] = useState(35);
@@ -216,6 +215,8 @@ export function LaunchPage() {
   const [initialSol, setInitialSol] = useState("0.5");
   const [tier, setTier] = useState<0 | 1>(0);
   const [antiBot, setAntiBot] = useState(60);
+  const [curveType, setCurveType] = useState<0 | 1>(0);
+  const [lpPolicy, setLpPolicy] = useState<0 | 1 | 2>(0);
 
   // ── Program version detection ─────────────────────────────────────────────
   useEffect(() => {
@@ -325,6 +326,33 @@ export function LaunchPage() {
     };
   }, [isV2Launch, lockDays, lockPercent, creatorAlloc, curveLiquidity, v2Circulation, airdrop, v1Airdrop, burn]);
 
+  // ── Launch preview prices (mirrors on-chain math) ─────────────────────────
+  const launchPreview = useMemo(() => {
+    if (!isV2Launch) return null;
+    const TOTAL_SUPPLY = 1_000_000_000_000_000_000; // 1B with 9 decimals
+    const S_init = initialSolNum * 1e9; // lamports
+    const T_init = TOTAL_SUPPLY * (curveLiquidity / 100);
+    const S_grad = 50 * 1e9; // 50 SOL migration threshold in lamports
+    if (T_init <= 0 || S_init <= 0) return null;
+    const initialPrice = curveType === 1
+      ? (2 * S_init * 1e9) / T_init   // quadratic spot price × 1e9
+      : (S_init * 1e9) / T_init;       // cpmm spot price × 1e9
+    const gradPrice = curveType === 1
+      ? (() => {
+          const sqrtRatio = Math.sqrt(S_init / S_grad);
+          const T_grad = T_init * sqrtRatio;
+          return (2 * S_grad * 1e9) / T_grad;
+        })()
+      : (S_grad * S_grad * 1e9) / (T_init * S_init);
+    // Convert to human-readable SOL per million tokens
+    const perMillion = (p: number) => (p / 1e9) * 1e6; // SOL per 1M tokens
+    return {
+      initialPriceSolPerMillion: perMillion(initialPrice).toFixed(6),
+      gradPriceSolPerMillion: perMillion(gradPrice).toFixed(4),
+      expectedRaiseSol: 50,
+    };
+  }, [isV2Launch, initialSolNum, curveLiquidity, curveType]);
+
   const trustScore = trustBreakdown.score;
   const validDistribution = isV2Launch
     ? v2Circulation >= 15 && v2Circulation <= 40
@@ -395,7 +423,7 @@ export function LaunchPage() {
   };
 
   // ── Launch handler ────────────────────────────────────────────────────────
-  const handleLaunch = async () => {
+  const handleLaunch = async (testLockDays?: number) => {
     if (!anchorWallet || !wallet.connected) { alert("Connect wallet first"); return; }
     setBusy(true); setError(null); setResult(null);
     setDbSaved(false); setDbError(null);
@@ -408,13 +436,14 @@ export function LaunchPage() {
       const { signature, mint } = useV2
         ? await launchTokenV2(getProgramV2(provider), anchorWallet.publicKey, {
             name, symbol,
-            lockPercent, lockDays, burnOption: burn,
+            lockPercent, lockDays: testLockDays ?? lockDays, burnOption: burn,
             creatorAllocation: creatorAlloc,
             curveLiquidityPercent: curveLiquidity,
             circulationPercent: v2Circulation,
             airdropPercent: airdrop,
             initialSol: initialSolNum,
             tier, antiBotSeconds: antiBot,
+            curveType, lpPolicy,
           })
         : await launchToken(getProgram(provider), anchorWallet.publicKey, {
             name, symbol, totalSupply: V1_SUPPLY,
@@ -797,6 +826,65 @@ export function LaunchPage() {
                 ticks={["0", "300", "600"]}
                 unit="s"
               />
+
+              {isV2Launch && (
+                <>
+                  {/* Curve type selector */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-white/70 mb-1">Curve Type</label>
+                    <p className="text-xs text-white/40 mb-2">Determines how token price changes with each trade.</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {([
+                        { v: 0 as const, label: "CPMM", desc: "Constant-product (x·y=k). Smooth, predictable pricing." },
+                        { v: 1 as const, label: "Quadratic", desc: "Price rises faster as supply sells out." },
+                      ]).map(({ v, label, desc }) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setCurveType(v)}
+                          className={cn(
+                            "p-3 rounded-lg border text-left transition-all",
+                            curveType === v
+                              ? "border-[#00FF41]/60 bg-[#00FF41]/10"
+                              : "border-white/10 bg-white/5 hover:border-white/20"
+                          )}
+                        >
+                          <div className={cn("font-bold text-sm mb-1", curveType === v ? "text-[#00FF41]" : "text-white")}>{label}</div>
+                          <div className="text-white/40 text-xs">{desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* LP policy selector */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-white/70 mb-1">LP Policy (after migration)</label>
+                    <p className="text-xs text-white/40 mb-2">What happens to Raydium LP tokens when your token graduates.</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {([
+                        { v: 0 as const, label: "Lock", desc: "LP locked in PDA (recommended)" },
+                        { v: 1 as const, label: "Burn", desc: "LP destroyed permanently" },
+                        { v: 2 as const, label: "To Creator", desc: "LP sent to creator wallet" },
+                      ]).map(({ v, label, desc }) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setLpPolicy(v)}
+                          className={cn(
+                            "p-3 rounded-lg border text-left transition-all",
+                            lpPolicy === v
+                              ? "border-[#B026FF]/60 bg-[#B026FF]/10"
+                              : "border-white/10 bg-white/5 hover:border-white/20"
+                          )}
+                        >
+                          <div className={cn("font-bold text-xs mb-1", lpPolicy === v ? "text-[#B026FF]" : "text-white")}>{label}</div>
+                          <div className="text-white/40 text-[10px]">{desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </GlassPanel>
           </motion.div>
 
@@ -997,7 +1085,7 @@ export function LaunchPage() {
           {/* Launch button */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
             <button
-              onClick={handleLaunch}
+              onClick={() => handleLaunch()}
               disabled={
                 busy || isCheckingProgram || !wallet.connected ||
                 !validDistribution || !validCombinedLiquidity ||
@@ -1013,6 +1101,23 @@ export function LaunchPage() {
                 <><Rocket size={18} />{wallet.connected ? "Launch token" : "Connect wallet to launch"}</>
               )}
             </button>
+
+            {/* Devnet test shortcut — uses 1-minute lock for quick testing */}
+            {isV2Launch && (
+              <div className="mt-2 flex justify-center">
+                <button
+                  onClick={() => handleLaunch(1)}
+                  disabled={
+                    busy || isCheckingProgram || !wallet.connected ||
+                    !validDistribution || !validCombinedLiquidity ||
+                    !validInitialSol || insufficientSol || !name || !symbol
+                  }
+                  className="text-xs px-4 py-1.5 rounded-lg border border-white/10 bg-white/5 text-white/35 hover:border-white/20 hover:text-white/55 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  ⚡ Test launch · 1-min lock (devnet only)
+                </button>
+              </div>
+            )}
           </motion.div>
         </div>
 
@@ -1071,6 +1176,40 @@ export function LaunchPage() {
               </div>
             </GlassPanel>
           </motion.div>
+
+          {/* Launch preview prices */}
+          {launchPreview && (
+            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.23 }}>
+              <GlassPanel className="p-5">
+                <h4 className="text-xs font-mono uppercase tracking-widest text-white/40 mb-4">Launch Preview</h4>
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-white/50">Initial price</span>
+                    <span className="font-mono text-xs text-[#00FF41]">◎ {launchPreview.initialPriceSolPerMillion} / 1M</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-white/50">Graduation price</span>
+                    <span className="font-mono text-xs text-[#B026FF]">◎ {launchPreview.gradPriceSolPerMillion} / 1M</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-white/50">Expected raise</span>
+                    <span className="font-mono text-xs text-white/70">◎ {launchPreview.expectedRaiseSol} SOL</span>
+                  </div>
+                  <div className="flex items-center justify-between pt-1 border-t border-white/10">
+                    <span className="text-xs text-white/50">Curve</span>
+                    <span className="font-mono text-xs text-white/70">{curveType === 1 ? "Quadratic" : "CPMM"}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-white/50">LP policy</span>
+                    <span className="font-mono text-xs text-white/70">{["Lock", "Burn", "To Creator"][lpPolicy]}</span>
+                  </div>
+                </div>
+                <p className="text-white/20 text-[10px] mt-3 leading-relaxed">
+                  Prices shown in SOL per 1M tokens. Graduation at ◎50 SOL raised.
+                </p>
+              </GlassPanel>
+            </motion.div>
+          )}
 
           {/* Distribution */}
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25 }}>

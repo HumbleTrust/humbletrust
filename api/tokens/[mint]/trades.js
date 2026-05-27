@@ -12,6 +12,8 @@ const { isValidWallet, setCors } = require("../../_lib/validate");
 const { parseCurveTradeEvents } = require("../../_lib/curve-events");
 
 const PROGRAM_ID_V2    = "FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr";
+const RAYDIUM_CPMM     = "DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb";
+const WSOL_MINT        = "So11111111111111111111111111111111111111112";
 const RPC_ENDPOINT     = process.env.SOLANA_RPC || "https://api.devnet.solana.com";
 const LAMPORTS_PER_SOL = 1_000_000_000;
 const WSOL_MINT        = "So11111111111111111111111111111111111111112";
@@ -29,7 +31,7 @@ function getWeb3() {
   return web3;
 }
 
-function derivePdas(mint) {
+function deriveCurvePdas(mint) {
   const { PublicKey } = getWeb3();
   const mintPk    = new PublicKey(mint);
   const programPk = new PublicKey(PROGRAM_ID_V2);

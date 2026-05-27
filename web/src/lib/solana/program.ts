@@ -165,6 +165,10 @@ export interface LaunchV2Params {
   initialSol: number;
   tier: 0 | 1;
   antiBotSeconds: number;
+  /** 0 = CPMM (constant-product, default), 1 = Quadratic */
+  curveType?: 0 | 1;
+  /** 0 = Lock (default/recommended), 1 = Burn, 2 = ToCreator */
+  lpPolicy?: 0 | 1 | 2;
 }
 
 export const launchToken = async (
@@ -236,7 +240,9 @@ export const launchTokenV2 = async (
       new BN(initialSolLamports),
       new PublicKey(HUMBLETRUST_METRICS_AUTHORITY),
       params.tier,
-      params.antiBotSeconds
+      params.antiBotSeconds,
+      params.curveType ?? 0,
+      params.lpPolicy ?? 0
     )
     .accounts({
       creator,

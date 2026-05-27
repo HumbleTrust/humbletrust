@@ -299,6 +299,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [validMint, mintInput, canUseCurve]);
 
+
   // Keep ref in sync for use inside fetchChartTrades closure
   useEffect(() => { tokenInfoRef.current = tokenInfo; }, [tokenInfo]);
 
@@ -1225,6 +1226,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                     ? "Migration prepared"
                   : side === "buy" ? "Buy on Curve" : "Sell on Curve"}
             </button>
+
 
             {/* Links */}
             <div className="flex flex-wrap gap-x-3 gap-y-1">

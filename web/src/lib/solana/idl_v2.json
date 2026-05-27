@@ -1092,6 +1092,14 @@
         {
           "name": "anti_bot_seconds",
           "type": "u16"
+        },
+        {
+          "name": "curve_type",
+          "type": "u8"
+        },
+        {
+          "name": "lp_policy",
+          "type": "u8"
         }
       ]
     },
@@ -4305,6 +4313,21 @@
       "code": 6059,
       "name": "RaydiumCpiFailed",
       "msg": "Raydium CPI failed"
+    },
+    {
+      "code": 6058,
+      "name": "InvalidCurveType",
+      "msg": "Curve type must be 0 (CPMM) or 1 (Quadratic)"
+    },
+    {
+      "code": 6059,
+      "name": "InvalidLpPolicy",
+      "msg": "LP policy must be 0 (Lock), 1 (Burn), or 2 (ToCreator)"
+    },
+    {
+      "code": 6060,
+      "name": "LpPolicyAccountMissing",
+      "msg": "LP policy requires a creator LP token account in remaining_accounts[0]"
     }
   ],
   "types": [
@@ -4998,6 +5021,14 @@
             "type": "pubkey"
           },
           {
+            "name": "curve_type",
+            "type": "u8"
+          },
+          {
+            "name": "lp_policy",
+            "type": "u8"
+          },
+          {
             "name": "total_supply",
             "type": "u64"
           },
@@ -5356,6 +5387,22 @@
           {
             "name": "trading_unlock_time",
             "type": "i64"
+          },
+          {
+            "name": "curve_type",
+            "type": "u8"
+          },
+          {
+            "name": "lp_policy",
+            "type": "u8"
+          },
+          {
+            "name": "initial_price_lamports_per_token",
+            "type": "u64"
+          },
+          {
+            "name": "graduation_price_lamports_per_token",
+            "type": "u64"
           },
           {
             "name": "bump",
