@@ -26,6 +26,7 @@ import {
   PROGRAM_ID_V2_PK,
   buyOnCurveV2,
   claimLpFeesV2,
+  fetchCreatorLockState,
   fetchLpLockState,
   fetchCurveTradeFromTransaction,
   fetchMigrationState,
@@ -38,6 +39,9 @@ import {
   migrateToRaydiumV2,
   sellOnCurveV2,
   unlockLpTokensV2,
+  unlockLockedTokensV2,
+  useVestingTrancheV2,
+  type CreatorLockState,
   type LpLockState,
   type MigrationState,
 } from "../../lib/solana/program";
@@ -222,6 +226,11 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   const [lpLockAmt, setLpLockAmt]           = useState("");
   const [migrationError, setMigrationError] = useState<string | null>(null);
 
+  // Creator lock / vesting state
+  const [creatorLockState, setCreatorLockState] = useState<CreatorLockState | null>(null);
+  const [creatorLockBusy, setCreatorLockBusy]   = useState(false);
+  const [creatorLockError, setCreatorLockError] = useState<string | null>(null);
+
   // Separate mainnet RPC connection for Jupiter swaps
   const mainnetConnection = useMemo(
     () => new Connection("https://api.mainnet-beta.solana.com", "confirmed"),
@@ -260,6 +269,13 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   useEffect(() => {
     if (!validMint || !canUseCurve) { setMigrationState(null); setLpLockState(null); return; }
     void refreshMigrationState();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [validMint, mintInput, canUseCurve]);
+
+  // Auto-load creator lock/vesting state when mint changes
+  useEffect(() => {
+    if (!validMint || !canUseCurve) { setCreatorLockState(null); return; }
+    void refreshCreatorLockState();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [validMint, mintInput, canUseCurve]);
 
@@ -459,6 +475,15 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       ]);
       setMigrationState(ms);
       setLpLockState(ls);
+    } catch { /* silent */ }
+  }, [mintInput, canUseCurve, connection]);
+
+  const refreshCreatorLockState = useCallback(async (mintOverride?: string) => {
+    const mintValue = (mintOverride ?? mintInput).trim();
+    if (!canUseCurve || mintValue.length < 32) return;
+    try {
+      const cls = await fetchCreatorLockState(connection, new PublicKey(mintValue));
+      setCreatorLockState(cls);
     } catch { /* silent */ }
   }, [mintInput, canUseCurve, connection]);
 
@@ -678,6 +703,40 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       setMigrationError(friendlyError(e.message || String(e)));
     } finally {
       setLpLockBusy(false);
+    }
+  };
+
+  const runUnlockTokens = async () => {
+    if (!anchorWallet || !wallet.connected || !validMint) return;
+    setCreatorLockBusy(true); setCreatorLockError(null);
+    try {
+      const mint = new PublicKey(mintInput.trim());
+      const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
+      const program  = getProgramV2(provider);
+      const { signature } = await unlockLockedTokensV2(program, anchorWallet.publicKey, mint);
+      setTxSig(signature);
+      await refreshCreatorLockState();
+    } catch (e: any) {
+      setCreatorLockError(friendlyError(e.message || String(e)));
+    } finally {
+      setCreatorLockBusy(false);
+    }
+  };
+
+  const runVestingTranche = async (tranche: number) => {
+    if (!anchorWallet || !wallet.connected || !validMint) return;
+    setCreatorLockBusy(true); setCreatorLockError(null);
+    try {
+      const mint = new PublicKey(mintInput.trim());
+      const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
+      const program  = getProgramV2(provider);
+      const { signature } = await useVestingTrancheV2(program, anchorWallet.publicKey, mint, tranche, 1, connection);
+      setTxSig(signature);
+      await refreshCreatorLockState();
+    } catch (e: any) {
+      setCreatorLockError(friendlyError(e.message || String(e)));
+    } finally {
+      setCreatorLockBusy(false);
     }
   };
 
@@ -1614,6 +1673,103 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
               </div>
             </GlassPanel>
           )}
+
+          {/* ── Creator lock / vesting controls ── */}
+          {!isMainnet && canUseCurve && validMint && creatorLockState &&
+           wallet.publicKey?.toBase58() === creatorLockState.creator && (() => {
+            const now = Math.floor(Date.now() / 1000);
+            const SECS_PER_DAY = 60; // test-mode: 1 day unit = 60s
+            const elapsed = now - creatorLockState.createdAt;
+            const elapsedDays = Math.floor(elapsed / SECS_PER_DAY);
+            const canUnlock = creatorLockState.isLocked && now >= creatorLockState.unlockTime;
+            const secsLeft = Math.max(0, creatorLockState.unlockTime - now);
+
+            const vestingStatus = (done: boolean, day: number) => {
+              if (done) return { label: "Claimed", color: "text-[#00FF41]", ready: false };
+              if (elapsedDays >= day) return { label: "Ready", color: "text-green-400", ready: true };
+              const s = Math.max(0, day * SECS_PER_DAY - elapsed);
+              const m = Math.floor(s / 60), sec = s % 60;
+              return { label: `${m}m ${sec}s`, color: "text-white/40", ready: false };
+            };
+            const t1 = vestingStatus(creatorLockState.vestingT1Done, 30);
+            const t2 = vestingStatus(creatorLockState.vestingT2Done, 60);
+            const t3 = vestingStatus(creatorLockState.vestingT3Done, 90);
+            const totalVesting = creatorLockState.creatorAllocationAmount / 1e9;
+
+            return (
+              <GlassPanel className="p-4 border-purple-500/20 bg-purple-500/5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Lock size={14} className="text-purple-400" />
+                  <span className="text-sm font-semibold text-purple-300">Creator Controls</span>
+                  <button onClick={() => refreshCreatorLockState()} className="ml-auto text-white/30 hover:text-white/60 transition-colors">
+                    <RefreshCw size={12} />
+                  </button>
+                </div>
+
+                {/* Locked tokens */}
+                <div className="mb-3 p-3 rounded-lg bg-white/5 border border-white/10">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-white/50">Locked tokens (30%)</span>
+                    <span className={cn("text-xs font-mono", creatorLockState.isLocked ? "text-yellow-400" : "text-[#00FF41]")}>
+                      {creatorLockState.isLocked ? "🔒 Locked" : "🔓 Unlocked"}
+                    </span>
+                  </div>
+                  <div className="text-xs text-white/40 mb-2">
+                    {creatorLockState.isLocked
+                      ? canUnlock
+                        ? "Ready to unlock"
+                        : `Unlocks in ${Math.floor(secsLeft / 60)}m ${secsLeft % 60}s`
+                      : `Released: ${(creatorLockState.lockedAmountAfterBurn / 1e9).toLocaleString()} tokens`
+                    }
+                  </div>
+                  {creatorLockState.isLocked && (
+                    <button
+                      onClick={runUnlockTokens}
+                      disabled={!canUnlock || creatorLockBusy}
+                      className={cn(
+                        "w-full py-1.5 rounded-lg text-xs font-semibold transition-all",
+                        canUnlock && !creatorLockBusy
+                          ? "bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30"
+                          : "bg-white/5 text-white/20 cursor-not-allowed border border-white/5"
+                      )}
+                    >
+                      {creatorLockBusy ? "Unlocking…" : canUnlock ? "Unlock Locked Tokens" : "Not ready yet"}
+                    </button>
+                  )}
+                </div>
+
+                {/* Vesting tranches */}
+                {creatorLockState.creatorAllocationAmount > 0 && (
+                  <div className="p-3 rounded-lg bg-white/5 border border-white/10">
+                    <div className="text-xs text-white/50 mb-2">Creator vesting ({(totalVesting).toLocaleString()} tokens total)</div>
+                    <div className="space-y-2">
+                      {([
+                        { n: 1, pct: "33%", status: t1 },
+                        { n: 2, pct: "33%", status: t2 },
+                        { n: 3, pct: "34%", status: t3 },
+                      ] as const).map(({ n, pct, status }) => (
+                        <div key={n} className="flex items-center gap-2">
+                          <span className="text-xs text-white/40 w-16">T{n} · {pct}</span>
+                          <span className={cn("text-xs font-mono flex-1", status.color)}>{status.label}</span>
+                          {status.ready && (
+                            <button
+                              onClick={() => runVestingTranche(n)}
+                              disabled={creatorLockBusy}
+                              className="px-2 py-0.5 rounded text-xs bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 transition-all disabled:opacity-40"
+                            >
+                              {creatorLockBusy ? "…" : "Claim"}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {creatorLockError && <div className="text-red-400 text-xs mt-2">{creatorLockError}</div>}
+              </GlassPanel>
+            );
+          })()}
         </motion.div>
       </div>
 

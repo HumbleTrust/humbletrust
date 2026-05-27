@@ -974,4 +974,108 @@ export const initGlobalStateV2 = async (program: Program, authority: PublicKey) 
   return { signature: tx, globalState };
 };
 
+// ─── Creator lock / vesting state ────────────────────────────────────────────
+
+export interface CreatorLockState {
+  creator: string;
+  isLocked: boolean;
+  unlockTime: number;
+  lockedAmountAfterBurn: number;
+  createdAt: number;
+  creatorAllocationAmount: number;
+  vestingT1Done: boolean;
+  vestingT2Done: boolean;
+  vestingT3Done: boolean;
+  vestingT1Action: number;
+  vestingT2Action: number;
+  vestingT3Action: number;
+}
+
+export const fetchCreatorLockState = async (
+  connection: Connection,
+  mint: PublicKey
+): Promise<CreatorLockState | null> => {
+  try {
+    const pdas = findV2Pdas(mint);
+    const coder = new BorshAccountsCoder(idlV2Json as Idl);
+    const metaInfo = await connection.getAccountInfo(pdas.tokenMetadata);
+    if (!metaInfo) return null;
+    const m = coder.decode("TokenMetadataV2", metaInfo.data) as any;
+    return {
+      creator:               (m.creator ?? m.Creator)?.toBase58?.() ?? "",
+      isLocked:              !!(m.isLocked ?? m.is_locked),
+      unlockTime:            Number(m.unlockTime ?? m.unlock_time ?? 0),
+      lockedAmountAfterBurn: Number(m.lockedAmountAfterBurn ?? m.locked_amount_after_burn ?? 0),
+      createdAt:             Number(m.createdAt ?? m.created_at ?? 0),
+      creatorAllocationAmount: Number(m.creatorAllocationAmount ?? m.creator_allocation_amount ?? 0),
+      vestingT1Done:         !!(m.vestingT1Done ?? m.vesting_t1_done),
+      vestingT2Done:         !!(m.vestingT2Done ?? m.vesting_t2_done),
+      vestingT3Done:         !!(m.vestingT3Done ?? m.vesting_t3_done),
+      vestingT1Action:       Number(m.vestingT1Action ?? m.vesting_t1_action ?? 0),
+      vestingT2Action:       Number(m.vestingT2Action ?? m.vesting_t2_action ?? 0),
+      vestingT3Action:       Number(m.vestingT3Action ?? m.vesting_t3_action ?? 0),
+    };
+  } catch {
+    return null;
+  }
+};
+
+export const unlockLockedTokensV2 = async (
+  program: Program,
+  creator: PublicKey,
+  mint: PublicKey
+) => {
+  const pdas = findV2Pdas(mint);
+  const tx = await program.methods
+    .unlockLockedTokensV2()
+    .accounts({
+      creator,
+      tokenMetadata:    pdas.tokenMetadata,
+      mint,
+      lockedVault:      pdas.lockedVault,
+      circulationVault: pdas.circulationVault,
+      tokenProgram:     TOKEN_PROGRAM_ID,
+    })
+    .rpc();
+  return { signature: tx };
+};
+
+export const useVestingTrancheV2 = async (
+  program: Program,
+  creator: PublicKey,
+  mint: PublicKey,
+  tranche: number,
+  action: number, // 1=send to wallet, 2=burn, 3=add to circulation
+  connection: Connection
+) => {
+  const pdas = findV2Pdas(mint);
+  const creatorReceiveAccount = getAssociatedTokenAddressSync(mint, creator, false, TOKEN_PROGRAM_ID);
+
+  // Auto-create creator ATA if missing
+  const ataInfo = await connection.getAccountInfo(creatorReceiveAccount);
+  if (!ataInfo) {
+    const createAtaIx = createAssociatedTokenAccountInstruction(
+      creator, creatorReceiveAccount, creator, mint,
+      TOKEN_PROGRAM_ID
+    );
+    const setupTx = new Transaction().add(createAtaIx);
+    const provider = (program.provider as AnchorProvider);
+    await provider.sendAndConfirm(setupTx);
+  }
+
+  const tx = await program.methods
+    .useVestingTrancheV2(tranche, action)
+    .accounts({
+      creator,
+      tokenMetadata:         pdas.tokenMetadata,
+      mint,
+      creatorVault:          pdas.creatorVault,
+      circulationVault:      pdas.circulationVault,
+      creatorReceiveAccount,
+      tokenProgram:          TOKEN_PROGRAM_ID,
+    })
+    .rpc();
+  return { signature: tx };
+};
+
 export { BN, PublicKey, Keypair };
