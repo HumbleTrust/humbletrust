@@ -10,6 +10,7 @@ import {
 } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
+  NATIVE_MINT,
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
   getAccount,
@@ -285,6 +286,8 @@ describe("humbletrust_v2", () => {
     const mint = mintKp.publicKey;
     const [tokenMetadata]  = findPda([Buffer.from("token_metadata_v2"),    mint.toBuffer()]);
     const [curveTreasury]  = findPda([Buffer.from("curve_treasury_sol_v2"),mint.toBuffer()]);
+    const triggererTokenAccount = await getOrCreateAta(mint, provider.wallet.publicKey);
+    const triggererWsolAccount = await getOrCreateAta(NATIVE_MINT, provider.wallet.publicKey);
 
     const meta = await program.account.tokenMetadataV2.fetch(tokenMetadata);
 
@@ -312,6 +315,8 @@ describe("humbletrust_v2", () => {
           // Stub accounts — Raydium validation will fail first, but threshold check should fail before that
           migrationTokenAccount: Keypair.generate().publicKey,
           migrationWsolAccount:  Keypair.generate().publicKey,
+          triggererTokenAccount,
+          triggererWsolAccount,
           wsolMint:              Keypair.generate().publicKey,
           raydiumProgram:        Keypair.generate().publicKey,
           raydiumAmmConfig:      Keypair.generate().publicKey,
@@ -319,6 +324,7 @@ describe("humbletrust_v2", () => {
           raydiumPoolState:      Keypair.generate().publicKey,
           raydiumLpMint:         Keypair.generate().publicKey,
           raydiumUserLpToken:    Keypair.generate().publicKey,
+          raydiumLpVault:        findPda([Buffer.from("raydium_lp_custody_v2"), mint.toBuffer()])[0],
           raydiumToken0Vault:    Keypair.generate().publicKey,
           raydiumToken1Vault:    Keypair.generate().publicKey,
           raydiumCreatePoolFee:  Keypair.generate().publicKey,

@@ -124,19 +124,10 @@ console.log(" TOTAL rent needed:     ", totalRentNeeded);
 // ── HumbleTrust curve state ───────────────────────────────────────────────────
 console.log("\n══════════ HumbleTrust Curve State ══════════");
 const curveTreasurySol = pda([Buffer.from("curve_treasury_sol_v2"), MINT.toBuffer()], HUMBLETRUST_V2);
-const tokenMetadata = pda([Buffer.from("token_metadata_v2"), MINT.toBuffer()], HUMBLETRUST_V2);
 
 const treasuryInfo = await connection.getAccountInfo(curveTreasurySol);
 if (treasuryInfo) {
-  const solLamports = treasuryInfo.data.readBigUInt64LE(8); // current_sol_lamports
   console.log(" curve_treasury_sol lamports: ", treasuryInfo.lamports);
-  console.log(" current_sol_lamports field:  ", solLamports.toString());
-}
-
-const metaInfo = await connection.getAccountInfo(tokenMetadata);
-if (metaInfo) {
-  const isMigrated = metaInfo.data[8 + 1 + 32 + 32 + 8 + 8 + 1]; // rough offset
-  console.log(" token metadata exists, data:", metaInfo.data.length, "bytes");
 }
 
 console.log();

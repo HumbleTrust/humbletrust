@@ -37,6 +37,7 @@ import {
   isProgramExecutable,
   lockLpTokensV2,
   migrateToRaydiumV2,
+  prepareRaydiumMigrationV2,
   sellOnCurveV2,
   unlockLpTokensV2,
   unlockLockedTokensV2,
@@ -125,6 +126,20 @@ const formatPrice = (value: number) => {
   return value.toFixed(8);
 };
 
+const isRenderableTrade = (trade: ApiTrade) => {
+  const price = Number(trade.price_sol);
+  const sol = Number(trade.sol_amount);
+  const tokens = Number(trade.token_amount);
+  const time = new Date(trade.block_time).getTime();
+  return (
+    (trade.side === "buy" || trade.side === "sell") &&
+    Number.isFinite(price) && price > 0 &&
+    Number.isFinite(sol) && sol > 0 &&
+    Number.isFinite(tokens) && tokens > 0 &&
+    Number.isFinite(time)
+  );
+};
+
 const estimateTokensOut = (solIn: number, solReserve: number, tokenReserve: number) => {
   if (solIn <= 0 || solReserve <= 0 || tokenReserve <= 0) return 0;
   const solAfterFee = solIn * (1 - CURVE_FEE_RATE);
@@ -209,6 +224,11 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const chartAbortRef = useRef<AbortController | null>(null);
+  const lastRaydiumSyncRef = useRef<string | null>(null);
+  const chartDisplayTrades = useMemo(
+    () => chartTrades.filter(isRenderableTrade),
+    [chartTrades]
+  );
 
   // External token detection (pump.fun / mainnet)
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
@@ -341,13 +361,24 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
 
   // Show DexScreener embed for mainnet DEX tokens and graduated pump.fun tokens
   const showDexChart = !!(tokenInfo?.dexPairAddress && (tokenInfo.source === "mainnet" || tokenInfo.complete === true));
-  const canTrade = wallet.connected && busy === null && validMint && (isMainnet || canUseCurve);
+  const raydiumTradingActive = !isMainnet && !!migrationState?.isMigrated;
+  const migrationPreparedOnly = !isMainnet && !!migrationState?.isPrepared && !migrationState?.isMigrated;
+  const canTrade = wallet.connected && busy === null && validMint && (
+    isMainnet ||
+    raydiumTradingActive ||
+    (canUseCurve && !migrationPreparedOnly)
+  );
   const solscanUrl = validMint
     ? isMainnet
       ? `https://solscan.io/token/${selectedMint}`
       : `https://solscan.io/token/${selectedMint}?cluster=devnet`
     : null;
   const pumpFunUrl = tokenInfo?.source === "pumpfun" ? `https://pump.fun/coin/${selectedMint}` : null;
+  const raydiumSwapUrl = validMint
+    ? side === "buy"
+      ? `https://raydium.io/swap/?inputMint=sol&outputMint=${selectedMint}`
+      : `https://raydium.io/swap/?inputMint=${selectedMint}&outputMint=sol`
+    : null;
 
   const savedTokenMap = useMemo(() => {
     const map = new Map<string, ReturnType<typeof listTokens>[number]>();
@@ -359,12 +390,19 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   const selectedDecimals = isMainnet ? (tokenInfo?.decimals ?? 6) : (selectedWalletToken?.decimals ?? 9);
   const selectedSymbol = tokenInfo?.symbol || selectedWalletToken?.symbol || savedTokenMap.get(selectedMint)?.symbol || "TOKEN";
   const sellBalanceExceeded = side === "sell" && !!selectedWalletToken && tokensIn > selectedWalletToken.balance;
-  const sellBalanceMissing = side === "sell" && wallet.connected && validMint && !tokenPickerBusy && !selectedWalletToken;
-  const canSubmitTrade = canTrade && (side === "buy"
-    ? solIn > 0
-    : isMainnet
-      ? parsePositive(tokensAmount, 0) > 0
-      : tokensIn > 0 && !!selectedWalletToken && !sellBalanceExceeded);
+  const sellBalanceMissing = !raydiumTradingActive && side === "sell" && wallet.connected && validMint && !tokenPickerBusy && !selectedWalletToken;
+  const canSubmitTrade = raydiumTradingActive
+    ? validMint && busy === null && (side === "buy" ? solIn > 0 : tokensIn > 0)
+    : canTrade && (side === "buy"
+      ? solIn > 0
+      : isMainnet
+        ? parsePositive(tokensAmount, 0) > 0
+        : tokensIn > 0 && !!selectedWalletToken && !sellBalanceExceeded);
+
+  const openRaydiumSwap = useCallback(() => {
+    if (!raydiumSwapUrl) return;
+    window.open(raydiumSwapUrl, "_blank", "noopener,noreferrer");
+  }, [raydiumSwapUrl]);
 
   const loadWalletTokens = useCallback(async () => {
     if (!wallet.publicKey) { setWalletTokens([]); return; }
@@ -415,7 +453,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   const runSyncTrades = useCallback(async (mint: string) => {
     setSyncing(true);
     setSyncMsg(null);
-    const result = await syncTokenTrades(mint, 200);
+    const result = await syncTokenTrades(mint, 100);
     setSyncing(false);
     if (result.error) {
       setSyncMsg(`Sync error: ${result.error}`);
@@ -436,15 +474,13 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
     return () => clearInterval(interval);
   }, [validMint, mintInput, fetchChartTrades]);
 
-  // Auto-sync Raydium trades once per mint when migration is detected
-  const autoSyncedMintRef = useRef<string | null>(null);
   useEffect(() => {
+    if (!validMint || !migrationState?.isMigrated) return;
     const mint = mintInput.trim();
-    if (!validMint || !migrationState?.isMigrated || autoSyncedMintRef.current === mint) return;
-    autoSyncedMintRef.current = mint;
+    if (lastRaydiumSyncRef.current === mint) return;
+    lastRaydiumSyncRef.current = mint;
     void runSyncTrades(mint);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [validMint, mintInput, migrationState?.isMigrated]);
+  }, [validMint, mintInput, migrationState?.isMigrated, runSyncTrades]);
 
   const refreshReserves = async (mintOverride?: string) => {
     const mintValue = (mintOverride ?? mintInput).trim();
@@ -551,6 +587,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   };
 
   const runBuy = async () => {
+    if (raydiumTradingActive) { openRaydiumSwap(); return; }
     if (!anchorWallet || !wallet.connected) return;
     if (isMainnet) { return runMainnetBuy(); }
     setBusy("buy"); setTradeError(null); setTxSig(null);
@@ -596,6 +633,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   };
 
   const runSell = async () => {
+    if (raydiumTradingActive) { openRaydiumSwap(); return; }
     if (!anchorWallet || !wallet.connected) return;
     if (isMainnet) { return runMainnetSell(); }
     setBusy("sell"); setTradeError(null); setTxSig(null);
@@ -650,8 +688,12 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       const mint = new PublicKey(mintInput.trim());
       const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
       const program = getProgramV2(provider);
-      const { signature } = await migrateToRaydiumV2(program, anchorWallet.publicKey, mint);
-      setTxSig(signature);
+      if (!migrationState?.isPrepared) {
+        const prepared = await prepareRaydiumMigrationV2(program, anchorWallet.publicKey, mint);
+        setTxSig(prepared.signature);
+      }
+      const migrated = await migrateToRaydiumV2(program, anchorWallet.publicKey, mint);
+      setTxSig(migrated.signature);
       await refreshMigrationState();
     } catch (e: any) {
       setMigrationError(friendlyError(e.message || String(e)));
@@ -751,7 +793,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
     }
   };
 
-  const activeImpact = side === "buy" ? priceImpact : sellPriceImpact;
+  const activeImpact = raydiumTradingActive ? 0 : side === "buy" ? priceImpact : sellPriceImpact;
   const impactColor =
     activeImpact > 5 ? "text-red-400" :
     activeImpact > 2 ? "text-yellow-400" :
@@ -772,7 +814,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
           </h2>
           <p className="text-white/50 text-sm">
             {canUseCurve
-              ? "V2 devnet tokens trade through the HumbleTrust bonding curve. Chart updates live from the indexer."
+              ? "V2 devnet tokens trade on the HumbleTrust bonding curve, then continue on Raydium after migration."
               : "V2 curve trading is waiting for the devnet program deploy."}
           </p>
         </GlassPanel>
@@ -1051,6 +1093,8 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                         ? formatCompact(Number(jupiterQuote.outAmount) / Math.pow(10, tokenInfo?.decimals ?? 6), 4)
                         : formatCompact(Number(jupiterQuote.outAmount) / LAMPORTS_PER_SOL, 6)
                       : <span className="text-white/30 text-sm">Enter amount</span>
+                ) : raydiumTradingActive ? (
+                  <span className="text-white/30 text-sm">Live quote opens on Raydium</span>
                 ) : (
                   side === "buy" ? formatCompact(estimatedTokens, 4) : formatCompact(estimatedSol, 6)
                 )}
@@ -1066,16 +1110,18 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs">
                 <span className="text-white/40">Fee</span>
-                <strong className="text-white/70">{(CURVE_FEE_RATE * 100).toFixed(0)}%</strong>
+                <strong className="text-white/70">{raydiumTradingActive ? "Raydium" : `${(CURVE_FEE_RATE * 100).toFixed(0)}%`}</strong>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-white/40">Slippage guard</span>
-                <strong className="text-white/70">{(slippageBps / 100).toFixed(slippageBps % 100 === 0 ? 0 : 1)}%</strong>
+                <span className="text-white/40">{raydiumTradingActive ? "Routing" : "Slippage guard"}</span>
+                <strong className="text-white/70">
+                  {raydiumTradingActive ? "Raydium pool" : `${(slippageBps / 100).toFixed(slippageBps % 100 === 0 ? 0 : 1)}%`}
+                </strong>
               </div>
             </div>
 
             {/* Slippage selector */}
-            <div className="flex gap-1.5 items-center">
+            {!raydiumTradingActive && <div className="flex gap-1.5 items-center">
               {[50, 100, 300].map((bps) => (
                 <button
                   key={bps}
@@ -1100,9 +1146,9 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                   if (Number.isFinite(value) && value >= 0 && value <= 25) setSlippageBps(Math.round(value * 100));
                 }}
               />
-            </div>
+            </div>}
 
-            {slippageBps === 0 && (
+            {!raydiumTradingActive && slippageBps === 0 && (
               <div className="text-red-400 text-xs">0% slippage will fail on any price movement. Use only for exact tests.</div>
             )}
 
@@ -1111,13 +1157,15 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
               <div className="flex justify-between text-xs">
                 <span className="text-white/40">Price impact</span>
                 <strong className={impactColor}>
-                  {formatCompact(Math.abs(activeImpact), 2)}%
+                  {raydiumTradingActive ? "Live quote" : `${formatCompact(Math.abs(activeImpact), 2)}%`}
                 </strong>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-white/40">Min. received</span>
                 <strong className="text-white/70">
-                  {side === "buy"
+                  {raydiumTradingActive
+                    ? "Quoted on Raydium"
+                    : side === "buy"
                     ? `${formatCompact(estimatedTokens * (1 - slippageBps / 10_000), 4)} ${selectedSymbol}`
                     : `${formatCompact(estimatedSol * (1 - slippageBps / 10_000), 6)} SOL`}
                 </strong>
@@ -1125,7 +1173,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
             </div>
 
             {/* Inline warnings */}
-            {!isMainnet && activeImpact > 5 && (
+            {!isMainnet && !raydiumTradingActive && activeImpact > 5 && (
               <div className="text-red-400 text-xs">
                 High price impact ({formatCompact(Math.abs(activeImpact), 1)}%). Consider reducing your trade size.
               </div>
@@ -1135,6 +1183,16 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
             )}
             {!isMainnet && sellBalanceMissing && (
               <div className="text-red-400 text-xs">This mint is not in your connected wallet.</div>
+            )}
+            {raydiumTradingActive && (
+              <div className="text-[#00FF41]/80 text-xs leading-relaxed">
+                Bonding curve is closed. Buys and sells continue through the active Raydium pool.
+              </div>
+            )}
+            {migrationPreparedOnly && (
+              <div className="text-yellow-300 text-xs leading-relaxed">
+                Curve trading is paused. Migration liquidity is prepared; continue the Raydium migration below.
+              </div>
             )}
 
             {/* Mainnet warning */}
@@ -1149,34 +1207,26 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
             )}
 
             {/* Action button */}
-            {!isMainnet && migrationState?.isMigrated ? (
-              <a
-                href={`https://raydium.io/swap/?inputMint=sol&outputMint=${selectedMint}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-3.5 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 bg-gradient-to-r from-[#00FF41] to-[#00cc33] text-black hover:shadow-[0_0_24px_rgba(0,255,65,0.4)] transition-all"
-              >
-                <Rocket size={15} />
-                Trade {selectedSymbol} on Raydium
-                <ExternalLink size={13} />
-              </a>
-            ) : (
-              <button
-                onClick={side === "buy" ? runBuy : runSell}
-                disabled={!canSubmitTrade}
-                className={cn(
-                  "w-full py-3.5 rounded-lg font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed",
-                  side === "buy"
-                    ? "bg-gradient-to-r from-[#00FF41] to-[#00FF41]/80 text-black hover:shadow-[0_0_24px_rgba(0,255,65,0.4)]"
-                    : "bg-gradient-to-r from-red-500 to-red-500/80 text-white hover:shadow-[0_0_24px_rgba(239,68,68,0.4)]"
-                )}
-              >
-                {busy === "buy" ? "Buying…" : busy === "sell" ? "Selling…"
-                  : isMainnet
-                    ? side === "buy" ? `Buy ${selectedSymbol} via Jupiter` : `Sell ${selectedSymbol} via Jupiter`
-                    : side === "buy" ? "Buy on Curve" : "Sell on Curve"}
-              </button>
-            )}
+            <button
+              onClick={raydiumTradingActive ? openRaydiumSwap : side === "buy" ? runBuy : runSell}
+              disabled={!canSubmitTrade}
+              className={cn(
+                "w-full py-3.5 rounded-lg font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed",
+                side === "buy"
+                  ? "bg-gradient-to-r from-[#00FF41] to-[#00FF41]/80 text-black hover:shadow-[0_0_24px_rgba(0,255,65,0.4)]"
+                  : "bg-gradient-to-r from-red-500 to-red-500/80 text-white hover:shadow-[0_0_24px_rgba(239,68,68,0.4)]"
+              )}
+            >
+              {busy === "buy" ? "Buying…" : busy === "sell" ? "Selling…"
+                : isMainnet
+                  ? side === "buy" ? `Buy ${selectedSymbol} via Jupiter` : `Sell ${selectedSymbol} via Jupiter`
+                  : raydiumTradingActive
+                    ? side === "buy" ? "Buy on Raydium" : "Sell on Raydium"
+                  : migrationPreparedOnly
+                    ? "Migration prepared"
+                  : side === "buy" ? "Buy on Curve" : "Sell on Curve"}
+            </button>
+
 
             {/* Links */}
             <div className="flex flex-wrap gap-x-3 gap-y-1">
@@ -1188,6 +1238,11 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
               {solscanUrl && (
                 <a href={solscanUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70">
                   Solscan <ExternalLink size={10} />
+                </a>
+              )}
+              {raydiumTradingActive && raydiumSwapUrl && (
+                <a href={raydiumSwapUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-xs text-[#00FF41]/70 hover:text-[#00FF41]">
+                  Raydium swap <ExternalLink size={10} />
                 </a>
               )}
             </div>
@@ -1375,7 +1430,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                   </div>
                 );
 
-                const hasData = chartTrades.filter(t => Number(t.price_sol) > 0).length > 0;
+                const hasData = chartDisplayTrades.length > 0;
                 if (!hasData) return (
                   <div className="h-52 flex items-center justify-center rounded-lg bg-white/[0.02] border border-white/5">
                     <div className="text-center">
@@ -1391,9 +1446,9 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
 
                 return (
                   <LightweightTradeChart
-                    trades={chartTrades}
+                    trades={chartDisplayTrades}
                     periodSec={periodSec}
-                    height={260}
+                    height={fullChart ? 520 : 320}
                     showVolume={showVolume}
                     showSma20={indicators.sma20}
                     showSma50={indicators.sma50}
@@ -1417,22 +1472,22 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
               )}
 
               {/* Stats bar */}
-              {chartTrades.length > 0 && (() => {
-                const buys = chartTrades.filter(t => t.side === "buy").length;
-                const sells = chartTrades.filter(t => t.side === "sell").length;
-                const totalSol = chartTrades.reduce((s, t) => s + Number(t.sol_amount), 0);
+              {chartDisplayTrades.length > 0 && (() => {
+                const buys = chartDisplayTrades.filter(t => t.side === "buy").length;
+                const sells = chartDisplayTrades.filter(t => t.side === "sell").length;
+                const totalSol = chartDisplayTrades.reduce((s, t) => s + Number(t.sol_amount), 0);
                 return (
                   <div className="flex items-center gap-4 text-xs border-t border-white/5 pt-2">
                     <span className="text-[#00FF41]">▲ {buys} buys</span>
                     <span className="text-[#FF3C6B]">▼ {sells} sells</span>
                     <span className="text-white/40">{totalSol.toFixed(3)} SOL vol</span>
-                    <span className="text-white/25 ml-auto">{chartTrades.length} trades · auto 30s</span>
+                    <span className="text-white/25 ml-auto">{chartDisplayTrades.length} trades · auto 30s</span>
                   </div>
                 );
               })()}
 
               {/* Trade history table */}
-              {chartTrades.length > 0 && (
+              {chartDisplayTrades.length > 0 && (
                 <div className="border-t border-white/10 pt-3">
                   <p className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-2">Trade history</p>
                   {/* Header */}
@@ -1445,7 +1500,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                     <span />
                   </div>
                   <div className="space-y-0 max-h-52 overflow-y-auto pr-1 mt-1">
-                    {[...chartTrades]
+                    {[...chartDisplayTrades]
                       .sort((a, b) => new Date(b.block_time).getTime() - new Date(a.block_time).getTime())
                       .map((trade, i) => {
                         const isBuy = trade.side === "buy";
@@ -1497,8 +1552,8 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
             </div>
           </GlassPanel>
 
-          {/* ── Live reserves (devnet curve only, hidden after migration) ── */}
-          {!isMainnet && !migrationState?.isMigrated && <GlassPanel className="p-4">
+          {/* ── Live reserves (devnet curve only) ── */}
+          {!isMainnet && !raydiumTradingActive && <GlassPanel className="p-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
               {[
                 { label: "Curve price", value: formatPrice(currentPrice) },
@@ -1584,23 +1639,27 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                     />
                   </div>
                   <div className="text-white/40 text-xs mb-3">
-                    {migrationState.progressPct.toFixed(1)}% — reach 100% to open Raydium CPMM pool
+                    {migrationState.isPrepared
+                      ? `Prepared — ${(migrationState.migrationWsolLamports / LAMPORTS_PER_SOL).toFixed(3)} SOL ready for Raydium`
+                      : `${migrationState.progressPct.toFixed(1)}% — reach 100% to open Raydium CPMM pool`}
                   </div>
                   <button
                     onClick={runMigrate}
-                    disabled={migrationState.progressPct < 100 || migrationBusy || !wallet.connected}
+                    disabled={(!migrationState.isPrepared && migrationState.progressPct < 100) || migrationBusy || !wallet.connected}
                     className="w-full py-2.5 rounded-lg font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{
-                      background: migrationState.progressPct >= 100
+                      background: migrationState.isPrepared || migrationState.progressPct >= 100
                         ? "linear-gradient(135deg, #00FF41, #00cc33)"
                         : "rgba(255,255,255,0.05)",
-                      color: migrationState.progressPct >= 100 ? "#000" : "rgba(255,255,255,0.4)",
+                      color: migrationState.isPrepared || migrationState.progressPct >= 100 ? "#000" : "rgba(255,255,255,0.4)",
                       border: "1px solid rgba(255,255,255,0.1)",
                     }}
                   >
                     {migrationBusy
                       ? "Migrating…"
-                      : migrationState.progressPct >= 100
+                      : migrationState.isPrepared
+                        ? "🚀 Continue Raydium Migration"
+                        : migrationState.progressPct >= 100
                         ? "🚀 Trigger Migration · Earn 0.1 SOL"
                         : `Needs ${((migrationState.thresholdLamports - migrationState.currentSolLamports) / LAMPORTS_PER_SOL).toFixed(2)} more SOL`}
                   </button>
