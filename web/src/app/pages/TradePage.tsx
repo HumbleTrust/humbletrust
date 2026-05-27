@@ -37,6 +37,7 @@ import {
   isProgramExecutable,
   lockLpTokensV2,
   migrateToRaydiumV2,
+  prepareRaydiumMigrationV2,
   sellOnCurveV2,
   unlockLpTokensV2,
   unlockLockedTokensV2,
@@ -657,8 +658,12 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       const mint = new PublicKey(mintInput.trim());
       const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
       const program = getProgramV2(provider);
-      const { signature } = await migrateToRaydiumV2(program, anchorWallet.publicKey, mint);
-      setTxSig(signature);
+      if (!migrationState?.isPrepared) {
+        const prepared = await prepareRaydiumMigrationV2(program, anchorWallet.publicKey, mint);
+        setTxSig(prepared.signature);
+      }
+      const migrated = await migrateToRaydiumV2(program, anchorWallet.publicKey, mint);
+      setTxSig(migrated.signature);
       await refreshMigrationState();
     } catch (e: any) {
       setMigrationError(friendlyError(e.message || String(e)));
@@ -1578,23 +1583,27 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                     />
                   </div>
                   <div className="text-white/40 text-xs mb-3">
-                    {migrationState.progressPct.toFixed(1)}% — reach 100% to open Raydium CPMM pool
+                    {migrationState.isPrepared
+                      ? `Prepared — ${(migrationState.migrationWsolLamports / LAMPORTS_PER_SOL).toFixed(3)} SOL ready for Raydium`
+                      : `${migrationState.progressPct.toFixed(1)}% — reach 100% to open Raydium CPMM pool`}
                   </div>
                   <button
                     onClick={runMigrate}
-                    disabled={migrationState.progressPct < 100 || migrationBusy || !wallet.connected}
+                    disabled={(!migrationState.isPrepared && migrationState.progressPct < 100) || migrationBusy || !wallet.connected}
                     className="w-full py-2.5 rounded-lg font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{
-                      background: migrationState.progressPct >= 100
+                      background: migrationState.isPrepared || migrationState.progressPct >= 100
                         ? "linear-gradient(135deg, #00FF41, #00cc33)"
                         : "rgba(255,255,255,0.05)",
-                      color: migrationState.progressPct >= 100 ? "#000" : "rgba(255,255,255,0.4)",
+                      color: migrationState.isPrepared || migrationState.progressPct >= 100 ? "#000" : "rgba(255,255,255,0.4)",
                       border: "1px solid rgba(255,255,255,0.1)",
                     }}
                   >
                     {migrationBusy
                       ? "Migrating…"
-                      : migrationState.progressPct >= 100
+                      : migrationState.isPrepared
+                        ? "🚀 Continue Raydium Migration"
+                        : migrationState.progressPct >= 100
                         ? "🚀 Trigger Migration · Earn 0.1 SOL"
                         : `Needs ${((migrationState.thresholdLamports - migrationState.currentSolLamports) / LAMPORTS_PER_SOL).toFixed(2)} more SOL`}
                   </button>

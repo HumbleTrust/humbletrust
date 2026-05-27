@@ -1362,6 +1362,7 @@
         },
         {
           "name": "token_metadata",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -1799,7 +1800,7 @@
           "type": "u64"
         },
         {
-          "name": "payer_buffer_lamports",
+          "name": "_payer_buffer_lamports",
           "type": "u64"
         },
         {
@@ -1930,6 +1931,289 @@
         {
           "name": "certificate_nft_mint",
           "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "prepare_raydium_migration_v2",
+      "discriminator": [
+        182,
+        135,
+        27,
+        113,
+        71,
+        100,
+        106,
+        115
+      ],
+      "accounts": [
+        {
+          "name": "triggerer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_metadata",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97,
+                  95,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "curve_pool_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  114,
+                  118,
+                  101,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "curve_treasury_sol",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  114,
+                  118,
+                  101,
+                  95,
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121,
+                  95,
+                  115,
+                  111,
+                  108,
+                  95,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lp_lock_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  108,
+                  111,
+                  99,
+                  107,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "raydium_migration_authority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  97,
+                  121,
+                  100,
+                  105,
+                  117,
+                  109,
+                  95,
+                  109,
+                  105,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121,
+                  95,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "migration_token_account",
+          "writable": true
+        },
+        {
+          "name": "migration_wsol_account",
+          "writable": true
+        },
+        {
+          "name": "wsol_mint"
+        },
+        {
+          "name": "raydium_program"
+        },
+        {
+          "name": "raydium_amm_config"
+        },
+        {
+          "name": "raydium_authority"
+        },
+        {
+          "name": "raydium_pool_state",
+          "writable": true
+        },
+        {
+          "name": "raydium_lp_mint",
+          "writable": true
+        },
+        {
+          "name": "raydium_user_lp_token",
+          "writable": true
+        },
+        {
+          "name": "raydium_token_0_vault",
+          "writable": true
+        },
+        {
+          "name": "raydium_token_1_vault",
+          "writable": true
+        },
+        {
+          "name": "raydium_create_pool_fee",
+          "writable": true
+        },
+        {
+          "name": "raydium_observation_state",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "token_program_2022"
+        },
+        {
+          "name": "associated_token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "payer_buffer_lamports",
+          "type": "u64"
         }
       ]
     },
@@ -2819,6 +3103,92 @@
               }
             ]
           }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "unlock_lp_tokens_v2",
+      "discriminator": [
+        163,
+        169,
+        207,
+        224,
+        190,
+        49,
+        50,
+        49
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "lp_lock",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  108,
+                  111,
+                  99,
+                  107,
+                  95,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "lp_lock.token_mint",
+                "account": "LpLockV2"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lp_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "lp_lock.token_mint",
+                "account": "LpLockV2"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator_lp_account",
+          "writable": true
         },
         {
           "name": "token_program",
@@ -3771,66 +4141,76 @@
     },
     {
       "code": 6045,
+      "name": "LaunchesPaused",
+      "msg": "Token launches are currently paused by admin"
+    },
+    {
+      "code": 6046,
       "name": "AdminRequired",
       "msg": "Operation requires HumbleTrust admin authority"
     },
     {
-      "code": 6046,
+      "code": 6047,
       "name": "InvalidFeeParameters",
       "msg": "Invalid fee parameters"
     },
     {
-      "code": 6047,
+      "code": 6048,
       "name": "MathOverflow",
       "msg": "Math overflow"
     },
     {
-      "code": 6048,
+      "code": 6049,
       "name": "InvalidRaydiumPool",
       "msg": "Invalid Raydium pool"
     },
     {
-      "code": 6049,
+      "code": 6050,
       "name": "RaydiumPoolAlreadyCreated",
       "msg": "Raydium pool already exists for this token"
     },
     {
-      "code": 6050,
+      "code": 6051,
       "name": "InvalidRaydiumProgram",
       "msg": "Invalid Raydium CPMM program"
     },
     {
-      "code": 6051,
+      "code": 6052,
       "name": "InvalidRaydiumAuthority",
       "msg": "Invalid Raydium CPMM authority"
     },
     {
-      "code": 6052,
+      "code": 6053,
       "name": "InvalidRaydiumCreatePoolFee",
       "msg": "Invalid Raydium CPMM create-pool fee account"
     },
     {
-      "code": 6053,
+      "code": 6054,
       "name": "InvalidAssociatedTokenProgram",
       "msg": "Invalid Associated Token Program"
     },
     {
-      "code": 6054,
+      "code": 6055,
       "name": "InvalidToken2022Program",
       "msg": "Invalid Token-2022 Program"
     },
     {
-      "code": 6055,
+      "code": 6056,
       "name": "InvalidRaydiumTokenOrder",
       "msg": "Raydium requires token_0_mint < token_1_mint"
     },
     {
-      "code": 6056,
+      "code": 6057,
       "name": "InvalidLpAmount",
       "msg": "Invalid Raydium LP amount"
     },
     {
-      "code": 6057,
+      "code": 6058,
+      "name": "MigrationNotPrepared",
+      "msg": "Raydium migration funds must be prepared before opening the pool"
+    },
+    {
+      "code": 6059,
       "name": "RaydiumCpiFailed",
       "msg": "Raydium CPI failed"
     }

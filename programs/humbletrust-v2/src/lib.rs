@@ -1199,22 +1199,90 @@ pub mod humbletrust_v2 {
         Ok(())
     }
 
+    pub fn prepare_raydium_migration_v2(
+        ctx: Context<MigrateToRaydiumV2>,
+        payer_buffer_lamports: u64,
+    ) -> Result<()> {
+        let meta = &ctx.accounts.token_metadata;
+        require!(!meta.is_migrated, HumbleV2Error::AlreadyMigrated);
+        require!(
+            ctx.accounts.curve_treasury_sol.current_sol_lamports
+                >= meta.migration_threshold_lamports,
+            HumbleV2Error::MigrationThresholdNotMet
+        );
+        validate_migration_token_accounts(
+            ctx.accounts.raydium_migration_authority.key(),
+            ctx.accounts.mint.key(),
+            &ctx.accounts.migration_token_account,
+            &ctx.accounts.migration_wsol_account,
+        )?;
+
+        let reward_lamports = meta.migration_reward_lamports;
+        let total_non_pool_lamports = reward_lamports
+            .checked_add(payer_buffer_lamports)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        require!(
+            ctx.accounts.curve_treasury_sol.current_sol_lamports > total_non_pool_lamports,
+            HumbleV2Error::InsufficientCurveReserve
+        );
+
+        let token_amount = ctx.accounts.curve_pool_vault.amount;
+        let sol_amount = ctx
+            .accounts
+            .curve_treasury_sol
+            .current_sol_lamports
+            .checked_sub(total_non_pool_lamports)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        require!(token_amount > 0, HumbleV2Error::InsufficientVaultBalance);
+        require!(sol_amount > 0, HumbleV2Error::InsufficientCurveReserve);
+
+        // Do all CPI work before direct lamport movement. Calling another program after
+        // manual lamport edits can trip Solana's instruction balance checks.
+        move_curve_tokens_to_migration_account(
+            &ctx.accounts.token_program,
+            &ctx.accounts.token_metadata.to_account_info(),
+            &ctx.accounts.curve_pool_vault.to_account_info(),
+            &ctx.accounts.migration_token_account.to_account_info(),
+            ctx.accounts.mint.key(),
+            ctx.accounts.token_metadata.bump,
+            token_amount,
+        )?;
+        if reward_lamports > 0 {
+            debit_treasury_to_account(
+                &mut ctx.accounts.curve_treasury_sol,
+                &ctx.accounts.triggerer.to_account_info(),
+                reward_lamports,
+            )?;
+        }
+        debit_treasury_to_account(
+            &mut ctx.accounts.curve_treasury_sol,
+            &ctx.accounts.raydium_migration_authority.to_account_info(),
+            payer_buffer_lamports,
+        )?;
+        debit_treasury_to_account(
+            &mut ctx.accounts.curve_treasury_sol,
+            &ctx.accounts.migration_wsol_account.to_account_info(),
+            sol_amount,
+        )?;
+
+        let meta = &mut ctx.accounts.token_metadata;
+        meta.migration_trigger = ctx.accounts.triggerer.key();
+        meta.curve_sol_reserve_lamports = ctx.accounts.curve_treasury_sol.current_sol_lamports;
+        meta.curve_token_reserve_amount = 0;
+        Ok(())
+    }
+
     pub fn migrate_to_raydium_v2(
         ctx: Context<MigrateToRaydiumV2>,
         raydium_pool: Pubkey,
         lp_amount: u64,
-        payer_buffer_lamports: u64,
+        _payer_buffer_lamports: u64,
         open_time: u64,
     ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let meta = &ctx.accounts.token_metadata;
         require!(!meta.is_migrated, HumbleV2Error::AlreadyMigrated);
         require!(lp_amount > 0, HumbleV2Error::InvalidLpAmount);
-        require!(
-            ctx.accounts.curve_treasury_sol.current_sol_lamports
-                >= meta.migration_threshold_lamports,
-            HumbleV2Error::MigrationThresholdNotMet
-        );
         validate_raydium_cpmm_common(
             &ctx.accounts.raydium_program,
             &ctx.accounts.raydium_authority,
@@ -1237,54 +1305,30 @@ pub mod humbletrust_v2 {
             );
         }
 
-        let reward_lamports = meta.migration_reward_lamports;
-        if reward_lamports > 0 {
-            require!(
-                ctx.accounts.curve_treasury_sol.current_sol_lamports >= reward_lamports,
-                HumbleV2Error::InsufficientCurveReserve
-            );
-            debit_treasury_to_account(
-                &mut ctx.accounts.curve_treasury_sol,
-                &ctx.accounts.triggerer.to_account_info(),
-                reward_lamports,
-            )?;
-        }
-
-        let token_amount = ctx.accounts.curve_pool_vault.amount;
-        let sol_amount = ctx
+        let token_amount = token_account_amount(&ctx.accounts.migration_token_account)?;
+        let wsol_rent =
+            Rent::get()?.minimum_balance(anchor_spl::token::spl_token::state::Account::LEN);
+        let prepared_wsol_lamports = ctx
             .accounts
-            .curve_treasury_sol
-            .current_sol_lamports
-            .checked_sub(payer_buffer_lamports)
-            .ok_or(error!(HumbleV2Error::MathOverflow))?;
-        require!(token_amount > 0, HumbleV2Error::InsufficientVaultBalance);
-        require!(sol_amount > 0, HumbleV2Error::InsufficientCurveReserve);
+            .migration_wsol_account
+            .to_account_info()
+            .lamports()
+            .checked_sub(wsol_rent)
+            .ok_or(error!(HumbleV2Error::MigrationNotPrepared))?;
+        require!(token_amount > 0, HumbleV2Error::MigrationNotPrepared);
+        require!(
+            prepared_wsol_lamports > 0,
+            HumbleV2Error::MigrationNotPrepared
+        );
 
-        move_curve_tokens_to_migration_account(
-            &ctx.accounts.token_program,
-            &ctx.accounts.token_metadata.to_account_info(),
-            &ctx.accounts.curve_pool_vault.to_account_info(),
-            &ctx.accounts.migration_token_account.to_account_info(),
-            ctx.accounts.mint.key(),
-            ctx.accounts.token_metadata.bump,
-            token_amount,
-        )?;
-        debit_treasury_to_account(
-            &mut ctx.accounts.curve_treasury_sol,
-            &ctx.accounts.raydium_migration_authority.to_account_info(),
-            payer_buffer_lamports,
-        )?;
-        debit_treasury_to_account(
-            &mut ctx.accounts.curve_treasury_sol,
-            &ctx.accounts.migration_wsol_account.to_account_info(),
-            sol_amount,
-        )?;
         token::sync_native(CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
             SyncNative {
                 account: ctx.accounts.migration_wsol_account.to_account_info(),
             },
         ))?;
+        let sol_amount = token_account_amount(&ctx.accounts.migration_wsol_account)?;
+        require!(sol_amount > 0, HumbleV2Error::MigrationNotPrepared);
 
         let migration_bump = [ctx.bumps.raydium_migration_authority];
         let mint_key = ctx.accounts.mint.key();
@@ -1366,7 +1410,9 @@ pub mod humbletrust_v2 {
         let meta = &mut ctx.accounts.token_metadata;
         meta.is_migrated = true;
         meta.raydium_pool = ctx.accounts.raydium_pool_state.key();
-        meta.migration_trigger = ctx.accounts.triggerer.key();
+        if meta.migration_trigger == Pubkey::default() {
+            meta.migration_trigger = ctx.accounts.triggerer.key();
+        }
         meta.migrated_at = now;
         meta.curve_sol_reserve_lamports = ctx.accounts.curve_treasury_sol.current_sol_lamports;
         meta.curve_token_reserve_amount = 0;
@@ -1385,7 +1431,7 @@ pub mod humbletrust_v2 {
             mint: meta.mint,
             raydium_pool: ctx.accounts.raydium_pool_state.key(),
             triggerer: ctx.accounts.triggerer.key(),
-            reward_lamports,
+            reward_lamports: 0,
             remaining_curve_tokens: 0,
             remaining_curve_sol_lamports: ctx.accounts.curve_treasury_sol.current_sol_lamports,
             lp_amount: minted_lp,
@@ -1702,7 +1748,11 @@ pub mod humbletrust_v2 {
     ) -> Result<()> {
         require!(lp_amount > 0, HumbleV2Error::InvalidAmount);
         require!(
-            if cfg!(feature = "test-mode") { lock_days >= 1 } else { lock_days >= 30 },
+            if cfg!(feature = "test-mode") {
+                lock_days >= 1
+            } else {
+                lock_days >= 30
+            },
             HumbleV2Error::InvalidLockDays
         );
         require!(
@@ -1743,7 +1793,13 @@ pub mod humbletrust_v2 {
         lp_lock.lp_vault_bump = ctx.bumps.lp_vault;
         lp_lock.lp_fee_pool_bump = ctx.bumps.lp_fee_pool;
 
-        let lp_bonus: u8 = if lock_days >= 180 { 10 } else if lock_days >= 90 { 5 } else { 0 };
+        let lp_bonus: u8 = if lock_days >= 180 {
+            10
+        } else if lock_days >= 90 {
+            5
+        } else {
+            0
+        };
         if lp_bonus > 0 {
             let meta = &mut ctx.accounts.token_metadata;
             meta.trust_score = meta.trust_score.saturating_add(lp_bonus).min(100);
@@ -3337,6 +3393,8 @@ pub enum HumbleV2Error {
     InvalidRaydiumTokenOrder,
     #[msg("Invalid Raydium LP amount")]
     InvalidLpAmount,
+    #[msg("Raydium migration funds must be prepared before opening the pool")]
+    MigrationNotPrepared,
     #[msg("Raydium CPI failed")]
     RaydiumCpiFailed,
 }
@@ -3361,8 +3419,11 @@ fn validate_launch_inputs(
     require!(!symbol.is_empty(), HumbleV2Error::SymbolTooShort);
     require!(symbol.len() <= 5, HumbleV2Error::SymbolTooLong);
     require!(
-        if cfg!(feature = "test-mode") { (1..=360).contains(&lock_days) }
-        else { (30..=360).contains(&lock_days) },
+        if cfg!(feature = "test-mode") {
+            (1..=360).contains(&lock_days)
+        } else {
+            (30..=360).contains(&lock_days)
+        },
         HumbleV2Error::InvalidLockDays
     );
     require!(
@@ -3441,16 +3502,28 @@ fn mint_to_vault<'info>(
 // In test-mode each "month unit" = 300 seconds (5 minutes) for airdrop/LP cooldowns.
 // These fns are compiled out of all non-test builds.
 fn seconds_per_day() -> i64 {
-    if cfg!(feature = "test-mode") { 60 } else { SECONDS_PER_DAY }
+    if cfg!(feature = "test-mode") {
+        60
+    } else {
+        SECONDS_PER_DAY
+    }
 }
 
 fn seconds_per_month() -> i64 {
-    if cfg!(feature = "test-mode") { 300 } else { SECONDS_PER_MONTH }
+    if cfg!(feature = "test-mode") {
+        300
+    } else {
+        SECONDS_PER_MONTH
+    }
 }
 
 // In test-mode migration threshold is 5 SOL instead of 50 SOL.
 fn migration_threshold_lamports() -> u64 {
-    if cfg!(feature = "test-mode") { 5_000_000_000 } else { MIGRATION_THRESHOLD_SOL_LAMPORTS }
+    if cfg!(feature = "test-mode") {
+        5_000_000_000
+    } else {
+        MIGRATION_THRESHOLD_SOL_LAMPORTS
+    }
 }
 
 fn raydium_cpmm_program_id() -> Pubkey {
@@ -3930,8 +4003,8 @@ fn price_lamports_per_token(sol_reserve: u64, token_reserve: u64) -> Result<u64>
 fn rewards_multiplier_bps(score: u8) -> u16 {
     match score {
         81..=100 => 20_000,
-        51..=80  => 15_000,
-        _        => 10_000,
+        51..=80 => 15_000,
+        _ => 10_000,
     }
 }
 
@@ -4012,23 +4085,23 @@ fn calculate_trust_score_v2(
 ) -> TrustScoreV2 {
     // Lock duration: 0–250 tenths (0–25 pts). Longer lock = stronger commitment.
     let lock_days_tenths: u16 = match lock_days {
-        0..=29   => 0,
-        30..=59  => 40,
-        60..=89  => 80,
+        0..=29 => 0,
+        30..=59 => 40,
+        60..=89 => 80,
         90..=179 => 120,
         180..=269 => 180,
         270..=359 => 220,
-        360..    => 250,
+        360.. => 250,
     };
 
     // Lock percent: 0–200 tenths (0–20 pts). More supply locked = less dump risk.
     let lock_pct_tenths: u16 = match lock_percent {
-        0..=29  => 0,
+        0..=29 => 0,
         30..=39 => 60,
         40..=49 => 100,
         50..=59 => 140,
         60..=69 => 170,
-        70..    => 200,
+        70.. => 200,
     };
 
     // Combined into score_lock_tenths (max 450).
@@ -4036,45 +4109,45 @@ fn calculate_trust_score_v2(
 
     // Creator percent: 0–150 tenths (0–15 pts). Lower = less rug risk.
     let creator_tenths: u16 = match creator_percent {
-        0       => 150,
-        1..=3   => 120,
-        4..=5   => 90,
-        6..=8   => 60,
-        9..=10  => 30,
-        _       => 0,
+        0 => 150,
+        1..=3 => 120,
+        4..=5 => 90,
+        6..=8 => 60,
+        9..=10 => 30,
+        _ => 0,
     };
 
     // Curve liquidity: 0–100 tenths (0–10 pts). More curve liquidity = safer market.
     let curve_liquidity_tenths: u16 = match curve_liquidity_percent {
-        0..=19  => 0,
+        0..=19 => 0,
         20..=29 => 30,
         30..=39 => 60,
         40..=49 => 80,
-        50..    => 100,
+        50.. => 100,
     };
 
     // Circulation: 0–80 tenths (0–8 pts). Healthy range 15–40% signals good distribution.
     let circulation_tenths: u16 = match circulation_percent {
-        0..=9   => 0,
+        0..=9 => 0,
         10..=14 => 40,
         15..=40 => 80,
         41..=60 => 40,
-        _       => 20,
+        _ => 20,
     };
 
     // Airdrop: 0–100 tenths (0–10 pts). Having one signals community intent.
     let airdrop_tenths: u16 = match airdrop_percent {
-        0       => 0,
-        1..=4   => 50,
-        5..=9   => 80,
-        10..    => 100,
+        0 => 0,
+        1..=4 => 50,
+        5..=9 => 80,
+        10.. => 100,
     };
 
     // Burn on unlock: 0–120 tenths (0–12 pts). Permanent supply reduction.
     let burn_tenths: u16 = match burn_option {
         25 => 60,
         50 => 120,
-        _  => 0,
+        _ => 0,
     };
 
     // Max raw_tenths = 450 + 150 + 100 + 80 + 100 + 120 = 1000.

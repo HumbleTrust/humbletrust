@@ -757,6 +757,9 @@ export interface MigrationState {
   raydiumPool: string;
   migratedAt: number;
   progressPct: number;
+  isPrepared: boolean;
+  migrationTokenAmount: number;
+  migrationWsolLamports: number;
 }
 
 export const fetchMigrationState = async (
@@ -765,10 +768,18 @@ export const fetchMigrationState = async (
 ): Promise<MigrationState | null> => {
   try {
     const pdas = findV2Pdas(mint);
+    const [migrationAuthority] = findRaydiumMigrationAuthorityV2Pda(mint);
+    const migrationTokenAccount = getAssociatedTokenAddressSync(mint, migrationAuthority, true);
+    const migrationWsolAccount = getAssociatedTokenAddressSync(WSOL_MINT, migrationAuthority, true);
     const coder = new BorshAccountsCoder(idlV2Json as Idl);
-    const [metaInfo, treasuryInfo] = await Promise.all([
+    const [metaInfo, treasuryInfo, migrationTokenBalance, migrationWsolInfo, wsolRent] = await Promise.all([
       connection.getAccountInfo(pdas.tokenMetadata),
       connection.getAccountInfo(pdas.curveTreasurySol),
+      connection.getTokenAccountBalance(migrationTokenAccount)
+        .then((balance) => Number(balance.value.amount || 0))
+        .catch(() => 0),
+      connection.getAccountInfo(migrationWsolAccount),
+      connection.getMinimumBalanceForRentExemption(165).catch(() => 2_039_280),
     ]);
     if (!metaInfo) return null;
     const meta = coder.decode("TokenMetadataV2", metaInfo.data) as any;
@@ -788,6 +799,9 @@ export const fetchMigrationState = async (
       raydiumPool: (meta.raydiumPool ?? meta.raydium_pool ?? PublicKey.default).toBase58?.() ?? PublicKey.default.toBase58(),
       migratedAt: Number(meta.migratedAt ?? meta.migrated_at ?? 0),
       progressPct: threshold > 0 ? Math.min(100, (currentSolLamports / threshold) * 100) : 0,
+      isPrepared: migrationTokenBalance > 0 && (migrationWsolInfo?.lamports ?? 0) > wsolRent,
+      migrationTokenAmount: migrationTokenBalance,
+      migrationWsolLamports: Math.max(0, (migrationWsolInfo?.lamports ?? 0) - wsolRent),
     };
   } catch {
     return null;
@@ -893,6 +907,64 @@ export const migrateToRaydiumV2 = async (
     .rpc();
 
   return { signature: tx, poolState: ray.poolState };
+};
+
+export const prepareRaydiumMigrationV2 = async (
+  program: Program,
+  triggerer: PublicKey,
+  mint: PublicKey,
+  payerBufferLamports = 250_000_000
+) => {
+  const pdas = findV2Pdas(mint);
+  const ray = findRaydiumCpmmPdas(mint);
+  const [migrationAuthority] = findRaydiumMigrationAuthorityV2Pda(mint);
+  const provider = program.provider as AnchorProvider;
+
+  const migrationTokenAccount = getAssociatedTokenAddressSync(mint, migrationAuthority, true);
+  const migrationWsolAccount  = getAssociatedTokenAddressSync(WSOL_MINT, migrationAuthority, true);
+  const raydiumUserLpToken    = getAssociatedTokenAddressSync(ray.lpMint, migrationAuthority, true);
+
+  const preInstructions = [];
+  const [tokInfo, wsolInfo] = await Promise.all([
+    provider.connection.getAccountInfo(migrationTokenAccount),
+    provider.connection.getAccountInfo(migrationWsolAccount),
+  ]);
+  if (!tokInfo)  preInstructions.push(createAssociatedTokenAccountInstruction(triggerer, migrationTokenAccount, migrationAuthority, mint));
+  if (!wsolInfo) preInstructions.push(createAssociatedTokenAccountInstruction(triggerer, migrationWsolAccount,  migrationAuthority, WSOL_MINT));
+
+  const tx = await program.methods
+    .prepareRaydiumMigrationV2(new BN(payerBufferLamports))
+    .accounts({
+      triggerer,
+      tokenMetadata:           pdas.tokenMetadata,
+      mint,
+      curvePoolVault:          pdas.curvePoolVault,
+      curveTreasurySol:        pdas.curveTreasurySol,
+      lpLockVault:             pdas.lpLockVault,
+      raydiumMigrationAuthority: migrationAuthority,
+      migrationTokenAccount,
+      migrationWsolAccount,
+      wsolMint:                WSOL_MINT,
+      raydiumProgram:          RAYDIUM_CPMM_DEVNET,
+      raydiumAmmConfig:        ray.ammConfig,
+      raydiumAuthority:        RAYDIUM_DEVNET_AUTHORITY,
+      raydiumPoolState:        ray.poolState,
+      raydiumLpMint:           ray.lpMint,
+      raydiumUserLpToken,
+      raydiumToken0Vault:      ray.token0Vault,
+      raydiumToken1Vault:      ray.token1Vault,
+      raydiumCreatePoolFee:    RAYDIUM_DEVNET_POOL_FEE,
+      raydiumObservationState: ray.observationState,
+      tokenProgram:            TOKEN_PROGRAM_ID,
+      tokenProgram2022:        TOKEN_2022_PROGRAM_PK,
+      associatedTokenProgram:  ASSOC_TOKEN_PROGRAM_PK,
+      systemProgram:           SystemProgram.programId,
+      rent:                    SYSVAR_RENT_PUBKEY,
+    })
+    .preInstructions(preInstructions)
+    .rpc();
+
+  return { signature: tx };
 };
 
 export const lockLpTokensV2 = async (
