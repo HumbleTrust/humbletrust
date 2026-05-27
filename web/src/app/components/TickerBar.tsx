@@ -7,14 +7,15 @@ interface TickerItem {
   change24h: number;
 }
 
+// crypto.com Exchange API instruments
 const COINS = [
-  { id: "solana",                    symbol: "SOL"  },
-  { id: "bitcoin",                   symbol: "BTC"  },
-  { id: "ethereum",                  symbol: "ETH"  },
-  { id: "jupiter-exchange-solana",   symbol: "JUP"  },
-  { id: "bonk",                      symbol: "BONK" },
-  { id: "dogwifcoin",                symbol: "WIF"  },
-  { id: "jito-governance-token",     symbol: "JTO"  },
+  { instrument: "SOL_USDT",  symbol: "SOL"  },
+  { instrument: "BTC_USDT",  symbol: "BTC"  },
+  { instrument: "ETH_USDT",  symbol: "ETH"  },
+  { instrument: "JUP_USDT",  symbol: "JUP"  },
+  { instrument: "BONK_USDT", symbol: "BONK" },
+  { instrument: "WIF_USDT",  symbol: "WIF"  },
+  { instrument: "JTO_USDT",  symbol: "JTO"  },
 ];
 
 const FALLBACK: TickerItem[] = [
@@ -42,24 +43,33 @@ export function TickerBar() {
 
   useEffect(() => {
     mounted.current = true;
-    const ids = COINS.map((c) => c.id).join(",");
 
     const load = async () => {
       try {
+        // Fetch all tickers from crypto.com Exchange API v2 in a single call
         const r = await fetch(
-          `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`,
+          "https://api.crypto.com/v2/public/get-ticker",
           { signal: AbortSignal.timeout(8000) }
         );
         if (!r.ok || !mounted.current) return;
         const data = await r.json();
-        const next: TickerItem[] = COINS.map(({ id, symbol }) => ({
-          symbol,
-          price: data[id]?.usd ?? FALLBACK.find((f) => f.symbol === symbol)!.price,
-          change24h: data[id]?.usd_24h_change ?? 0,
-        }));
+        const allTickers: any[] = data?.result?.data ?? [];
+        const map = new Map<string, any>(allTickers.map((t: any) => [t.i, t]));
+
+        const next: TickerItem[] = COINS.map(({ instrument, symbol }) => {
+          const t = map.get(instrument);
+          if (!t) return FALLBACK.find((f) => f.symbol === symbol)!;
+          const price = Number(t.a) || 0;
+          // 'c' is 24h absolute price change; convert to percentage
+          const absChange = Number(t.c) || 0;
+          const prevPrice = price - absChange;
+          const change24h = prevPrice > 0 ? (absChange / prevPrice) * 100 : 0;
+          return { symbol, price, change24h };
+        });
+
         if (mounted.current) setItems(next);
       } catch {
-        // keep fallback
+        // keep current data / fallback
       }
     };
 
@@ -93,6 +103,11 @@ export function TickerBar() {
             </span>
           );
         })}
+        {/* Source attribution */}
+        <span className="inline-flex items-center gap-1 text-[9px] font-mono text-white/20 shrink-0">
+          via crypto.com
+          <span className="text-white/10">·</span>
+        </span>
       </div>
     </div>
   );
