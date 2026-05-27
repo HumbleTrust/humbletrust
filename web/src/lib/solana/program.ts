@@ -715,6 +715,12 @@ export const findLpFeePoolV2Pda = (tokenMint: PublicKey) =>
     PROGRAM_ID_V2_PK
   );
 
+export const findRaydiumLpCustodyV2Pda = (tokenMint: PublicKey) =>
+  PublicKey.findProgramAddressSync(
+    [Buffer.from("raydium_lp_custody_v2"), tokenMint.toBuffer()],
+    PROGRAM_ID_V2_PK
+  );
+
 function sortMintsForRaydium(a: PublicKey, b: PublicKey): [PublicKey, PublicKey] {
   return a.toBuffer().compare(b.toBuffer()) < 0 ? [a, b] : [b, a];
 }
@@ -859,15 +865,22 @@ export const migrateToRaydiumV2 = async (
 
   const migrationTokenAccount = getAssociatedTokenAddressSync(mint, migrationAuthority, true);
   const migrationWsolAccount  = getAssociatedTokenAddressSync(WSOL_MINT, migrationAuthority, true);
-  const raydiumUserLpToken    = getAssociatedTokenAddressSync(ray.lpMint, migrationAuthority, true);
+  const triggererTokenAccount = getAssociatedTokenAddressSync(mint, triggerer, false);
+  const triggererWsolAccount  = getAssociatedTokenAddressSync(WSOL_MINT, triggerer, false);
+  const raydiumUserLpToken    = getAssociatedTokenAddressSync(ray.lpMint, triggerer, false);
+  const [raydiumLpVault]      = findRaydiumLpCustodyV2Pda(mint);
 
   const preInstructions = [];
-  const [tokInfo, wsolInfo] = await Promise.all([
+  const [tokInfo, wsolInfo, triggererTokInfo, triggererWsolInfo] = await Promise.all([
     provider.connection.getAccountInfo(migrationTokenAccount),
     provider.connection.getAccountInfo(migrationWsolAccount),
+    provider.connection.getAccountInfo(triggererTokenAccount),
+    provider.connection.getAccountInfo(triggererWsolAccount),
   ]);
   if (!tokInfo)  preInstructions.push(createAssociatedTokenAccountInstruction(triggerer, migrationTokenAccount, migrationAuthority, mint));
   if (!wsolInfo) preInstructions.push(createAssociatedTokenAccountInstruction(triggerer, migrationWsolAccount,  migrationAuthority, WSOL_MINT));
+  if (!triggererTokInfo) preInstructions.push(createAssociatedTokenAccountInstruction(triggerer, triggererTokenAccount, triggerer, mint));
+  if (!triggererWsolInfo) preInstructions.push(createAssociatedTokenAccountInstruction(triggerer, triggererWsolAccount, triggerer, WSOL_MINT));
 
   const tx = await program.methods
     .migrateToRaydiumV2(
@@ -886,6 +899,8 @@ export const migrateToRaydiumV2 = async (
       raydiumMigrationAuthority: migrationAuthority,
       migrationTokenAccount,
       migrationWsolAccount,
+      triggererTokenAccount,
+      triggererWsolAccount,
       wsolMint:                WSOL_MINT,
       raydiumProgram:          RAYDIUM_CPMM_DEVNET,
       raydiumAmmConfig:        ray.ammConfig,
@@ -893,6 +908,7 @@ export const migrateToRaydiumV2 = async (
       raydiumPoolState:        ray.poolState,
       raydiumLpMint:           ray.lpMint,
       raydiumUserLpToken,
+      raydiumLpVault,
       raydiumToken0Vault:      ray.token0Vault,
       raydiumToken1Vault:      ray.token1Vault,
       raydiumCreatePoolFee:    RAYDIUM_DEVNET_POOL_FEE,
@@ -922,15 +938,22 @@ export const prepareRaydiumMigrationV2 = async (
 
   const migrationTokenAccount = getAssociatedTokenAddressSync(mint, migrationAuthority, true);
   const migrationWsolAccount  = getAssociatedTokenAddressSync(WSOL_MINT, migrationAuthority, true);
-  const raydiumUserLpToken    = getAssociatedTokenAddressSync(ray.lpMint, migrationAuthority, true);
+  const triggererTokenAccount = getAssociatedTokenAddressSync(mint, triggerer, false);
+  const triggererWsolAccount  = getAssociatedTokenAddressSync(WSOL_MINT, triggerer, false);
+  const raydiumUserLpToken    = getAssociatedTokenAddressSync(ray.lpMint, triggerer, false);
+  const [raydiumLpVault]      = findRaydiumLpCustodyV2Pda(mint);
 
   const preInstructions = [];
-  const [tokInfo, wsolInfo] = await Promise.all([
+  const [tokInfo, wsolInfo, triggererTokInfo, triggererWsolInfo] = await Promise.all([
     provider.connection.getAccountInfo(migrationTokenAccount),
     provider.connection.getAccountInfo(migrationWsolAccount),
+    provider.connection.getAccountInfo(triggererTokenAccount),
+    provider.connection.getAccountInfo(triggererWsolAccount),
   ]);
   if (!tokInfo)  preInstructions.push(createAssociatedTokenAccountInstruction(triggerer, migrationTokenAccount, migrationAuthority, mint));
   if (!wsolInfo) preInstructions.push(createAssociatedTokenAccountInstruction(triggerer, migrationWsolAccount,  migrationAuthority, WSOL_MINT));
+  if (!triggererTokInfo) preInstructions.push(createAssociatedTokenAccountInstruction(triggerer, triggererTokenAccount, triggerer, mint));
+  if (!triggererWsolInfo) preInstructions.push(createAssociatedTokenAccountInstruction(triggerer, triggererWsolAccount, triggerer, WSOL_MINT));
 
   const tx = await program.methods
     .prepareRaydiumMigrationV2(new BN(payerBufferLamports))
@@ -944,6 +967,8 @@ export const prepareRaydiumMigrationV2 = async (
       raydiumMigrationAuthority: migrationAuthority,
       migrationTokenAccount,
       migrationWsolAccount,
+      triggererTokenAccount,
+      triggererWsolAccount,
       wsolMint:                WSOL_MINT,
       raydiumProgram:          RAYDIUM_CPMM_DEVNET,
       raydiumAmmConfig:        ray.ammConfig,
@@ -951,6 +976,7 @@ export const prepareRaydiumMigrationV2 = async (
       raydiumPoolState:        ray.poolState,
       raydiumLpMint:           ray.lpMint,
       raydiumUserLpToken,
+      raydiumLpVault,
       raydiumToken0Vault:      ray.token0Vault,
       raydiumToken1Vault:      ray.token1Vault,
       raydiumCreatePoolFee:    RAYDIUM_DEVNET_POOL_FEE,

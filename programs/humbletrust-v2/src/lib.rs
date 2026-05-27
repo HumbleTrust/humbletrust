@@ -5,10 +5,12 @@ use anchor_lang::solana_program::{
     instruction::{AccountMeta, Instruction},
     program::invoke_signed,
     program_pack::Pack,
+    system_instruction,
 };
 use anchor_lang::system_program;
 use anchor_spl::token::{
-    self, Burn, Mint, MintTo, SetAuthority, SyncNative, Token, TokenAccount, Transfer,
+    self, Burn, InitializeAccount3, Mint, MintTo, SetAuthority, SyncNative, Token, TokenAccount,
+    Transfer,
 };
 
 declare_id!("FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr");
@@ -1338,21 +1340,63 @@ pub mod humbletrust_v2 {
             &migration_bump,
         ];
         let signer = &[migration_seeds];
-        let lp_before = token_account_amount(&ctx.accounts.raydium_user_lp_token)?;
+
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.migration_token_account.to_account_info(),
+                    to: ctx.accounts.triggerer_token_account.to_account_info(),
+                    authority: ctx.accounts.raydium_migration_authority.to_account_info(),
+                },
+                signer,
+            ),
+            token_amount,
+        )?;
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.migration_wsol_account.to_account_info(),
+                    to: ctx.accounts.triggerer_wsol_account.to_account_info(),
+                    authority: ctx.accounts.raydium_migration_authority.to_account_info(),
+                },
+                signer,
+            ),
+            sol_amount,
+        )?;
+
+        let payer_refund_lamports = ctx.accounts.raydium_migration_authority.lamports();
+        if payer_refund_lamports > 0 {
+            system_program::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.system_program.to_account_info(),
+                    system_program::Transfer {
+                        from: ctx.accounts.raydium_migration_authority.to_account_info(),
+                        to: ctx.accounts.triggerer.to_account_info(),
+                    },
+                    signer,
+                ),
+                payer_refund_lamports,
+            )?;
+        }
+
+        let lp_before = token_account_amount_if_initialized(&ctx.accounts.raydium_user_lp_token)?;
+        let raydium_signer: &[&[&[u8]]] = &[];
 
         if meta.raydium_pool == Pubkey::default() {
             invoke_raydium_cpmm_initialize(
                 RaydiumCpmmInitializeCpi {
                     raydium_program: ctx.accounts.raydium_program.to_account_info(),
-                    creator: ctx.accounts.raydium_migration_authority.to_account_info(),
+                    creator: ctx.accounts.triggerer.to_account_info(),
                     amm_config: ctx.accounts.raydium_amm_config.to_account_info(),
                     authority: ctx.accounts.raydium_authority.to_account_info(),
                     pool_state: ctx.accounts.raydium_pool_state.to_account_info(),
                     token_mint: ctx.accounts.mint.to_account_info(),
                     wsol_mint: ctx.accounts.wsol_mint.to_account_info(),
                     lp_mint: ctx.accounts.raydium_lp_mint.to_account_info(),
-                    creator_token: ctx.accounts.migration_token_account.to_account_info(),
-                    creator_wsol: ctx.accounts.migration_wsol_account.to_account_info(),
+                    creator_token: ctx.accounts.triggerer_token_account.to_account_info(),
+                    creator_wsol: ctx.accounts.triggerer_wsol_account.to_account_info(),
                     creator_lp_token: ctx.accounts.raydium_user_lp_token.to_account_info(),
                     token_0_vault: ctx.accounts.raydium_token_0_vault.to_account_info(),
                     token_1_vault: ctx.accounts.raydium_token_1_vault.to_account_info(),
@@ -1369,7 +1413,7 @@ pub mod humbletrust_v2 {
                 token_amount,
                 sol_amount,
                 open_time,
-                signer,
+                raydium_signer,
             )?;
         } else {
             require_keys_eq!(
@@ -1380,12 +1424,12 @@ pub mod humbletrust_v2 {
             invoke_raydium_cpmm_deposit(
                 RaydiumCpmmDepositCpi {
                     raydium_program: ctx.accounts.raydium_program.to_account_info(),
-                    owner: ctx.accounts.raydium_migration_authority.to_account_info(),
+                    owner: ctx.accounts.triggerer.to_account_info(),
                     authority: ctx.accounts.raydium_authority.to_account_info(),
                     pool_state: ctx.accounts.raydium_pool_state.to_account_info(),
                     owner_lp_token: ctx.accounts.raydium_user_lp_token.to_account_info(),
-                    token_account: ctx.accounts.migration_token_account.to_account_info(),
-                    wsol_account: ctx.accounts.migration_wsol_account.to_account_info(),
+                    token_account: ctx.accounts.triggerer_token_account.to_account_info(),
+                    wsol_account: ctx.accounts.triggerer_wsol_account.to_account_info(),
                     token_0_vault: ctx.accounts.raydium_token_0_vault.to_account_info(),
                     token_1_vault: ctx.accounts.raydium_token_1_vault.to_account_info(),
                     token_program: ctx.accounts.token_program.to_account_info(),
@@ -1397,7 +1441,7 @@ pub mod humbletrust_v2 {
                 lp_amount,
                 token_amount,
                 sol_amount,
-                signer,
+                raydium_signer,
             )?;
         }
 
@@ -1406,6 +1450,28 @@ pub mod humbletrust_v2 {
             .checked_sub(lp_before)
             .ok_or(error!(HumbleV2Error::MathOverflow))?;
         require!(minted_lp > 0, HumbleV2Error::InvalidLpAmount);
+
+        init_token_vault_if_needed(
+            &ctx.accounts.triggerer.to_account_info(),
+            &ctx.accounts.raydium_lp_vault.to_account_info(),
+            &ctx.accounts.raydium_lp_mint.to_account_info(),
+            &ctx.accounts.raydium_migration_authority.to_account_info(),
+            &ctx.accounts.token_program,
+            &ctx.accounts.system_program,
+            ctx.accounts.mint.key(),
+            ctx.bumps.raydium_lp_vault,
+        )?;
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.raydium_user_lp_token.to_account_info(),
+                    to: ctx.accounts.raydium_lp_vault.to_account_info(),
+                    authority: ctx.accounts.triggerer.to_account_info(),
+                },
+            ),
+            minted_lp,
+        )?;
 
         let meta = &mut ctx.accounts.token_metadata;
         meta.is_migrated = true;
@@ -2502,6 +2568,20 @@ pub struct MigrateToRaydiumV2<'info> {
     #[account(mut)]
     pub migration_wsol_account: UncheckedAccount<'info>,
 
+    #[account(
+        mut,
+        constraint = triggerer_token_account.owner == triggerer.key() @ HumbleV2Error::InvalidTokenAccountOwner,
+        constraint = triggerer_token_account.mint == mint.key() @ HumbleV2Error::InvalidMintForTokenAccount
+    )]
+    pub triggerer_token_account: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        constraint = triggerer_wsol_account.owner == triggerer.key() @ HumbleV2Error::InvalidTokenAccountOwner,
+        constraint = triggerer_wsol_account.mint == NATIVE_SOL_MINT @ HumbleV2Error::InvalidMintForTokenAccount
+    )]
+    pub triggerer_wsol_account: Box<Account<'info, TokenAccount>>,
+
     /// CHECK: verified against native SOL mint.
     pub wsol_mint: UncheckedAccount<'info>,
 
@@ -2520,6 +2600,13 @@ pub struct MigrateToRaydiumV2<'info> {
     /// CHECK: Raydium mints/deposits LP into the migration PDA ATA.
     #[account(mut)]
     pub raydium_user_lp_token: UncheckedAccount<'info>,
+    /// CHECK: Program custody vault for Raydium LP tokens, initialized after Raydium creates the LP mint.
+    #[account(
+        mut,
+        seeds = [b"raydium_lp_custody_v2", mint.key().as_ref()],
+        bump
+    )]
+    pub raydium_lp_vault: UncheckedAccount<'info>,
     /// CHECK: Raydium token 0 vault PDA.
     #[account(mut)]
     pub raydium_token_0_vault: UncheckedAccount<'info>,
@@ -3682,6 +3769,70 @@ fn debit_treasury_to_account<'info>(
 
 fn token_account_amount(account: &UncheckedAccount) -> Result<u64> {
     Ok(unpack_spl_token_account(&account.to_account_info())?.amount)
+}
+
+fn token_account_amount_if_initialized(account: &UncheckedAccount) -> Result<u64> {
+    if account.to_account_info().data_is_empty() {
+        return Ok(0);
+    }
+    token_account_amount(account)
+}
+
+fn init_token_vault_if_needed<'info>(
+    payer: &AccountInfo<'info>,
+    vault: &AccountInfo<'info>,
+    mint: &AccountInfo<'info>,
+    authority: &AccountInfo<'info>,
+    token_program: &Program<'info, Token>,
+    system_program: &Program<'info, System>,
+    token_mint: Pubkey,
+    bump: u8,
+) -> Result<()> {
+    if !vault.data_is_empty() {
+        let token_account = unpack_spl_token_account(vault)?;
+        require_keys_eq!(
+            token_account.mint,
+            *mint.key,
+            HumbleV2Error::InvalidMintForTokenAccount
+        );
+        require_keys_eq!(
+            token_account.owner,
+            *authority.key,
+            HumbleV2Error::InvalidTokenAccountOwner
+        );
+        return Ok(());
+    }
+
+    let rent = Rent::get()?;
+    let space = anchor_spl::token::spl_token::state::Account::LEN;
+    let lamports = rent.minimum_balance(space);
+    let token_program_key = token_program.key();
+    let bump_seed = [bump];
+    let vault_seeds: &[&[u8]] = &[b"raydium_lp_custody_v2", token_mint.as_ref(), &bump_seed];
+    let signer = &[vault_seeds];
+
+    invoke_signed(
+        &system_instruction::create_account(
+            payer.key,
+            vault.key,
+            lamports,
+            space as u64,
+            &token_program_key,
+        ),
+        &[payer.clone(), vault.clone(), system_program.to_account_info()],
+        signer,
+    )?;
+
+    token::initialize_account3(CpiContext::new(
+        token_program.to_account_info(),
+        InitializeAccount3 {
+            account: vault.clone(),
+            mint: mint.clone(),
+            authority: authority.clone(),
+        },
+    ))?;
+
+    Ok(())
 }
 
 fn unpack_spl_token_account(

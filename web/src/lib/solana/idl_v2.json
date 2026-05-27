@@ -1732,6 +1732,14 @@
           "writable": true
         },
         {
+          "name": "triggerer_token_account",
+          "writable": true
+        },
+        {
+          "name": "triggerer_wsol_account",
+          "writable": true
+        },
+        {
           "name": "wsol_mint"
         },
         {
@@ -1754,6 +1762,44 @@
         {
           "name": "raydium_user_lp_token",
           "writable": true
+        },
+        {
+          "name": "raydium_lp_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  97,
+                  121,
+                  100,
+                  105,
+                  117,
+                  109,
+                  95,
+                  108,
+                  112,
+                  95,
+                  99,
+                  117,
+                  115,
+                  116,
+                  111,
+                  100,
+                  121,
+                  95,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
         },
         {
           "name": "raydium_token_0_vault",
@@ -2152,6 +2198,14 @@
           "writable": true
         },
         {
+          "name": "triggerer_token_account",
+          "writable": true
+        },
+        {
+          "name": "triggerer_wsol_account",
+          "writable": true
+        },
+        {
           "name": "wsol_mint"
         },
         {
@@ -2174,6 +2228,44 @@
         {
           "name": "raydium_user_lp_token",
           "writable": true
+        },
+        {
+          "name": "raydium_lp_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  97,
+                  121,
+                  100,
+                  105,
+                  117,
+                  109,
+                  95,
+                  108,
+                  112,
+                  95,
+                  99,
+                  117,
+                  115,
+                  116,
+                  111,
+                  100,
+                  121,
+                  95,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
         },
         {
           "name": "raydium_token_0_vault",

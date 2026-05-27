@@ -359,7 +359,8 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
 
   // Show DexScreener embed for mainnet DEX tokens and graduated pump.fun tokens
   const showDexChart = !!(tokenInfo?.dexPairAddress && (tokenInfo.source === "mainnet" || tokenInfo.complete === true));
-  const canTrade = wallet.connected && busy === null && validMint && (isMainnet || canUseCurve);
+  const curveTradingClosed = !isMainnet && !!migrationState && (migrationState.isPrepared || migrationState.isMigrated);
+  const canTrade = wallet.connected && busy === null && validMint && (isMainnet || (canUseCurve && !curveTradingClosed));
   const solscanUrl = validMint
     ? isMainnet
       ? `https://solscan.io/token/${selectedMint}`
@@ -1148,6 +1149,13 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
             {!isMainnet && sellBalanceMissing && (
               <div className="text-red-400 text-xs">This mint is not in your connected wallet.</div>
             )}
+            {curveTradingClosed && (
+              <div className="text-yellow-300 text-xs leading-relaxed">
+                {migrationState?.isMigrated
+                  ? "Curve trading is closed. This token has graduated to Raydium."
+                  : "Curve trading is paused. Migration liquidity is prepared; continue the Raydium migration below."}
+              </div>
+            )}
 
             {/* Mainnet warning */}
             {isMainnet && (
@@ -1174,6 +1182,8 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
               {busy === "buy" ? "Buying…" : busy === "sell" ? "Selling…"
                 : isMainnet
                   ? side === "buy" ? `Buy ${selectedSymbol} via Jupiter` : `Sell ${selectedSymbol} via Jupiter`
+                  : curveTradingClosed
+                    ? migrationState?.isMigrated ? "Graduated to Raydium" : "Migration prepared"
                   : side === "buy" ? "Buy on Curve" : "Sell on Curve"}
             </button>
 
