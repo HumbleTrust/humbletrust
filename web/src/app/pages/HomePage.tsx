@@ -426,6 +426,15 @@ export function HomePage({ onTabChange }: HomePageProps) {
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
         <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-white/20 py-2">
           <a
+            href="https://x.com/HumbleTrust2026"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1 hover:text-white/50 transition-colors"
+          >
+            @HumbleTrust2026 <ExternalLink size={9} />
+          </a>
+          <span>·</span>
+          <a
             href="https://solscan.io/?cluster=devnet"
             target="_blank"
             rel="noreferrer"
