@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useWallet, useAnchorWallet, useConnection } from "@solana/wallet-adapter-react";
 import { AnchorProvider } from "@coral-xyz/anchor";
 import { PublicKey } from "@solana/web3.js";
-import { Rocket, ExternalLink, Loader, Upload, X, Award, Lock, UserCheck } from "lucide-react";
+import { Rocket, ExternalLink, Loader, Upload, X, Award, Lock, UserCheck, Globe, Twitter, Send } from "lucide-react";
 import { motion } from "motion/react";
 import { GlassPanel } from "../components/GlassPanel";
 import { cn } from "../components/ui/utils";
@@ -216,7 +216,11 @@ export function LaunchPage() {
   const [tier, setTier] = useState<0 | 1>(0);
   const [antiBot, setAntiBot] = useState(60);
   const [curveType, setCurveType] = useState<0 | 1>(0);
-  const [lpPolicy, setLpPolicy] = useState<0 | 1 | 2>(0);
+  const [lpPolicy, setLpPolicy] = useState<0 | 1>(0);
+  const [description, setDescription] = useState("");
+  const [website, setWebsite] = useState("");
+  const [twitter, setTwitter] = useState("");
+  const [telegram, setTelegram] = useState("");
 
   // ── Program version detection ─────────────────────────────────────────────
   useEffect(() => {
@@ -474,6 +478,10 @@ export function LaunchPage() {
             tier,
             certificateMint,
             logoUri: logoDataUrl || null,
+            description: description || null,
+            website: website || null,
+            twitter: twitter || null,
+            telegram: telegram || null,
           });
           if (response?.error) throw new Error(response.error);
           setDbSaved(true);
@@ -643,6 +651,56 @@ export function LaunchPage() {
               <div className="mt-4">
                 <label className="block text-sm font-medium text-white/70 mb-1.5">Total Supply</label>
                 <input className={inputCls} value="1,000,000,000 fixed" readOnly />
+              </div>
+
+              {/* Description */}
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-white/70 mb-1.5">
+                  Description <span className="text-white/30 font-normal">(optional · max 200 chars)</span>
+                </label>
+                <textarea
+                  className={cn(inputCls, "resize-none h-20 py-2.5")}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value.slice(0, 200))}
+                  placeholder="Short description visible on the token page…"
+                />
+                <p className="text-white/25 text-xs mt-0.5 text-right">{description.length}/200</p>
+              </div>
+
+              {/* Social links */}
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-white/70 mb-2">
+                  Social Links <span className="text-white/30 font-normal">(optional)</span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="relative">
+                    <Globe size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                    <input
+                      className={cn(inputCls, "pl-9 text-sm")}
+                      value={website}
+                      onChange={(e) => setWebsite(e.target.value)}
+                      placeholder="Website URL"
+                    />
+                  </div>
+                  <div className="relative">
+                    <Twitter size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                    <input
+                      className={cn(inputCls, "pl-9 text-sm")}
+                      value={twitter}
+                      onChange={(e) => setTwitter(e.target.value)}
+                      placeholder="Twitter / X"
+                    />
+                  </div>
+                  <div className="relative">
+                    <Send size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                    <input
+                      className={cn(inputCls, "pl-9 text-sm")}
+                      value={telegram}
+                      onChange={(e) => setTelegram(e.target.value)}
+                      placeholder="Telegram"
+                    />
+                  </div>
+                </div>
               </div>
             </GlassPanel>
           </motion.div>
@@ -832,12 +890,22 @@ export function LaunchPage() {
                   {/* Curve type selector */}
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-white/70 mb-1">Curve Type</label>
-                    <p className="text-xs text-white/40 mb-2">Determines how token price changes with each trade.</p>
+                    <p className="text-xs text-white/40 mb-2">Determines how token price responds to each buy and sell.</p>
                     <div className="grid grid-cols-2 gap-3">
                       {([
-                        { v: 0 as const, label: "CPMM", desc: "Constant-product (x·y=k). Smooth, predictable pricing." },
-                        { v: 1 as const, label: "Quadratic", desc: "Price rises faster as supply sells out." },
-                      ]).map(({ v, label, desc }) => (
+                        {
+                          v: 0 as const,
+                          label: "Protected CPMM",
+                          badge: "Recommended",
+                          desc: "Constant-product (x·y=k) — the same formula powering Raydium and Uniswap. Smooth, predictable price impact. Best for most launches.",
+                        },
+                        {
+                          v: 1 as const,
+                          label: "Quadratic (Advanced)",
+                          badge: null,
+                          desc: "Price accelerates as supply dwindles (T²·S=k). Strong scarcity dynamics — higher upside for early buyers, higher volatility risk.",
+                        },
+                      ]).map(({ v, label, badge, desc }) => (
                         <button
                           key={v}
                           type="button"
@@ -849,8 +917,13 @@ export function LaunchPage() {
                               : "border-white/10 bg-white/5 hover:border-white/20"
                           )}
                         >
-                          <div className={cn("font-bold text-sm mb-1", curveType === v ? "text-[#00FF41]" : "text-white")}>{label}</div>
-                          <div className="text-white/40 text-xs">{desc}</div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={cn("font-bold text-sm", curveType === v ? "text-[#00FF41]" : "text-white")}>{label}</span>
+                            {badge && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#00FF41]/20 text-[#00FF41] font-mono">{badge}</span>
+                            )}
+                          </div>
+                          <div className="text-white/40 text-xs leading-snug">{desc}</div>
                         </button>
                       ))}
                     </div>
@@ -858,13 +931,20 @@ export function LaunchPage() {
 
                   {/* LP policy selector */}
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-white/70 mb-1">LP Policy (after migration)</label>
-                    <p className="text-xs text-white/40 mb-2">What happens to Raydium LP tokens when your token graduates.</p>
-                    <div className="grid grid-cols-3 gap-2">
+                    <label className="block text-sm font-medium text-white/70 mb-1">LP Policy (after graduation)</label>
+                    <p className="text-xs text-white/40 mb-2">What happens to Raydium LP tokens when your token graduates to the CPMM pool.</p>
+                    <div className="grid grid-cols-2 gap-3">
                       {([
-                        { v: 0 as const, label: "Lock", desc: "LP locked in PDA (recommended)" },
-                        { v: 1 as const, label: "Burn", desc: "LP destroyed permanently" },
-                        { v: 2 as const, label: "To Creator", desc: "LP sent to creator wallet" },
+                        {
+                          v: 0 as const,
+                          label: "Lock (Recommended)",
+                          desc: "LP tokens locked in a PDA vault on-chain. Liquidity is permanently secured — no one can remove it, ever.",
+                        },
+                        {
+                          v: 1 as const,
+                          label: "Burn",
+                          desc: "LP tokens burned on graduation. Permanently removes any possibility of liquidity withdrawal.",
+                        },
                       ]).map(({ v, label, desc }) => (
                         <button
                           key={v}
@@ -878,7 +958,7 @@ export function LaunchPage() {
                           )}
                         >
                           <div className={cn("font-bold text-xs mb-1", lpPolicy === v ? "text-[#B026FF]" : "text-white")}>{label}</div>
-                          <div className="text-white/40 text-[10px]">{desc}</div>
+                          <div className="text-white/40 text-[10px] leading-snug">{desc}</div>
                         </button>
                       ))}
                     </div>
@@ -1201,7 +1281,7 @@ export function LaunchPage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-white/50">LP policy</span>
-                    <span className="font-mono text-xs text-white/70">{["Lock", "Burn", "To Creator"][lpPolicy]}</span>
+                    <span className="font-mono text-xs text-white/70">{lpPolicy === 0 ? "Lock" : "Burn"}</span>
                   </div>
                 </div>
                 <p className="text-white/20 text-[10px] mt-3 leading-relaxed">

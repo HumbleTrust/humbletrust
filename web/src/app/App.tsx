@@ -27,6 +27,8 @@ import { HomePage } from "./pages/HomePage";
 import { WalletProvider } from "../lib/WalletProvider";
 import { HexagonBackground } from "./components/HexagonBackground";
 import { Navigation } from "./components/Navigation";
+import { AnnouncementBanner } from "./components/AnnouncementBanner";
+import { TickerBar } from "./components/TickerBar";
 import { Dashboard } from "./components/pages/Dashboard";
 import { Charts } from "./components/pages/Charts";
 import { Portfolio } from "./components/pages/Portfolio";
@@ -73,11 +75,15 @@ export default function App() {
         <div className="min-h-screen bg-black text-white relative overflow-hidden">
           <HexagonBackground />
           <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
-          <main className="relative z-10 md:ml-64 p-6 pb-24 md:pb-6">
-            <ErrorBoundary>
-              <div className="max-w-[1400px] mx-auto">{renderPage()}</div>
-            </ErrorBoundary>
-          </main>
+          <div className="relative z-10 md:ml-64 flex flex-col min-h-screen">
+            <AnnouncementBanner />
+            <TickerBar />
+            <main className="flex-1 p-6 pb-24 md:pb-6">
+              <ErrorBoundary>
+                <div className="max-w-[1400px] mx-auto">{renderPage()}</div>
+              </ErrorBoundary>
+            </main>
+          </div>
         </div>
       </WalletProvider>
     </ErrorBoundary>
