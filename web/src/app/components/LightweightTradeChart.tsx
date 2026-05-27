@@ -31,9 +31,23 @@ interface Bucket {
   open: number; high: number; low: number; close: number; vol: number; buyVol: number; sellVol: number;
 }
 
+const isValidChartTrade = (trade: ApiTrade) => {
+  const price = Number(trade.price_sol);
+  const sol = Number(trade.sol_amount);
+  const tokens = Number(trade.token_amount);
+  const time = new Date(trade.block_time).getTime();
+  return (
+    (trade.side === "buy" || trade.side === "sell") &&
+    Number.isFinite(price) && price > 0 &&
+    Number.isFinite(sol) && sol > 0 &&
+    Number.isFinite(tokens) && tokens > 0 &&
+    Number.isFinite(time)
+  );
+};
+
 function buildBuckets(trades: ApiTrade[], periodSec: number): Map<number, Bucket> {
   const sorted = [...trades]
-    .filter(t => Number(t.price_sol) > 0)
+    .filter(isValidChartTrade)
     .sort((a, b) => new Date(a.block_time).getTime() - new Date(b.block_time).getTime());
 
   const buckets = new Map<number, Bucket>();
@@ -65,12 +79,19 @@ function buildBuckets(trades: ApiTrade[], periodSec: number): Map<number, Bucket
   return buckets;
 }
 
-function buildCandles(buckets: Map<number, Bucket>): CandlestickData[] {
+function buildCandles(buckets: Map<number, Bucket>, periodSec: number): CandlestickData[] {
   let previousClose: number | null = null;
+  let previousTime: number | null = null;
+  const maxCarryGap = periodSec <= 5 ? periodSec * 3 : periodSec * 2;
+
   return [...buckets.entries()]
     .sort(([a], [b]) => a - b)
     .map(([time, c]) => {
-      const open = previousClose ?? c.open;
+      const carryPreviousClose =
+        previousClose !== null &&
+        previousTime !== null &&
+        time - previousTime <= maxCarryGap;
+      const open = carryPreviousClose ? previousClose : c.open;
       const candle = {
         time: time as UTCTimestamp,
         open,
@@ -79,6 +100,7 @@ function buildCandles(buckets: Map<number, Bucket>): CandlestickData[] {
         close: c.close,
       };
       previousClose = c.close;
+      previousTime = time;
       return candle;
     });
 }
@@ -203,6 +225,9 @@ export function LightweightTradeChart({
         borderColor: "rgba(255,255,255,0.08)",
         timeVisible: true,
         secondsVisible: true,
+        barSpacing: 12,
+        minBarSpacing: 4,
+        rightOffset: 8,
       },
       width: containerRef.current.clientWidth,
       height,
@@ -215,6 +240,8 @@ export function LightweightTradeChart({
       borderDownColor: "#FF3C6B",
       wickUpColor: "rgba(0,255,65,0.85)",
       wickDownColor: "rgba(255,60,107,0.85)",
+      priceLineColor: "rgba(0,255,65,0.35)",
+      priceLineWidth: 1,
       priceFormat: { type: "price", precision: 12, minMove: 0.000000000001 },
     });
 
@@ -239,8 +266,14 @@ export function LightweightTradeChart({
     const vol = chart.addHistogramSeries({
       priceFormat: { type: "volume" },
       priceScaleId: "vol",
+      priceLineVisible: false,
+      lastValueVisible: false,
     });
-    chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+    chart.priceScale("vol").applyOptions({
+      scaleMargins: { top: 0.82, bottom: 0 },
+      borderVisible: false,
+      visible: false,
+    });
 
     const sma20 = chart.addLineSeries({ color: "#FFD700", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
     const sma50 = chart.addLineSeries({ color: "#B026FF", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
@@ -256,6 +289,8 @@ export function LightweightTradeChart({
     chart.priceScale("rsi").applyOptions({
       scaleMargins: { top: 0.82, bottom: 0 },
       textColor: "rgba(255,149,0,0.6)",
+      borderVisible: false,
+      visible: false,
     });
     rsi.createPriceLine({ price: 70, color: "rgba(255,60,107,0.5)", lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: "" });
     rsi.createPriceLine({ price: 30, color: "rgba(0,255,65,0.5)", lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: "" });
@@ -306,20 +341,26 @@ export function LightweightTradeChart({
     if (!candleRef.current || !lineRef.current || !areaRef.current) return;
 
     const buckets = buildBuckets(trades, periodSec);
-    const candles = buildCandles(buckets);
+    const candles = buildCandles(buckets, periodSec);
     const lineData = buildLine(buckets);
+    const activeDataLength = Math.max(candles.length, lineData.length);
 
     // Adjust scale margins dynamically based on active overlays
     const mainBottom = showVolume && showRsi ? 0.5 : (showVolume || showRsi) ? 0.3 : 0.08;
     chartRef.current?.applyOptions({
       rightPriceScale: { scaleMargins: { top: 0.05, bottom: mainBottom } },
+      timeScale: {
+        barSpacing: periodSec <= 5 ? 14 : 11,
+        minBarSpacing: 4,
+        rightOffset: 8,
+      },
     });
     if (showVolume && showRsi) {
-      chartRef.current?.priceScale("vol").applyOptions({ scaleMargins: { top: 0.62, bottom: 0.22 } });
-      chartRef.current?.priceScale("rsi").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+      chartRef.current?.priceScale("vol").applyOptions({ scaleMargins: { top: 0.62, bottom: 0.22 }, visible: false });
+      chartRef.current?.priceScale("rsi").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 }, visible: true });
     } else {
-      chartRef.current?.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
-      chartRef.current?.priceScale("rsi").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+      chartRef.current?.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 }, visible: false });
+      chartRef.current?.priceScale("rsi").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 }, visible: showRsi });
     }
 
     // Show only the active series, clear others
@@ -347,8 +388,12 @@ export function LightweightTradeChart({
     if (ema20Ref.current) ema20Ref.current.setData(showEma20 ? calcEma(baseForIndicators, 20) : []);
     if (rsiRef.current) rsiRef.current.setData(showRsi ? calcRsi(baseForIndicators, 14) : []);
 
-    if (candles.length > 0 || lineData.length > 0) {
-      chartRef.current?.timeScale().fitContent();
+    if (activeDataLength > 0) {
+      const visibleBars = Math.min(Math.max(activeDataLength + 10, 42), 90);
+      chartRef.current?.timeScale().setVisibleLogicalRange({
+        from: activeDataLength - visibleBars,
+        to: activeDataLength + 8,
+      });
     }
   }, [trades, periodSec, mode, showVolume, showSma20, showSma50, showEma20, showRsi]);
 

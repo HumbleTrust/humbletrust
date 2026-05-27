@@ -125,6 +125,20 @@ const formatPrice = (value: number) => {
   return value.toFixed(8);
 };
 
+const isRenderableTrade = (trade: ApiTrade) => {
+  const price = Number(trade.price_sol);
+  const sol = Number(trade.sol_amount);
+  const tokens = Number(trade.token_amount);
+  const time = new Date(trade.block_time).getTime();
+  return (
+    (trade.side === "buy" || trade.side === "sell") &&
+    Number.isFinite(price) && price > 0 &&
+    Number.isFinite(sol) && sol > 0 &&
+    Number.isFinite(tokens) && tokens > 0 &&
+    Number.isFinite(time)
+  );
+};
+
 const estimateTokensOut = (solIn: number, solReserve: number, tokenReserve: number) => {
   if (solIn <= 0 || solReserve <= 0 || tokenReserve <= 0) return 0;
   const solAfterFee = solIn * (1 - CURVE_FEE_RATE);
@@ -209,6 +223,10 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const chartAbortRef = useRef<AbortController | null>(null);
+  const chartDisplayTrades = useMemo(
+    () => chartTrades.filter(isRenderableTrade),
+    [chartTrades]
+  );
 
   // External token detection (pump.fun / mainnet)
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
@@ -1351,7 +1369,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                   </div>
                 );
 
-                const hasData = chartTrades.filter(t => Number(t.price_sol) > 0).length > 0;
+                const hasData = chartDisplayTrades.length > 0;
                 if (!hasData) return (
                   <div className="h-52 flex items-center justify-center rounded-lg bg-white/[0.02] border border-white/5">
                     <div className="text-center">
@@ -1367,9 +1385,9 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
 
                 return (
                   <LightweightTradeChart
-                    trades={chartTrades}
+                    trades={chartDisplayTrades}
                     periodSec={periodSec}
-                    height={260}
+                    height={fullChart ? 520 : 320}
                     showVolume={showVolume}
                     showSma20={indicators.sma20}
                     showSma50={indicators.sma50}
@@ -1393,22 +1411,22 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
               )}
 
               {/* Stats bar */}
-              {chartTrades.length > 0 && (() => {
-                const buys = chartTrades.filter(t => t.side === "buy").length;
-                const sells = chartTrades.filter(t => t.side === "sell").length;
-                const totalSol = chartTrades.reduce((s, t) => s + Number(t.sol_amount), 0);
+              {chartDisplayTrades.length > 0 && (() => {
+                const buys = chartDisplayTrades.filter(t => t.side === "buy").length;
+                const sells = chartDisplayTrades.filter(t => t.side === "sell").length;
+                const totalSol = chartDisplayTrades.reduce((s, t) => s + Number(t.sol_amount), 0);
                 return (
                   <div className="flex items-center gap-4 text-xs border-t border-white/5 pt-2">
                     <span className="text-[#00FF41]">▲ {buys} buys</span>
                     <span className="text-[#FF3C6B]">▼ {sells} sells</span>
                     <span className="text-white/40">{totalSol.toFixed(3)} SOL vol</span>
-                    <span className="text-white/25 ml-auto">{chartTrades.length} trades · auto 30s</span>
+                    <span className="text-white/25 ml-auto">{chartDisplayTrades.length} trades · auto 30s</span>
                   </div>
                 );
               })()}
 
               {/* Trade history table */}
-              {chartTrades.length > 0 && (
+              {chartDisplayTrades.length > 0 && (
                 <div className="border-t border-white/10 pt-3">
                   <p className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-2">Trade history</p>
                   {/* Header */}
@@ -1421,7 +1439,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                     <span />
                   </div>
                   <div className="space-y-0 max-h-52 overflow-y-auto pr-1 mt-1">
-                    {[...chartTrades]
+                    {[...chartDisplayTrades]
                       .sort((a, b) => new Date(b.block_time).getTime() - new Date(a.block_time).getTime())
                       .map((trade, i) => {
                         const isBuy = trade.side === "buy";

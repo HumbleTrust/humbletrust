@@ -42,7 +42,12 @@ async function handleGetTrades(mint, req, res) {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   const limit = Math.min(Number(req.query.limit) || 100, 500);
   const { data, error } = await getClient()
-    .from("trades").select("*").eq("mint", mint)
+    .from("trades").select("*")
+    .eq("mint", mint)
+    .in("side", ["buy", "sell"])
+    .gt("price_sol", 0)
+    .gt("token_amount", 0)
+    .gt("sol_amount", 0)
     .order("block_time", { ascending: false }).limit(limit);
   if (error) throw error;
   return res.json({ trades: data || [] });
@@ -55,7 +60,11 @@ async function handleGetOhlcv(mint, req, res) {
   const { data, error } = await getClient()
     .from("trades")
     .select("price_sol, sol_amount, block_time")
-    .eq("mint", mint).gt("price_sol", 0)
+    .eq("mint", mint)
+    .in("side", ["buy", "sell"])
+    .gt("price_sol", 0)
+    .gt("token_amount", 0)
+    .gt("sol_amount", 0)
     .order("block_time", { ascending: true }).limit(limit);
   if (error) throw error;
   if (!data || data.length === 0) return res.json({ candles: [], timeframe: tf });
@@ -79,6 +88,9 @@ async function handleRecordTrade(mint, req, res) {
   if (!signature || signature.length < 10) return res.status(400).json({ error: "invalid signature" });
   if (!trader || !isValidWallet(trader))   return res.status(400).json({ error: "invalid trader" });
   if (!["buy", "sell"].includes(side))     return res.status(400).json({ error: "side must be buy or sell" });
+  if (Number(token_amount) <= 0 || Number(sol_amount) <= 0 || Number(price_sol) <= 0) {
+    return res.status(400).json({ error: "invalid trade amounts" });
+  }
 
   const row = {
     signature, mint, trader, side,
@@ -153,6 +165,7 @@ async function handleSyncTrades(mint, req, res) {
       const tokenAmount      = (preT && postT)
         ? Math.abs(Number(preT.uiTokenAmount?.uiAmountString || 0) - Number(postT.uiTokenAmount?.uiAmountString || 0))
         : 0;
+      if (tokenAmount <= 0) continue;
 
       rows.push({
         signature:    sig.signature,
@@ -170,10 +183,20 @@ async function handleSyncTrades(mint, req, res) {
   if (rows.length === 0)
     return res.json({ synced: 0, message: "Transactions found but none parsed as curve trades" });
 
+  const validRows = rows.filter(row =>
+    ["buy", "sell"].includes(row.side) &&
+    Number(row.price_sol) > 0 &&
+    Number(row.token_amount) > 0 &&
+    Number(row.sol_amount) > 0
+  );
+
+  if (validRows.length === 0)
+    return res.json({ synced: 0, total_sigs: sigs.length, message: "Parsed transactions had no valid trade amounts" });
+
   const { error } = await getClient().from("trades")
-    .upsert(rows, { onConflict: "signature", ignoreDuplicates: true });
+    .upsert(validRows, { onConflict: "signature", ignoreDuplicates: true });
   if (error) throw error;
-  return res.json({ synced: rows.length, total_sigs: sigs.length });
+  return res.json({ synced: validRows.length, total_sigs: sigs.length });
 }
 
 module.exports = async (req, res) => {
