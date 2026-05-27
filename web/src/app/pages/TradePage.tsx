@@ -279,6 +279,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [validMint, mintInput, canUseCurve]);
 
+
   // Keep ref in sync for use inside fetchChartTrades closure
   useEffect(() => { tokenInfoRef.current = tokenInfo; }, [tokenInfo]);
 
@@ -434,6 +435,16 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
     const interval = setInterval(() => fetchChartTrades(mint, true), 30_000);
     return () => clearInterval(interval);
   }, [validMint, mintInput, fetchChartTrades]);
+
+  // Auto-sync Raydium trades once per mint when migration is detected
+  const autoSyncedMintRef = useRef<string | null>(null);
+  useEffect(() => {
+    const mint = mintInput.trim();
+    if (!validMint || !migrationState?.isMigrated || autoSyncedMintRef.current === mint) return;
+    autoSyncedMintRef.current = mint;
+    void runSyncTrades(mint);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [validMint, mintInput, migrationState?.isMigrated]);
 
   const refreshReserves = async (mintOverride?: string) => {
     const mintValue = (mintOverride ?? mintInput).trim();
@@ -1138,21 +1149,34 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
             )}
 
             {/* Action button */}
-            <button
-              onClick={side === "buy" ? runBuy : runSell}
-              disabled={!canSubmitTrade}
-              className={cn(
-                "w-full py-3.5 rounded-lg font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed",
-                side === "buy"
-                  ? "bg-gradient-to-r from-[#00FF41] to-[#00FF41]/80 text-black hover:shadow-[0_0_24px_rgba(0,255,65,0.4)]"
-                  : "bg-gradient-to-r from-red-500 to-red-500/80 text-white hover:shadow-[0_0_24px_rgba(239,68,68,0.4)]"
-              )}
-            >
-              {busy === "buy" ? "Buying…" : busy === "sell" ? "Selling…"
-                : isMainnet
-                  ? side === "buy" ? `Buy ${selectedSymbol} via Jupiter` : `Sell ${selectedSymbol} via Jupiter`
-                  : side === "buy" ? "Buy on Curve" : "Sell on Curve"}
-            </button>
+            {!isMainnet && migrationState?.isMigrated ? (
+              <a
+                href={`https://raydium.io/swap/?inputMint=sol&outputMint=${selectedMint}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3.5 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 bg-gradient-to-r from-[#00FF41] to-[#00cc33] text-black hover:shadow-[0_0_24px_rgba(0,255,65,0.4)] transition-all"
+              >
+                <Rocket size={15} />
+                Trade {selectedSymbol} on Raydium
+                <ExternalLink size={13} />
+              </a>
+            ) : (
+              <button
+                onClick={side === "buy" ? runBuy : runSell}
+                disabled={!canSubmitTrade}
+                className={cn(
+                  "w-full py-3.5 rounded-lg font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed",
+                  side === "buy"
+                    ? "bg-gradient-to-r from-[#00FF41] to-[#00FF41]/80 text-black hover:shadow-[0_0_24px_rgba(0,255,65,0.4)]"
+                    : "bg-gradient-to-r from-red-500 to-red-500/80 text-white hover:shadow-[0_0_24px_rgba(239,68,68,0.4)]"
+                )}
+              >
+                {busy === "buy" ? "Buying…" : busy === "sell" ? "Selling…"
+                  : isMainnet
+                    ? side === "buy" ? `Buy ${selectedSymbol} via Jupiter` : `Sell ${selectedSymbol} via Jupiter`
+                    : side === "buy" ? "Buy on Curve" : "Sell on Curve"}
+              </button>
+            )}
 
             {/* Links */}
             <div className="flex flex-wrap gap-x-3 gap-y-1">
@@ -1473,8 +1497,8 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
             </div>
           </GlassPanel>
 
-          {/* ── Live reserves (devnet curve only) ── */}
-          {!isMainnet && <GlassPanel className="p-4">
+          {/* ── Live reserves (devnet curve only, hidden after migration) ── */}
+          {!isMainnet && !migrationState?.isMigrated && <GlassPanel className="p-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
               {[
                 { label: "Curve price", value: formatPrice(currentPrice) },
