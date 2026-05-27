@@ -27,6 +27,10 @@ export interface ApiToken {
   burn_option?: number | null;
   certificate_mint?: string | null;
   logo_uri?: string | null;
+  description?: string | null;
+  website?: string | null;
+  twitter?: string | null;
+  telegram?: string | null;
 }
 
 export interface ApiTrade {
@@ -96,6 +100,10 @@ export const registerToken = (data: {
   certificateMint?: string | null;
   tier?: number;
   logoUri?: string | null;
+  description?: string | null;
+  website?: string | null;
+  twitter?: string | null;
+  telegram?: string | null;
 }) =>
   fetch(`${API_BASE}/tokens`, {
     method: "POST",

@@ -29,6 +29,7 @@ module.exports = async (req, res) => {
       const {
         mint, creator, name, symbol, signature, launchScore, lockPercent,
         burnOption, certificateMint, tier, logoUri, logo_uri, raydium_pool,
+        description, website, twitter, telegram,
       } = req.body || {};
 
       if (!mint || !creator) return res.status(400).json({ error: "mint and creator required" });
@@ -55,6 +56,10 @@ module.exports = async (req, res) => {
         certificate_mint: certificateMint || null,
         logo_uri: logoUri || logo_uri || null,
         tier: tierValue,
+        description: (description && typeof description === 'string') ? description.slice(0, 200) : null,
+        website: (website && typeof website === 'string') ? website.slice(0, 255) : null,
+        twitter: (twitter && typeof twitter === 'string') ? twitter.slice(0, 100) : null,
+        telegram: (telegram && typeof telegram === 'string') ? telegram.slice(0, 255) : null,
         ...(raydium_pool ? { raydium_pool, status: "migrated" } : {}),
         updated_at: new Date().toISOString(),
       }, { onConflict: "mint", ignoreDuplicates: false });
