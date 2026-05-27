@@ -38,6 +38,8 @@ import { DiscoverPage } from "./pages/DiscoverPage";
 import { TradePage } from "./pages/TradePage";
 import { MarketPage } from "./pages/MarketPage";
 import { NftPage } from "./pages/NftPage";
+import { AboutPage } from "./pages/AboutPage";
+import { ScorePage } from "./pages/ScorePage";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("home");
@@ -64,6 +66,8 @@ export default function App() {
       case "portfolio": return <Portfolio />;
       case "market":    return <MarketPage />;
       case "nft":       return <NftPage goLaunch={() => setActiveTab("launch")} />;
+      case "about":     return <AboutPage onTabChange={setActiveTab} />;
+      case "score":     return <ScorePage />;
       case "settings":  return <Settings />;
       default:          return <HomePage onTabChange={setActiveTab} />;
     }

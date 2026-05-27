@@ -1,6 +1,6 @@
 import {
   Home, LayoutDashboard, Rocket, Compass, ArrowLeftRight, LineChart,
-  Wallet, BarChart2, Award, Settings, Shield, MoreHorizontal, X,
+  Wallet, BarChart2, Award, Settings, Shield, MoreHorizontal, X, Info, Code2,
 } from "lucide-react";
 import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -23,6 +23,8 @@ const navItems = [
   { id: "portfolio",  label: "Portfolio",   icon: Wallet },
   { id: "market",     label: "Market",      icon: BarChart2 },
   { id: "nft",        label: "NFT Badges",  icon: Award },
+  { id: "score",      label: "Score API",   icon: Code2 },
+  { id: "about",      label: "About",       icon: Info },
   { id: "settings",   label: "Settings",    icon: Settings },
 ];
 
@@ -39,6 +41,8 @@ const moreNavItems = [
   { id: "charts",    label: "Charts",    icon: LineChart },
   { id: "market",    label: "Market",    icon: BarChart2 },
   { id: "nft",       label: "NFT Badges",icon: Award },
+  { id: "score",     label: "Score API", icon: Code2 },
+  { id: "about",     label: "About",     icon: Info },
   { id: "settings",  label: "Settings",  icon: Settings },
 ];
 

@@ -151,6 +151,81 @@ export const recordTrade = (
     .then((r) => readJson<{ ok?: boolean; error?: string }>(r))
     .catch((e) => ({ error: e.message }));
 
+// ── Trust Infrastructure API ──────────────────────────────────────────────────
+
+export interface TrustScore {
+  mint: string;
+  score: number;
+  trust_level: "WEAK" | "OK" | "STRONG" | "ELITE";
+  source: "humbletrust" | "external" | "external_cached";
+  token: {
+    name?: string | null;
+    symbol?: string | null;
+    status?: string | null;
+    logo_uri?: string | null;
+    creator?: string | null;
+    verified_issuer?: boolean;
+    verified_issuer_level?: number;
+  } | null;
+  breakdown: Record<string, unknown>;
+  onchain_verification?: Record<string, unknown> | null;
+  warning?: string;
+  cta?: string;
+  computed_at: string;
+}
+
+export interface WalletRisk {
+  wallet: string;
+  reputation_score: number;
+  risk_level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  verified_issuer: boolean;
+  launches: {
+    total: number;
+    avg_trust_score: number | null;
+    graduated: number;
+    high_score: number;
+    low_score: number;
+    recent: Array<{ mint: string; name?: string; symbol?: string; trust_score: number; status: string; created_at: string }>;
+  };
+  trading: { total_trades: number; buys: number; sells: number; total_sol_traded: number };
+  flags: Array<{ type: string; severity: string; message: string; count?: number }>;
+  computed_at: string;
+}
+
+export interface TokenHealth {
+  mint: string;
+  name?: string | null;
+  symbol?: string | null;
+  health_score: number;
+  health_level: "HEALTHY" | "NORMAL" | "WARNING" | "CRITICAL";
+  metrics: {
+    trades_24h: number;
+    buys_24h: number;
+    sells_24h: number;
+    volume_sol_24h: number;
+    volume_sol_1h: number;
+    price_change_24h: number;
+    current_price: number;
+    unique_traders: number;
+    buy_sell_ratio: number | null;
+  };
+  signals: Array<{ type: string; delta: number; msg: string }>;
+  trust_score: number;
+  status: string;
+  computed_at: string;
+}
+
+export const getTrustScore = (mint: string) =>
+  request<TrustScore>(`/score/${mint}`);
+
+export const getWalletRisk = (wallet: string) =>
+  request<WalletRisk>(`/wallets/${wallet}/risk`);
+
+export const getTokenHealth = (mint: string) =>
+  request<TokenHealth>(`/tokens/${mint}/health`);
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const chartWsUrl = (mint: string, timeframe: string) => {
   if (API_BASE_URL) {
     const base = new URL(API_BASE_URL);
