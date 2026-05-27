@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Award, ExternalLink, HardDrive, Lock, RefreshCw } from "lucide-react";
+import { ArrowLeft, Award, Check, Copy, ExternalLink, HardDrive, Lock, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { ApiToken, ApiTrade, getToken, getTokens, getTokenTrades } from "../../lib/solana/api";
 import { listTokens, SavedToken } from "../../lib/solana/image";
@@ -26,6 +26,21 @@ const scoreBorderColor = (score: number) =>
 
 const compact = (value: string | number) =>
   Number(value || 0).toLocaleString("en-US", { notation: "compact", maximumFractionDigits: 2 });
+
+const copyText = async (value: string) => {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
+};
 
 const savedToApi = (t: SavedToken): ApiToken => ({
   mint: t.mint,
@@ -58,6 +73,7 @@ const TokenDetailView = ({ mint, onBack }: TokenDetailViewProps) => {
   const [trades, setTrades] = useState<ApiTrade[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -99,7 +115,22 @@ const TokenDetailView = ({ mint, onBack }: TokenDetailViewProps) => {
           {token?.name || "Indexed token"}{" "}
           <span className="text-[#00FF41]">${token?.symbol || mint.slice(0, 4)}</span>
         </h2>
-        <p className="text-white/40 text-xs font-mono break-all">{mint}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-white/40 text-xs font-mono break-all">{mint}</p>
+          <button
+            type="button"
+            title={copied ? "Copied" : "Copy mint address"}
+            aria-label={copied ? "Mint address copied" : "Copy mint address"}
+            className="shrink-0 inline-flex w-7 h-7 items-center justify-center rounded-md border border-white/10 bg-white/5 text-white/45 hover:text-[#00FF41] hover:border-[#00FF41]/30 hover:bg-[#00FF41]/10 transition-colors"
+            onClick={async () => {
+              await copyText(mint);
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 1200);
+            }}
+          >
+            {copied ? <Check size={13} /> : <Copy size={13} />}
+          </button>
+        </div>
       </GlassPanel>
 
       {error && (
@@ -233,6 +264,7 @@ export const DiscoverPage = ({ onOpenToken, initialMint, onBack }: DiscoverPageP
   const [apiOk, setApiOk] = useState<boolean | null>(null);
   const [sort, setSort] = useState<"trust" | "volume" | "new">("new");
   const [selectedMint, setSelectedMint] = useState<string | null>(initialMint ?? null);
+  const [copiedMint, setCopiedMint] = useState<string | null>(null);
 
   const localTokens = useMemo(() => listTokens().map(savedToApi), []);
 
@@ -278,6 +310,14 @@ export const DiscoverPage = ({ onOpenToken, initialMint, onBack }: DiscoverPageP
   const handleBack = () => {
     setSelectedMint(null);
     onBack?.();
+  };
+
+  const copyMint = async (mint: string) => {
+    await copyText(mint);
+    setCopiedMint(mint);
+    window.setTimeout(() => {
+      setCopiedMint((current) => current === mint ? null : current);
+    }, 1200);
   };
 
   // If a token is selected, show detail view
@@ -435,8 +475,22 @@ export const DiscoverPage = ({ onOpenToken, initialMint, onBack }: DiscoverPageP
                   </div>
 
                   {/* Mint */}
-                  <div className="text-white/30 text-[10px] font-mono mb-2.5">
-                    {t.mint.slice(0, 8)}...{t.mint.slice(-6)}
+                  <div className="mb-2.5 flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate text-white/30 text-[10px] font-mono">
+                      {t.mint.slice(0, 8)}...{t.mint.slice(-6)}
+                    </span>
+                    <button
+                      type="button"
+                      title={copiedMint === t.mint ? "Copied" : "Copy mint address"}
+                      aria-label={copiedMint === t.mint ? "Mint address copied" : "Copy mint address"}
+                      className="shrink-0 inline-flex w-6 h-6 items-center justify-center rounded-md border border-white/10 bg-white/5 text-white/35 hover:text-[#00FF41] hover:border-[#00FF41]/30 hover:bg-[#00FF41]/10 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void copyMint(t.mint);
+                      }}
+                    >
+                      {copiedMint === t.mint ? <Check size={12} /> : <Copy size={12} />}
+                    </button>
                   </div>
 
                   {/* Score */}
