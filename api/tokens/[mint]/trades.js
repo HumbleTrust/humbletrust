@@ -9,6 +9,7 @@
 
 const { getClient } = require("../../_lib/db");
 const { isValidWallet, setCors } = require("../../_lib/validate");
+const { parseCurveTradeEvents } = require("../../_lib/curve-events");
 
 const PROGRAM_ID_V2    = "FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr";
 const RPC_ENDPOINT     = process.env.SOLANA_RPC || "https://api.devnet.solana.com";
@@ -121,6 +122,16 @@ async function handleSyncTrades(mint, req, res) {
       const tx  = txs[j];
       const sig = batch[j];
       if (!tx || tx.meta?.err) continue;
+
+      const event = parseCurveTradeEvents(tx.meta?.logMessages || [], mint)[0];
+      if (event) {
+        rows.push({
+          signature: sig.signature,
+          ...event,
+          block_time: sig.blockTime ? new Date(sig.blockTime * 1000).toISOString() : event.block_time,
+        });
+        continue;
+      }
 
       const accounts = (tx.transaction.message.staticAccountKeys || tx.transaction.message.accountKeys || [])
         .map(k => k.toBase58());

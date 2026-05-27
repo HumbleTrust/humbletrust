@@ -1,9 +1,19 @@
+const { PublicKey } = require("@solana/web3.js");
+
 // Shared validation helpers for API routes
 
 // Solana public key: base58, 32-44 chars
 const SOLANA_ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
-const isValidWallet = (w) => typeof w === 'string' && SOLANA_ADDR_RE.test(w);
+const isValidWallet = (w) => {
+  if (typeof w !== 'string' || !SOLANA_ADDR_RE.test(w)) return false;
+  try {
+    new PublicKey(w);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const ALLOWED_ORIGINS = [
   'https://humbletrust.vercel.app',

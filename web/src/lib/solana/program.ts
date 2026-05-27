@@ -323,6 +323,123 @@ export const sellOnCurveV2 = async (
   return { signature: tx, pdas };
 };
 
+const TOKEN_SCALE = 1_000_000_000;
+const CURVE_BUY_V2_DISCRIMINATOR = [223, 218, 65, 67, 253, 124, 178, 156];
+const CURVE_SELL_V2_DISCRIMINATOR = [9, 22, 19, 150, 232, 92, 244, 40];
+
+export interface CurveTradeRecord {
+  trader: string;
+  side: "buy" | "sell";
+  source: "curve";
+  token_amount: number;
+  sol_amount: number;
+  price_sol: number;
+  block_time: string;
+}
+
+const decodeBase64 = (value: string) => {
+  if (typeof atob === "function") {
+    return Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+  }
+  const bufferCtor = (globalThis as any).Buffer;
+  return Uint8Array.from(bufferCtor.from(value, "base64"));
+};
+
+const sameDiscriminator = (data: Uint8Array, disc: number[]) =>
+  data.length >= disc.length && disc.every((byte, index) => data[index] === byte);
+
+const readPubkeyFromEvent = (data: Uint8Array, offset: number) =>
+  new PublicKey(data.slice(offset, offset + 32)).toBase58();
+
+const readU64FromEvent = (data: Uint8Array, offset: number) =>
+  Number(new DataView(data.buffer, data.byteOffset + offset, 8).getBigUint64(0, true));
+
+const readI64FromEvent = (data: Uint8Array, offset: number) =>
+  Number(new DataView(data.buffer, data.byteOffset + offset, 8).getBigInt64(0, true));
+
+export const parseCurveTradeEvents = (
+  logMessages: string[] | null | undefined,
+  expectedMint?: string
+): CurveTradeRecord[] => {
+  const events: CurveTradeRecord[] = [];
+
+  for (const log of logMessages || []) {
+    const match = /^Program data: (.+)$/.exec(log);
+    if (!match) continue;
+
+    try {
+      const data = decodeBase64(match[1]);
+      if (sameDiscriminator(data, CURVE_BUY_V2_DISCRIMINATOR)) {
+        let offset = 8;
+        const mint = readPubkeyFromEvent(data, offset); offset += 32;
+        const trader = readPubkeyFromEvent(data, offset); offset += 32;
+        const solInLamports = readU64FromEvent(data, offset); offset += 8;
+        offset += 8; // platform_fee_lamports
+        offset += 8; // creator_fee_lamports
+        const tokensOut = readU64FromEvent(data, offset); offset += 8;
+        const priceLamportsPerToken = readU64FromEvent(data, offset); offset += 8;
+        const timestamp = readI64FromEvent(data, offset);
+        if (!expectedMint || mint === expectedMint) {
+          events.push({
+            trader,
+            side: "buy",
+            source: "curve",
+            token_amount: tokensOut / TOKEN_SCALE,
+            sol_amount: solInLamports / LAMPORTS_PER_SOL,
+            price_sol: priceLamportsPerToken / LAMPORTS_PER_SOL,
+            block_time: new Date(timestamp * 1000).toISOString(),
+          });
+        }
+      } else if (sameDiscriminator(data, CURVE_SELL_V2_DISCRIMINATOR)) {
+        let offset = 8;
+        const mint = readPubkeyFromEvent(data, offset); offset += 32;
+        const trader = readPubkeyFromEvent(data, offset); offset += 32;
+        const tokensIn = readU64FromEvent(data, offset); offset += 8;
+        const grossSolOutLamports = readU64FromEvent(data, offset); offset += 8;
+        offset += 8; // platform_fee_lamports
+        offset += 8; // creator_fee_lamports
+        offset += 8; // seller_receives_lamports
+        const priceLamportsPerToken = readU64FromEvent(data, offset); offset += 8;
+        const timestamp = readI64FromEvent(data, offset);
+        if (!expectedMint || mint === expectedMint) {
+          events.push({
+            trader,
+            side: "sell",
+            source: "curve",
+            token_amount: tokensIn / TOKEN_SCALE,
+            sol_amount: grossSolOutLamports / LAMPORTS_PER_SOL,
+            price_sol: priceLamportsPerToken / LAMPORTS_PER_SOL,
+            block_time: new Date(timestamp * 1000).toISOString(),
+          });
+        }
+      }
+    } catch (error) {
+      console.warn("[curve-events] failed to parse event log", error);
+    }
+  }
+
+  return events;
+};
+
+export const fetchCurveTradeFromTransaction = async (
+  connection: Connection,
+  signature: string,
+  mint: PublicKey,
+  expectedSide?: "buy" | "sell"
+) => {
+  const tx = await connection.getTransaction(signature, {
+    commitment: "confirmed",
+    maxSupportedTransactionVersion: 0,
+  });
+  const events = parseCurveTradeEvents(tx?.meta?.logMessages, mint.toBase58());
+  const event = expectedSide ? events.find((item) => item.side === expectedSide) : events[0];
+  if (!event) return null;
+  return {
+    ...event,
+    block_time: tx?.blockTime ? new Date(tx.blockTime * 1000).toISOString() : event.block_time,
+  };
+};
+
 export const mintLaunchCertificateV2 = async (
   program: Program,
   creator: PublicKey,

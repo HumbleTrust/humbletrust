@@ -6,7 +6,6 @@ import {
   UTCTimestamp,
   IChartApi,
   ISeriesApi,
-  SeriesMarker,
   CandlestickData,
   LineData,
   AreaData,
@@ -29,7 +28,7 @@ interface Props {
 }
 
 interface Bucket {
-  open: number; high: number; low: number; close: number; vol: number;
+  open: number; high: number; low: number; close: number; vol: number; buyVol: number; sellVol: number;
 }
 
 function buildBuckets(trades: ApiTrade[], periodSec: number): Map<number, Bucket> {
@@ -44,16 +43,44 @@ function buildBuckets(trades: ApiTrade[], periodSec: number): Map<number, Bucket
     const p = Number(t.price_sol);
     const v = Number(t.sol_amount);
     const b = buckets.get(bucket);
-    if (!b) buckets.set(bucket, { open: p, high: p, low: p, close: p, vol: v });
-    else { b.high = Math.max(b.high, p); b.low = Math.min(b.low, p); b.close = p; b.vol += v; }
+    if (!b) {
+      buckets.set(bucket, {
+        open: p,
+        high: p,
+        low: p,
+        close: p,
+        vol: v,
+        buyVol: t.side === "buy" ? v : 0,
+        sellVol: t.side === "sell" ? v : 0,
+      });
+    } else {
+      b.high = Math.max(b.high, p);
+      b.low = Math.min(b.low, p);
+      b.close = p;
+      b.vol += v;
+      if (t.side === "sell") b.sellVol += v;
+      else b.buyVol += v;
+    }
   }
   return buckets;
 }
 
 function buildCandles(buckets: Map<number, Bucket>): CandlestickData[] {
+  let previousClose: number | null = null;
   return [...buckets.entries()]
     .sort(([a], [b]) => a - b)
-    .map(([time, c]) => ({ time: time as UTCTimestamp, open: c.open, high: c.high, low: c.low, close: c.close }));
+    .map(([time, c]) => {
+      const open = previousClose ?? c.open;
+      const candle = {
+        time: time as UTCTimestamp,
+        open,
+        high: Math.max(open, c.high, c.close),
+        low: Math.min(open, c.low, c.close),
+        close: c.close,
+      };
+      previousClose = c.close;
+      return candle;
+    });
 }
 
 function buildLine(buckets: Map<number, Bucket>): LineData[] {
@@ -68,26 +95,16 @@ function buildArea(buckets: Map<number, Bucket>): AreaData[] {
     .map(([time, c]) => ({ time: time as UTCTimestamp, value: c.close }));
 }
 
-function buildVolume(trades: ApiTrade[], periodSec: number): HistogramData[] {
-  const sorted = [...trades]
-    .filter(t => Number(t.price_sol) > 0)
-    .sort((a, b) => new Date(a.block_time).getTime() - new Date(b.block_time).getTime());
-
-  const buckets = new Map<number, { vol: number; isBuy: boolean }>();
-  for (const t of sorted) {
-    const ts = Math.floor(new Date(t.block_time).getTime() / 1000);
-    const bucket = Math.floor(ts / periodSec) * periodSec;
-    const v = Number(t.sol_amount);
-    const b = buckets.get(bucket);
-    if (!b) buckets.set(bucket, { vol: v, isBuy: t.side === "buy" });
-    else b.vol += v;
-  }
+function buildVolume(buckets: Map<number, Bucket>, candles: CandlestickData[]): HistogramData[] {
+  const directionByTime = new Map(candles.map((c) => [Number(c.time), c.close >= c.open]));
   return [...buckets.entries()]
     .sort(([a], [b]) => a - b)
     .map(([time, b]) => ({
       time: time as UTCTimestamp,
       value: b.vol,
-      color: b.isBuy ? "rgba(0,255,65,0.25)" : "rgba(255,60,107,0.25)",
+      color: (b.sellVol > b.buyVol || directionByTime.get(time) === false)
+        ? "rgba(255,60,107,0.32)"
+        : "rgba(0,255,65,0.28)",
     }));
 }
 
@@ -130,22 +147,6 @@ function calcRsi(data: LineData[], period = 14): LineData[] {
     result.push({ time: data[i].time, value: avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss) });
   }
   return result;
-}
-
-function buildMarkers(trades: ApiTrade[], periodSec: number): SeriesMarker<UTCTimestamp>[] {
-  return [...trades]
-    .filter(t => (t.side === "buy" || t.side === "sell") && Number(t.price_sol) > 0)
-    .sort((a, b) => new Date(a.block_time).getTime() - new Date(b.block_time).getTime())
-    .map(t => {
-      const ts = Math.floor(new Date(t.block_time).getTime() / 1000);
-      return {
-        time: Math.floor(ts / periodSec) * periodSec as UTCTimestamp,
-        position: (t.side === "buy" ? "belowBar" : "aboveBar") as "belowBar" | "aboveBar",
-        color: t.side === "buy" ? "#00FF41" : "#FF3C6B",
-        shape: (t.side === "buy" ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown",
-        size: 1,
-      };
-    });
 }
 
 export function LightweightTradeChart({
@@ -212,8 +213,9 @@ export function LightweightTradeChart({
       downColor: "#FF3C6B",
       borderUpColor: "#00FF41",
       borderDownColor: "#FF3C6B",
-      wickUpColor: "rgba(0,255,65,0.6)",
-      wickDownColor: "rgba(255,60,107,0.6)",
+      wickUpColor: "rgba(0,255,65,0.85)",
+      wickDownColor: "rgba(255,60,107,0.85)",
+      priceFormat: { type: "price", precision: 12, minMove: 0.000000000001 },
     });
 
     const line = chart.addLineSeries({
@@ -221,6 +223,7 @@ export function LightweightTradeChart({
       lineWidth: 2,
       priceLineVisible: false,
       lastValueVisible: true,
+      priceFormat: { type: "price", precision: 12, minMove: 0.000000000001 },
     });
 
     const area = chart.addAreaSeries({
@@ -230,6 +233,7 @@ export function LightweightTradeChart({
       lineWidth: 2,
       priceLineVisible: false,
       lastValueVisible: true,
+      priceFormat: { type: "price", precision: 12, minMove: 0.000000000001 },
     });
 
     const vol = chart.addHistogramSeries({
@@ -334,7 +338,7 @@ export function LightweightTradeChart({
     }
 
     if (volRef.current) {
-      volRef.current.setData(showVolume ? buildVolume(trades, periodSec) : []);
+      volRef.current.setData(showVolume ? buildVolume(buckets, candles) : []);
     }
 
     const baseForIndicators = lineData;
@@ -342,14 +346,6 @@ export function LightweightTradeChart({
     if (sma50Ref.current) sma50Ref.current.setData(showSma50 ? calcSma(baseForIndicators, 50) : []);
     if (ema20Ref.current) ema20Ref.current.setData(showEma20 ? calcEma(baseForIndicators, 20) : []);
     if (rsiRef.current) rsiRef.current.setData(showRsi ? calcRsi(baseForIndicators, 14) : []);
-
-    // Markers only on the active series
-    const markers = buildMarkers(trades, periodSec);
-    try {
-      if (mode === "candles") candleRef.current.setMarkers(markers);
-      else if (mode === "line") lineRef.current.setMarkers(markers);
-      else areaRef.current.setMarkers(markers);
-    } catch { /* noop */ }
 
     if (candles.length > 0 || lineData.length > 0) {
       chartRef.current?.timeScale().fitContent();
