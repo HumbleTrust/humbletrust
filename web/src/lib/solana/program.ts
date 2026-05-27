@@ -836,7 +836,7 @@ export const migrateToRaydiumV2 = async (
   program: Program,
   triggerer: PublicKey,
   mint: PublicKey,
-  payerBufferLamports = 15_000_000
+  payerBufferLamports = 60_000_000
 ) => {
   const pdas = findV2Pdas(mint);
   const ray = findRaydiumCpmmPdas(mint);
