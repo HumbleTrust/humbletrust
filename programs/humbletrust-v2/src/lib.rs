@@ -127,6 +127,8 @@ pub mod humbletrust_v2 {
         metrics_authority: Pubkey,
         tier: u8,
         anti_bot_seconds: u16,
+        curve_type: u8,
+        lp_policy: u8,
     ) -> Result<()> {
         require!(
             !ctx.accounts.global_state.is_launches_paused,
@@ -145,6 +147,8 @@ pub mod humbletrust_v2 {
             initial_sol_lamports,
             tier,
             anti_bot_seconds,
+            curve_type,
+            lp_policy,
         )?;
         require_keys_eq!(
             ctx.accounts.fee_wallet.key(),
@@ -268,6 +272,19 @@ pub mod humbletrust_v2 {
             meta.migrated_at = 0;
             meta.anti_bot_seconds = anti_bot_seconds;
             meta.trading_unlock_time = now + anti_bot_seconds as i64;
+            meta.curve_type = curve_type;
+            meta.lp_policy = lp_policy;
+            meta.initial_price_lamports_per_token = curve_price_lamports_per_token(
+                initial_sol_lamports,
+                curve_liquidity_amount,
+                curve_type,
+            )?;
+            meta.graduation_price_lamports_per_token = graduation_price_lamports_per_token_for_curve(
+                initial_sol_lamports,
+                curve_liquidity_amount,
+                migration_threshold_lamports(),
+                curve_type,
+            )?;
             meta.bump = ctx.bumps.token_metadata;
             meta.locked_vault_bump = ctx.bumps.locked_vault;
             meta.creator_vault_bump = ctx.bumps.creator_vault;
@@ -445,6 +462,8 @@ pub mod humbletrust_v2 {
         emit!(TokenCreatedV2 {
             mint: mint_key,
             creator: ctx.accounts.creator.key(),
+            curve_type,
+            lp_policy,
             total_supply: TOTAL_SUPPLY,
             mint_supply_after_burn: ctx.accounts.token_metadata.mint_supply_after_burn,
             locked_allocation_amount,
@@ -799,7 +818,11 @@ pub mod humbletrust_v2 {
             .ok_or(error!(HumbleV2Error::MathOverflow))?;
         let token_reserve = ctx.accounts.curve_pool_vault.amount;
         let sol_reserve = ctx.accounts.curve_treasury_sol.current_sol_lamports;
-        let tokens_out = constant_product_tokens_out(token_reserve, sol_reserve, net_sol)?;
+        let tokens_out = if ctx.accounts.token_metadata.curve_type == 1 {
+            quadratic_tokens_out(token_reserve, sol_reserve, net_sol)?
+        } else {
+            constant_product_tokens_out(token_reserve, sol_reserve, net_sol)?
+        };
 
         require!(
             tokens_out >= min_tokens_out,
@@ -868,9 +891,10 @@ pub mod humbletrust_v2 {
         meta.curve_token_reserve_amount = token_reserve
             .checked_sub(tokens_out)
             .ok_or(error!(HumbleV2Error::MathOverflow))?;
-        meta.last_curve_price_lamports_per_token = price_lamports_per_token(
+        meta.last_curve_price_lamports_per_token = curve_price_lamports_per_token(
             meta.curve_sol_reserve_lamports,
             meta.curve_token_reserve_amount,
+            meta.curve_type,
         )?;
         meta.trading_volume = meta
             .trading_volume
@@ -917,7 +941,11 @@ pub mod humbletrust_v2 {
 
         let token_reserve = ctx.accounts.curve_pool_vault.amount;
         let sol_reserve = ctx.accounts.curve_treasury_sol.current_sol_lamports;
-        let gross_sol_out = constant_product_sol_out(token_reserve, sol_reserve, tokens_in)?;
+        let gross_sol_out = if ctx.accounts.token_metadata.curve_type == 1 {
+            quadratic_sol_out(token_reserve, sol_reserve, tokens_in)?
+        } else {
+            constant_product_sol_out(token_reserve, sol_reserve, tokens_in)?
+        };
         let platform_fee = bps_amount(gross_sol_out, PLATFORM_FEE_BPS as u64)?;
         let creator_fee = bps_amount(gross_sol_out, CREATOR_FEE_BPS as u64)?;
         let seller_receives = gross_sol_out
@@ -980,9 +1008,10 @@ pub mod humbletrust_v2 {
         meta.curve_token_reserve_amount = token_reserve
             .checked_add(tokens_in)
             .ok_or(error!(HumbleV2Error::MathOverflow))?;
-        meta.last_curve_price_lamports_per_token = price_lamports_per_token(
+        meta.last_curve_price_lamports_per_token = curve_price_lamports_per_token(
             meta.curve_sol_reserve_lamports,
             meta.curve_token_reserve_amount,
+            meta.curve_type,
         )?;
         meta.trading_volume = meta
             .trading_volume
@@ -1019,8 +1048,8 @@ pub mod humbletrust_v2 {
         Ok(())
     }
 
-    pub fn create_instant_raydium_pool_v2(
-        ctx: Context<CreateInstantRaydiumPoolV2>,
+    pub fn create_instant_raydium_pool_v2<'info>(
+        ctx: Context<'_, '_, '_, 'info, CreateInstantRaydiumPoolV2<'info>>,
         init_token_amount: u64,
         init_sol_lamports: u64,
         payer_buffer_lamports: u64,
@@ -1161,6 +1190,53 @@ pub mod humbletrust_v2 {
             .ok_or(error!(HumbleV2Error::MathOverflow))?;
         require!(minted_lp > 0, HumbleV2Error::InvalidLpAmount);
 
+        // Apply LP policy before taking the mutable metadata borrow.
+        // Capture owned AccountInfos to avoid lifetime conflicts.
+        let lp_policy = ctx.accounts.token_metadata.lp_policy;
+        let lp_creator_key = ctx.accounts.creator.key();
+        let lp_token_program_ai = ctx.accounts.token_program.to_account_info();
+        let lp_mint_ai = ctx.accounts.raydium_lp_mint.to_account_info();
+        let lp_user_token_ai = ctx.accounts.raydium_user_lp_token.to_account_info();
+        let lp_authority_ai = ctx.accounts.raydium_migration_authority.to_account_info();
+        let creator_lp_ata_opt = ctx.remaining_accounts.first().cloned();
+        match lp_policy {
+            1 => {
+                // Burn: destroy LP tokens immediately
+                token::burn(
+                    CpiContext::new_with_signer(
+                        lp_token_program_ai,
+                        Burn {
+                            mint: lp_mint_ai,
+                            from: lp_user_token_ai,
+                            authority: lp_authority_ai,
+                        },
+                        signer,
+                    ),
+                    minted_lp,
+                )?;
+            }
+            2 => {
+                // ToCreator: transfer LP to creator's LP token account (remaining_accounts[0])
+                require!(creator_lp_ata_opt.is_some(), HumbleV2Error::LpPolicyAccountMissing);
+                let creator_lp_ata_ai = creator_lp_ata_opt.unwrap();
+                let lp_ta = unpack_spl_token_account(&creator_lp_ata_ai)?;
+                require_keys_eq!(lp_ta.owner, lp_creator_key, HumbleV2Error::InvalidTokenAccountOwner);
+                token::transfer(
+                    CpiContext::new_with_signer(
+                        lp_token_program_ai,
+                        Transfer {
+                            from: lp_user_token_ai,
+                            to: creator_lp_ata_ai,
+                            authority: lp_authority_ai,
+                        },
+                        signer,
+                    ),
+                    minted_lp,
+                )?;
+            }
+            _ => {} // Policy 0 (Lock): LP stays in raydium_user_lp_token for lock_lp_tokens_v2
+        }
+
         let meta = &mut ctx.accounts.token_metadata;
         meta.raydium_pool = ctx.accounts.raydium_pool_state.key();
         // #1-c: mark migrated so this instruction cannot be called a second time
@@ -1180,10 +1256,12 @@ pub mod humbletrust_v2 {
         let lp_lock = &mut ctx.accounts.lp_lock_vault;
         lp_lock.token_mint = meta.mint;
         lp_lock.lp_mint = ctx.accounts.raydium_lp_mint.key();
-        lp_lock.lp_amount = lp_lock
-            .lp_amount
-            .checked_add(minted_lp)
-            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        if lp_policy == 0 {
+            lp_lock.lp_amount = lp_lock
+                .lp_amount
+                .checked_add(minted_lp)
+                .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        }
 
         emit!(InstantRaydiumPoolCreatedV2 {
             mint: meta.mint,
@@ -1199,8 +1277,8 @@ pub mod humbletrust_v2 {
         Ok(())
     }
 
-    pub fn migrate_to_raydium_v2(
-        ctx: Context<MigrateToRaydiumV2>,
+    pub fn migrate_to_raydium_v2<'info>(
+        ctx: Context<'_, '_, '_, 'info, MigrateToRaydiumV2<'info>>,
         raydium_pool: Pubkey,
         lp_amount: u64,
         payer_buffer_lamports: u64,
@@ -1363,6 +1441,53 @@ pub mod humbletrust_v2 {
             .ok_or(error!(HumbleV2Error::MathOverflow))?;
         require!(minted_lp > 0, HumbleV2Error::InvalidLpAmount);
 
+        // Apply LP policy before taking the mutable metadata borrow.
+        // Capture owned AccountInfos to avoid lifetime conflicts.
+        let lp_policy = ctx.accounts.token_metadata.lp_policy;
+        let meta_creator = ctx.accounts.token_metadata.creator;
+        let lp_token_program_ai = ctx.accounts.token_program.to_account_info();
+        let lp_mint_ai = ctx.accounts.raydium_lp_mint.to_account_info();
+        let lp_user_token_ai = ctx.accounts.raydium_user_lp_token.to_account_info();
+        let lp_authority_ai = ctx.accounts.raydium_migration_authority.to_account_info();
+        let creator_lp_ata_opt = ctx.remaining_accounts.first().cloned();
+        match lp_policy {
+            1 => {
+                // Burn: destroy LP tokens immediately
+                token::burn(
+                    CpiContext::new_with_signer(
+                        lp_token_program_ai,
+                        Burn {
+                            mint: lp_mint_ai,
+                            from: lp_user_token_ai,
+                            authority: lp_authority_ai,
+                        },
+                        signer,
+                    ),
+                    minted_lp,
+                )?;
+            }
+            2 => {
+                // ToCreator: transfer LP to creator's LP token account (remaining_accounts[0])
+                require!(creator_lp_ata_opt.is_some(), HumbleV2Error::LpPolicyAccountMissing);
+                let creator_lp_ata_ai = creator_lp_ata_opt.unwrap();
+                let lp_ta = unpack_spl_token_account(&creator_lp_ata_ai)?;
+                require_keys_eq!(lp_ta.owner, meta_creator, HumbleV2Error::InvalidTokenAccountOwner);
+                token::transfer(
+                    CpiContext::new_with_signer(
+                        lp_token_program_ai,
+                        Transfer {
+                            from: lp_user_token_ai,
+                            to: creator_lp_ata_ai,
+                            authority: lp_authority_ai,
+                        },
+                        signer,
+                    ),
+                    minted_lp,
+                )?;
+            }
+            _ => {} // Policy 0 (Lock): LP stays in raydium_user_lp_token for lock_lp_tokens_v2
+        }
+
         let meta = &mut ctx.accounts.token_metadata;
         meta.is_migrated = true;
         meta.raydium_pool = ctx.accounts.raydium_pool_state.key();
@@ -1376,10 +1501,12 @@ pub mod humbletrust_v2 {
         let lp_lock = &mut ctx.accounts.lp_lock_vault;
         lp_lock.token_mint = meta.mint;
         lp_lock.lp_mint = ctx.accounts.raydium_lp_mint.key();
-        lp_lock.lp_amount = lp_lock
-            .lp_amount
-            .checked_add(minted_lp)
-            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        if lp_policy == 0 {
+            lp_lock.lp_amount = lp_lock
+                .lp_amount
+                .checked_add(minted_lp)
+                .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        }
 
         emit!(MigratedToRaydiumV2 {
             mint: meta.mint,
@@ -2903,6 +3030,10 @@ pub struct TokenMetadataV2 {
     pub migrated_at: i64,
     pub anti_bot_seconds: u16,
     pub trading_unlock_time: i64,
+    pub curve_type: u8,
+    pub lp_policy: u8,
+    pub initial_price_lamports_per_token: u64,
+    pub graduation_price_lamports_per_token: u64,
     pub bump: u8,
     pub locked_vault_bump: u8,
     pub creator_vault_bump: u8,
@@ -3040,6 +3171,8 @@ struct TrustScoreV2 {
 pub struct TokenCreatedV2 {
     pub mint: Pubkey,
     pub creator: Pubkey,
+    pub curve_type: u8,
+    pub lp_policy: u8,
     pub total_supply: u64,
     pub mint_supply_after_burn: u64,
     pub locked_allocation_amount: u64,
@@ -3339,6 +3472,12 @@ pub enum HumbleV2Error {
     InvalidLpAmount,
     #[msg("Raydium CPI failed")]
     RaydiumCpiFailed,
+    #[msg("Curve type must be 0 (CPMM) or 1 (Quadratic)")]
+    InvalidCurveType,
+    #[msg("LP policy must be 0 (Lock), 1 (Burn), or 2 (ToCreator)")]
+    InvalidLpPolicy,
+    #[msg("LP policy requires a creator LP token account in remaining_accounts[0]")]
+    LpPolicyAccountMissing,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -3355,6 +3494,8 @@ fn validate_launch_inputs(
     initial_sol_lamports: u64,
     tier: u8,
     anti_bot_seconds: u16,
+    curve_type: u8,
+    lp_policy: u8,
 ) -> Result<()> {
     require!(!name.is_empty(), HumbleV2Error::NameTooShort);
     require!(name.len() <= 16, HumbleV2Error::NameTooLong);
@@ -3407,6 +3548,8 @@ fn validate_launch_inputs(
         anti_bot_seconds <= 600,
         HumbleV2Error::InvalidAntiBotSeconds
     );
+    require!(curve_type <= 1, HumbleV2Error::InvalidCurveType);
+    require!(lp_policy <= 2, HumbleV2Error::InvalidLpPolicy);
 
     Ok(())
 }
@@ -4106,5 +4249,171 @@ fn trust_level(score: u8) -> u8 {
         40..=69 => 1,
         70..=84 => 2,
         _ => 3,
+    }
+}
+
+// Integer square root via Newton's method (rounds down).
+fn isqrt_u128(n: u128) -> u128 {
+    if n == 0 {
+        return 0;
+    }
+    let mut x = n;
+    let mut y = (x + 1) >> 1;
+    while y < x {
+        x = y;
+        y = (x + n / x) >> 1;
+    }
+    x
+}
+
+// Quadratic curve invariant: T^2 * S = k.
+// Buy: T_new = T * sqrt(S / S_new)
+// Uses scaled-ratio approach to avoid overflow for large token reserves.
+fn quadratic_tokens_out(token_reserve: u64, sol_reserve: u64, net_sol_in: u64) -> Result<u64> {
+    require!(token_reserve > 0, HumbleV2Error::InsufficientCurveReserve);
+    require!(sol_reserve > 0, HumbleV2Error::InsufficientCurveReserve);
+    require!(net_sol_in > 0, HumbleV2Error::InvalidAmount);
+
+    // ratio_sq = S * SCALE_SQ / S_new  (represents (S/S_new) * 1e12)
+    // sqrt gives sqrt(S/S_new) * 1e6
+    // T_new = T * sqrt_ratio / 1e6
+    const SCALE_SQ: u128 = 1_000_000_000_000u128; // 1e12
+    const SCALE: u128 = 1_000_000u128;             // 1e6 = sqrt(SCALE_SQ)
+
+    let s = sol_reserve as u128;
+    let s_new = s
+        .checked_add(net_sol_in as u128)
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+    let ratio_sq = s
+        .checked_mul(SCALE_SQ)
+        .and_then(|v| v.checked_div(s_new))
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+    let sqrt_ratio = isqrt_u128(ratio_sq); // ≈ 1e6 * sqrt(S/S_new)
+    let t = token_reserve as u128;
+    let t_new = t
+        .checked_mul(sqrt_ratio)
+        .and_then(|v| v.checked_div(SCALE))
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+    let tokens_out = t
+        .checked_sub(t_new)
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+    u64::try_from(tokens_out).map_err(|_| error!(HumbleV2Error::MathOverflow))
+}
+
+// Quadratic curve sell: gross_sol_out = S * Δ * (2T + Δ) / (T + Δ)^2
+// Uses scaled-ratio approach to avoid overflow.
+fn quadratic_sol_out(token_reserve: u64, sol_reserve: u64, tokens_in: u64) -> Result<u64> {
+    require!(token_reserve > 0, HumbleV2Error::InsufficientCurveReserve);
+    require!(sol_reserve > 0, HumbleV2Error::InsufficientCurveReserve);
+    require!(tokens_in > 0, HumbleV2Error::InvalidAmount);
+
+    // gross = S * (delta / t_new) * ((t + t_new) / t_new)
+    // where t_new = t + delta, (t + t_new) = 2t + delta
+    const SCALE: u128 = 1_000_000_000u128; // 1e9
+
+    let t = token_reserve as u128;
+    let delta = tokens_in as u128;
+    let s = sol_reserve as u128;
+    let t_new = t
+        .checked_add(delta)
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+
+    // r1 = delta * SCALE / t_new
+    let r1 = delta
+        .checked_mul(SCALE)
+        .and_then(|v| v.checked_div(t_new))
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+
+    // r2 = (t + t_new) * SCALE / t_new  (= (2t + delta) * SCALE / t_new)
+    let two_t_plus_delta = t
+        .checked_add(t_new)
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+    let r2 = two_t_plus_delta
+        .checked_mul(SCALE)
+        .and_then(|v| v.checked_div(t_new))
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+
+    let gross_sol_out = s
+        .checked_mul(r1)
+        .and_then(|v| v.checked_div(SCALE))
+        .and_then(|v| v.checked_mul(r2))
+        .and_then(|v| v.checked_div(SCALE))
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+
+    u64::try_from(gross_sol_out).map_err(|_| error!(HumbleV2Error::MathOverflow))
+}
+
+// Curve-type-aware spot price (lamports per token, scaled by 1e9 for precision).
+// CPMM: S/T * 1e9  |  Quadratic: 2*S/T * 1e9
+fn curve_price_lamports_per_token(sol_reserve: u64, token_reserve: u64, curve_type: u8) -> Result<u64> {
+    if token_reserve == 0 {
+        return Ok(0);
+    }
+    let multiplier: u128 = if curve_type == 1 { 2 } else { 1 };
+    let price = (sol_reserve as u128)
+        .checked_mul(multiplier)
+        .and_then(|v| v.checked_mul(1_000_000_000))
+        .and_then(|v| v.checked_div(token_reserve as u128))
+        .ok_or(error!(HumbleV2Error::MathOverflow))?;
+    u64::try_from(price).map_err(|_| error!(HumbleV2Error::MathOverflow))
+}
+
+// Theoretical graduation price at the migration SOL threshold.
+// Stored at launch for frontend preview. Returns u64::MAX on extreme prices (saturating).
+fn graduation_price_lamports_per_token_for_curve(
+    initial_sol: u64,
+    initial_token_reserve: u64,
+    migration_threshold: u64,
+    curve_type: u8,
+) -> Result<u64> {
+    if initial_token_reserve == 0 || initial_sol == 0 || migration_threshold == 0 {
+        return Ok(0);
+    }
+
+    const SCALE_SQ: u128 = 1_000_000_000_000u128; // 1e12
+    const SCALE: u128 = 1_000_000u128;             // 1e6
+
+    let s_init = initial_sol as u128;
+    let s_grad = migration_threshold as u128;
+    let t_init = initial_token_reserve as u128;
+
+    if curve_type == 1 {
+        // Quadratic: T_grad = T_init * sqrt(S_init / S_grad)
+        // price = 2 * S_grad * 1e9 / T_grad
+        let ratio_sq = s_init
+            .checked_mul(SCALE_SQ)
+            .and_then(|v| v.checked_div(s_grad))
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        let sqrt_ratio = isqrt_u128(ratio_sq); // ≈ SCALE * sqrt(S_init/S_grad)
+        let t_grad = t_init
+            .checked_mul(sqrt_ratio)
+            .and_then(|v| v.checked_div(SCALE))
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        if t_grad == 0 {
+            return Ok(u64::MAX);
+        }
+        let price = (2u128)
+            .checked_mul(s_grad)
+            .and_then(|v| v.checked_mul(1_000_000_000))
+            .and_then(|v| v.checked_div(t_grad))
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        Ok(u64::try_from(price).unwrap_or(u64::MAX))
+    } else {
+        // CPMM: T_grad = T_init * S_init / S_grad
+        // price = S_grad^2 * 1e9 / (T_init * S_init)
+        let denom = t_init
+            .checked_mul(s_init)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        let numer = s_grad
+            .checked_mul(s_grad)
+            .and_then(|v| v.checked_mul(1_000_000_000))
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        if denom == 0 {
+            return Ok(0);
+        }
+        let price = numer
+            .checked_div(denom)
+            .ok_or(error!(HumbleV2Error::MathOverflow))?;
+        Ok(u64::try_from(price).unwrap_or(u64::MAX))
     }
 }
