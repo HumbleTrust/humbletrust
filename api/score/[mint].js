@@ -456,9 +456,9 @@ async function computeScore(mint, mintInfo, ep, db) {
       detail: "Liquidity pool tokens sent to burn address — liquidity is permanent" });
   } else if (!hasPool && holderData.length === 0) {
     signals.push({ id: "lp_unknown", category: "liquidity",
-      earned: 0, max: 20, ok: null,
+      earned: -8, max: 20, ok: null,
       label: "No liquidity data",
-      detail: "No holder or pool information available" });
+      detail: "Cannot verify pool safety or LP lock — unverifiable = risk" });
     flags.push({ type: "no_liquidity_data", severity: "medium",
       msg: "Liquidity status unverifiable — cannot confirm pool safety or LP lock" });
   } else {
@@ -561,9 +561,9 @@ async function computeScore(mint, mintInfo, ep, db) {
     });
   } else {
     signals.push({ id: "holder_concentration", category: "distribution",
-      earned: 0, max: 10, ok: null,
+      earned: -5, max: 10, ok: null,
       label: "No holder data available",
-      detail: "Could not fetch top holders from chain",
+      detail: "Whale concentration unverifiable — hidden risk cannot be ruled out",
     });
     flags.push({ type: "no_holder_data", severity: "low",
       msg: "Holder concentration unverifiable — whale risk cannot be assessed" });
@@ -590,9 +590,9 @@ async function computeScore(mint, mintInfo, ep, db) {
     };
   } else {
     signals.push({ id: "no_metadata", category: "legitimacy",
-      earned: 0, max: 5, ok: false,
+      earned: -10, max: 5, ok: false,
       label: "No on-chain Metaplex metadata",
-      detail: "Token has no Metaplex metadata — token identity is unverifiable" });
+      detail: "Token identity is unverifiable — no legitimate project skips metadata" });
     flags.push({ type: "no_metadata", severity: "high",
       msg: "No Metaplex metadata — token name, symbol and image cannot be verified on-chain" });
     onchain.metadata = null;
@@ -665,7 +665,12 @@ async function computeScore(mint, mintInfo, ep, db) {
   // ── Assemble result ────────────────────────────────────────────────────────
 
   const byCategory = (cat) => signals.filter(s => s.category === cat);
-  const earnedCat  = (cat) => Math.max(0, byCategory(cat).reduce((s, sig) => s + sig.earned, 0));
+  // Allow negative sums so penalties propagate — floor per category is -max (can't go below -100%)
+  const earnedCat  = (cat) => {
+    const raw = byCategory(cat).reduce((s, sig) => s + sig.earned, 0);
+    const max  = MAX[cat] || 100;
+    return Math.max(-max, raw);
+  };
 
   const categories = {
     supply_control: { earned: earnedCat("supply_control"), max: MAX.supply_control },
@@ -682,14 +687,14 @@ async function computeScore(mint, mintInfo, ep, db) {
   const nullPts  = signals.filter(s => s.ok === null).reduce((a, s) => a + s.max, 0);
   const totalPts = signals.reduce((a, s) => a + s.max, 0);
   const knownRatio = totalPts > 0 ? 1 - nullPts / totalPts : 1;
-  // FULL ≥70% data resolved, PARTIAL ≥40%, INSUFFICIENT <40%
+  // FULL ≥75% data resolved, PARTIAL ≥55%, INSUFFICIENT <55%
   const data_quality =
-    knownRatio >= 0.70 ? "FULL"         :
-    knownRatio >= 0.40 ? "PARTIAL"      : "INSUFFICIENT";
+    knownRatio >= 0.75 ? "FULL"         :
+    knownRatio >= 0.55 ? "PARTIAL"      : "INSUFFICIENT";
 
-  // Cap the raw score so missing data cannot masquerade as a good score.
-  // Only the positive signals we *could* measure count toward trust.
-  const cap = data_quality === "INSUFFICIENT" ? 45 : data_quality === "PARTIAL" ? 62 : 100;
+  // Cap ensures supply-control-only scores can't masquerade as trust.
+  // Active penalties above already lower the raw score; cap is a safety net.
+  const cap = data_quality === "INSUFFICIENT" ? 40 : data_quality === "PARTIAL" ? 58 : 100;
   const score = Math.max(0, Math.min(cap, Math.round(rawScore)));
 
   return { score, data_quality, categories, signals, flags, onchain, creator };

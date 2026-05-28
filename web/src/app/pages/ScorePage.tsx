@@ -312,16 +312,23 @@ export function ScorePage() {
                 <div className="grid grid-cols-2 gap-1.5 mb-3">
                   {Object.entries(scoreResult.categories).map(([cat, val]) => {
                     if (!val) return null;
-                    const pct = val.max > 0 ? val.earned / val.max : 0;
-                    const color = pct >= 0.8 ? "#00FF41" : pct >= 0.5 ? "#FFDB2B" : "#FF7A2F";
+                    const isNeg  = val.earned < 0;
+                    const pct    = val.max > 0 ? Math.max(0, val.earned / val.max) : 0;
+                    const color  = isNeg ? "#FF4444" : pct >= 0.8 ? "#00FF41" : pct >= 0.5 ? "#FFDB2B" : "#FF7A2F";
+                    const negPct = val.max > 0 ? Math.min(100, Math.abs(val.earned) / val.max * 100) : 0;
                     return (
                       <div key={cat} className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.05]">
                         <div className="flex justify-between items-center mb-1">
                           <span className="text-[9px] font-mono text-white/35 uppercase tracking-wider">{cat.replace(/_/g, " ")}</span>
-                          <span className="text-[10px] font-mono font-bold" style={{ color }}>{val.earned}/{val.max}</span>
+                          <span className="text-[10px] font-mono font-bold" style={{ color }}>
+                            {isNeg ? "" : ""}{val.earned}/{val.max}
+                          </span>
                         </div>
-                        <div className="h-0.5 rounded bg-white/10 overflow-hidden">
-                          <div className="h-full rounded transition-all" style={{ width: `${pct * 100}%`, background: color }} />
+                        <div className="h-0.5 rounded bg-white/10 overflow-hidden relative">
+                          {isNeg
+                            ? <div className="h-full rounded absolute right-0 transition-all" style={{ width: `${negPct}%`, background: "#FF4444" }} />
+                            : <div className="h-full rounded transition-all" style={{ width: `${pct * 100}%`, background: color }} />
+                          }
                         </div>
                       </div>
                     );
