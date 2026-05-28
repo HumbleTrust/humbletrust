@@ -30,7 +30,6 @@ import { Navigation } from "./components/Navigation";
 import { AnnouncementBanner } from "./components/AnnouncementBanner";
 import { TickerBar } from "./components/TickerBar";
 import { Dashboard } from "./components/pages/Dashboard";
-import { Charts } from "./components/pages/Charts";
 import { Portfolio } from "./components/pages/Portfolio";
 import { Settings } from "./components/pages/Settings";
 import { LaunchPage } from "./pages/LaunchPage";
@@ -62,7 +61,7 @@ export default function App() {
       case "launch":    return <LaunchPage />;
       case "discover":  return <DiscoverPage onOpenToken={(m) => setOpenMint(m)} />;
       case "trade":     return <TradePage goDiscover={() => setActiveTab("discover")} />;
-      case "charts":    return <Charts />;
+      case "charts":    return <MarketPage />;
       case "portfolio": return <Portfolio />;
       case "market":    return <MarketPage />;
       case "nft":       return <NftPage goLaunch={() => setActiveTab("launch")} />;

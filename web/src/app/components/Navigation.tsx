@@ -1,5 +1,5 @@
 import {
-  Home, LayoutDashboard, Rocket, Compass, ArrowLeftRight, LineChart,
+  Home, LayoutDashboard, Rocket, Compass, ArrowLeftRight,
   Wallet, BarChart2, Award, Settings, Shield, MoreHorizontal, X, Info, Code2,
 } from "lucide-react";
 import { useState } from "react";
@@ -19,7 +19,6 @@ const navItems = [
   { id: "launch",     label: "Launch",      icon: Rocket },
   { id: "discover",   label: "Discover",    icon: Compass },
   { id: "trade",      label: "Trade",       icon: ArrowLeftRight },
-  { id: "charts",     label: "Charts",      icon: LineChart },
   { id: "portfolio",  label: "Portfolio",   icon: Wallet },
   { id: "market",     label: "Market",      icon: BarChart2 },
   { id: "nft",        label: "NFT Badges",  icon: Award },
@@ -38,7 +37,6 @@ const primaryNavItems = [
 
 const moreNavItems = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "charts",    label: "Charts",    icon: LineChart },
   { id: "market",    label: "Market",    icon: BarChart2 },
   { id: "nft",       label: "NFT Badges",icon: Award },
   { id: "score",     label: "Score API", icon: Code2 },

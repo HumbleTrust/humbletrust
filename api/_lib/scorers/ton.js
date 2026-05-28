@@ -84,8 +84,11 @@ async function scoreTon(address, knownToken) {
     }
 
     // Admin address — null/zero = fully renounced
+    // tonapi.io returns raw format "0:0000...0000" or user-friendly "EQAAA...M9c"
     const admin = jetton.admin?.address || null;
-    const adminZero = !admin || admin === "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c";
+    const adminZero = !admin
+      || admin === "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c"
+      || /^0:0{64}$/.test(admin);
     if (adminZero) {
       signals.push({ id: "admin_revoked", category: "supply_control", earned: 15, max: 15, ok: true,
         label: "Admin address burned — full renouncement",
