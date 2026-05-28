@@ -1,5 +1,5 @@
-const { getClient } = require("../../../_lib/db");
-const { isValidWallet, setCors } = require("../../../_lib/validate");
+const { getClient } = require("../../_lib/db");
+const { isValidWallet, setCors } = require("../../_lib/validate");
 
 module.exports = async (req, res) => {
   setCors(req, res);

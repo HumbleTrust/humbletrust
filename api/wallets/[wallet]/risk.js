@@ -1,5 +1,5 @@
-const { getClient } = require("../../../_lib/db");
-const { isValidWallet, setCors } = require("../../../_lib/validate");
+const { getClient } = require("../../_lib/db");
+const { isValidWallet, setCors } = require("../../_lib/validate");
 
 const getRiskLevel = (r) =>
   r >= 75 ? "LOW" : r >= 50 ? "MEDIUM" : r >= 25 ? "HIGH" : "CRITICAL";
