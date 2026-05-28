@@ -12,6 +12,11 @@
  *   liquidity       25  –  LP burned, pool exists
  *   distribution    20  –  creator holdings, top-holder concentration
  *   legitimacy      15  –  metadata, update authority, creator DB record
+ *
+ * Query params:
+ *   ?format=badge    – returns SVG badge image (cached 5 min)
+ *   ?view=history    – returns score trend over time
+ *   ?nocache=1       – bypass all caches, force recompute
  */
 
 const { createHash } = require("crypto");
@@ -35,7 +40,6 @@ const METEORA_DLMM       = "LBUZKhRxPF3XUpBCjp4YzTKgLLjgGSFTKZqCoNaKXd";
 const BURN_ADDRESS       = "1nc1nerator11111111111111111111111111111111";
 const NULL_ADDR          = "11111111111111111111111111111111";
 
-// Programs that can legitimately hold mint authority (not a human creator)
 const KNOWN_PROGRAMS = new Set([
   PUMP_FUN_PROGRAM, PUMP_FUN_MIGRATION,
   TOKEN_PROGRAM, TOKEN_2022,
@@ -43,15 +47,36 @@ const KNOWN_PROGRAMS = new Set([
   METAPLEX, BURN_ADDRESS, NULL_ADDR,
 ]);
 
-// DEX program addresses for platform detection
 const DEX_PROGRAMS = {
-  [RAYDIUM_CPMM]:   "raydium_cpmm",
-  [RAYDIUM_AMM]:    "raydium_amm",
-  [ORCA_WHIRLPOOL]: "orca_whirlpool",
-  [METEORA_DLMM]:   "meteora_dlmm",
+  [RAYDIUM_CPMM]:     "raydium_cpmm",
+  [RAYDIUM_AMM]:      "raydium_amm",
+  [ORCA_WHIRLPOOL]:   "orca_whirlpool",
+  [METEORA_DLMM]:     "meteora_dlmm",
   [PUMP_FUN_PROGRAM]: "pump_fun",
   [PUMP_FUN_MIGRATION]: "pump_fun",
 };
+
+// ════════════════════════════════════════════════════════════════════════════
+// L1 in-process memory cache  (0 ms, per warm container)
+// ════════════════════════════════════════════════════════════════════════════
+
+const L1 = new Map(); // mint → { data, exp }
+const L1_TTL = 30_000; // 30 s
+
+function l1get(key) {
+  const e = L1.get(key);
+  if (!e) return null;
+  if (Date.now() > e.exp) { L1.delete(key); return null; }
+  return e.data;
+}
+
+function l1set(key, data, ttl = L1_TTL) {
+  if (L1.size > 500) {
+    const sorted = [...L1.entries()].sort((a, b) => a[1].exp - b[1].exp);
+    sorted.slice(0, 100).forEach(([k]) => L1.delete(k));
+  }
+  L1.set(key, { data, exp: Date.now() + ttl });
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // Base58 encode / decode
@@ -175,13 +200,11 @@ async function rpcCall(endpoint, method, params = [], timeout = 7000) {
   }
 }
 
-// Fetch mint account (SPL token info)
 async function fetchMintInfo(mint, ep) {
   const r = await rpcCall(ep, "getAccountInfo", [mint, { encoding: "jsonParsed" }]);
   return r?.value?.data?.parsed?.info || null;
 }
 
-// Fetch raw account bytes
 async function fetchRawAccount(addr, ep) {
   const r = await rpcCall(ep, "getAccountInfo", [addr, { encoding: "base64" }]);
   const d = r?.value?.data;
@@ -189,19 +212,16 @@ async function fetchRawAccount(addr, ep) {
   return Buffer.from(d[0], "base64");
 }
 
-// Fetch top-20 token holders
 async function fetchLargestAccounts(mint, ep) {
   const r = await rpcCall(ep, "getTokenLargestAccounts", [mint, { commitment: "confirmed" }]);
   return r?.value || [];
 }
 
-// Resolve token account → owner wallet
 async function fetchTokenAccountOwner(tokenAcc, ep) {
   const r = await rpcCall(ep, "getAccountInfo", [tokenAcc, { encoding: "jsonParsed" }]);
   return r?.value?.data?.parsed?.info?.owner || null;
 }
 
-// Creator: paginate signatures to find the oldest (creation) transaction
 async function fetchTokenCreator(mint, ep) {
   try {
     let before;
@@ -227,7 +247,6 @@ async function fetchTokenCreator(mint, ep) {
   }
 }
 
-// Creator's token balance for this mint
 async function fetchCreatorBalance(creator, mint, ep) {
   const r = await rpcCall(ep, "getTokenAccountsByOwner",
     [creator, { mint }, { encoding: "jsonParsed" }], 5000);
@@ -244,7 +263,6 @@ async function fetchCreatorBalance(creator, mint, ep) {
 function parseMetaplexMetadata(raw) {
   if (!raw || raw.length < 100) return null;
   try {
-    // key(1) + update_authority(32) + mint(32) = 65 bytes
     const updateAuthority = b58Encode(raw.slice(1, 33));
     const mintAddress     = b58Encode(raw.slice(33, 65));
 
@@ -264,7 +282,6 @@ function parseMetaplexMetadata(raw) {
 
     o += 2; // seller_fee_basis_points (u16)
 
-    // Option<Vec<Creator>>
     if (o + 1 > raw.length) return { updateAuthority, mintAddress, name, symbol, uri, isMutable: null };
     const hasCreators = raw[o++];
     if (hasCreators) {
@@ -272,7 +289,6 @@ function parseMetaplexMetadata(raw) {
       const cnt = raw.readUInt32LE(o); o += 4 + cnt * 34;
     }
 
-    // primary_sale_happened (bool)
     if (o + 2 > raw.length) return { updateAuthority, mintAddress, name, symbol, uri, isMutable: null };
     o += 1;
     const isMutable = raw[o] === 1;
@@ -288,15 +304,12 @@ function parseMetaplexMetadata(raw) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function detectPlatform(mint, mintAuthority, ep) {
-  // If mintAuthority is the pump.fun program itself, it's a pump.fun token
-  if (mintAuthority === PUMP_FUN_PROGRAM) return "pump_fun";
+  if (mintAuthority === PUMP_FUN_PROGRAM)   return "pump_fun";
   if (mintAuthority === PUMP_FUN_MIGRATION) return "pump_fun_graduated";
 
-  // Check if any of the top 10 recent transactions involved a known DEX
   const sigs = await rpcCall(ep, "getSignaturesForAddress", [mint, { limit: 10 }], 4000);
   if (!sigs?.length) return "unknown";
 
-  // Fetch one representative transaction and scan program IDs
   const tx = await rpcCall(ep, "getTransaction",
     [sigs[0].signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }], 4000);
   const keys = tx?.transaction?.message?.accountKeys
@@ -306,11 +319,9 @@ async function detectPlatform(mint, mintAuthority, ep) {
     if (addr && DEX_PROGRAMS[addr]) return DEX_PROGRAMS[addr];
   }
 
-  // Heuristic: pump.fun bonding curve PDAs are 44-char base58 and not standard wallets
   if (mintAuthority && !KNOWN_PROGRAMS.has(mintAuthority) && mintAuthority.length >= 43) {
     return "pump_fun_likely";
   }
-
   return "unknown";
 }
 
@@ -319,10 +330,10 @@ async function detectPlatform(mint, mintAuthority, ep) {
 // ════════════════════════════════════════════════════════════════════════════
 
 const MAX = {
-  supply_control: 40,  // mint_auth(25) + freeze_auth(15)
-  liquidity:      25,  // lp_burned(20) + has_pool(5)
-  distribution:   20,  // creator_holdings(10) + top_holder(10)
-  legitimacy:     15,  // metadata_immutable(5) + has_metadata(5) + creator_db(5)
+  supply_control: 40,
+  liquidity:      25,
+  distribution:   20,
+  legitimacy:     15,
 };
 
 async function computeScore(mint, mintInfo, ep, db) {
@@ -331,7 +342,6 @@ async function computeScore(mint, mintInfo, ep, db) {
   const flags     = [];
   let onchain     = {};
 
-  // ── PARALLEL DATA FETCHING ─────────────────────────────────────────────────
   const metaPda   = metadataPda(mint);
   const [holders, metaRaw] = await Promise.all([
     fetchLargestAccounts(mint, ep),
@@ -340,16 +350,11 @@ async function computeScore(mint, mintInfo, ep, db) {
 
   const meta = metaRaw ? parseMetaplexMetadata(metaRaw) : null;
 
-  // Resolve top-5 token account owners in parallel
   let owners = [];
   if (holders.length > 0) {
     owners = await Promise.all(holders.slice(0, 5).map(h => fetchTokenAccountOwner(h.address, ep)));
   }
 
-  // Identify creator:
-  // 1. If mintAuthority is a real wallet (not a program), use it
-  // 2. If Metaplex update_authority is a real wallet, use it as fallback
-  // 3. Last resort: scan transaction history
   let creator = null;
   if (mintInfo?.mintAuthority && !KNOWN_PROGRAMS.has(mintInfo.mintAuthority)) {
     creator = mintInfo.mintAuthority;
@@ -360,15 +365,13 @@ async function computeScore(mint, mintInfo, ep, db) {
     creator = await fetchTokenCreator(mint, ep);
   }
 
-  // Creator balance
   let creatorBalance = 0n;
   if (creator && totalSupply > 0n) {
     creatorBalance = await fetchCreatorBalance(creator, mint, ep);
   }
 
-  // ── CATEGORY A: SUPPLY CONTROL (40 pts) ───────────────────────────────────
+  // ── A: SUPPLY CONTROL (40 pts) ─────────────────────────────────────────────
 
-  // A1. Mint authority (25 pts)
   if (!mintInfo?.mintAuthority) {
     signals.push({ id: "mint_authority_revoked", category: "supply_control",
       earned: 25, max: 25, ok: true,
@@ -383,7 +386,6 @@ async function computeScore(mint, mintInfo, ep, db) {
       msg: "Mint authority not revoked — creator can inflate supply at any time" });
   }
 
-  // A2. Freeze authority (15 pts)
   if (!mintInfo?.freezeAuthority) {
     signals.push({ id: "freeze_authority_revoked", category: "supply_control",
       earned: 15, max: 15, ok: true,
@@ -401,11 +403,10 @@ async function computeScore(mint, mintInfo, ep, db) {
   onchain.mint_authority   = mintInfo?.mintAuthority   || null;
   onchain.freeze_authority = mintInfo?.freezeAuthority || null;
 
-  // ── CATEGORY B: LIQUIDITY (25 pts) ────────────────────────────────────────
+  // ── B: LIQUIDITY (25 pts) ──────────────────────────────────────────────────
 
-  // Identify which top accounts are LP-related or burned
-  let lpBurned   = false;
-  let hasPool    = false;
+  let lpBurned = false;
+  let hasPool  = false;
   const holderData = holders.slice(0, 5).map((h, i) => ({
     token_account: h.address,
     owner: owners[i] || null,
@@ -417,15 +418,10 @@ async function computeScore(mint, mintInfo, ep, db) {
 
   for (const h of holderData) {
     if (!h.owner) continue;
-    if (h.owner === BURN_ADDRESS || h.owner === NULL_ADDR) {
-      lpBurned = true;
-    }
-    if (KNOWN_PROGRAMS.has(h.owner) && h.owner !== TOKEN_PROGRAM && h.owner !== TOKEN_2022) {
-      hasPool = true;
-    }
+    if (h.owner === BURN_ADDRESS || h.owner === NULL_ADDR) lpBurned = true;
+    if (KNOWN_PROGRAMS.has(h.owner) && h.owner !== TOKEN_PROGRAM && h.owner !== TOKEN_2022) hasPool = true;
   }
 
-  // B1. LP burned (20 pts)
   if (lpBurned) {
     signals.push({ id: "lp_burned", category: "liquidity",
       earned: 20, max: 20, ok: true,
@@ -447,7 +443,6 @@ async function computeScore(mint, mintInfo, ep, db) {
     }
   }
 
-  // B2. Pool exists / has liquidity (5 pts)
   if (hasPool || lpBurned) {
     signals.push({ id: "has_liquidity_pool", category: "liquidity",
       earned: 5, max: 5, ok: true,
@@ -462,38 +457,32 @@ async function computeScore(mint, mintInfo, ep, db) {
 
   onchain.top_holders = holderData;
 
-  // ── CATEGORY C: DISTRIBUTION (20 pts) ─────────────────────────────────────
+  // ── C: DISTRIBUTION (20 pts) ───────────────────────────────────────────────
 
-  // C1. Creator holdings (10 pts)
   let creatorPct = null;
   if (creator && totalSupply > 0n) {
     creatorPct = (Number(creatorBalance) / Number(totalSupply)) * 100;
     let earned = 0;
     let detail = "";
     if (creatorPct < 2) {
-      earned = 10;
-      detail = `Creator holds only ${creatorPct.toFixed(2)}% — sold/distributed, low dump risk`;
+      earned = 10; detail = `Creator holds only ${creatorPct.toFixed(2)}% — sold/distributed, low dump risk`;
     } else if (creatorPct < 10) {
-      earned = 7;
-      detail = `Creator holds ${creatorPct.toFixed(2)}% — moderate position`;
+      earned = 7; detail = `Creator holds ${creatorPct.toFixed(2)}% — moderate position`;
     } else if (creatorPct < 25) {
-      earned = 3;
-      detail = `Creator holds ${creatorPct.toFixed(2)}% — notable position, some dump risk`;
+      earned = 3; detail = `Creator holds ${creatorPct.toFixed(2)}% — notable position, some dump risk`;
       flags.push({ type: "creator_large_holdings", severity: "medium",
         msg: `Creator holds ${creatorPct.toFixed(1)}% of supply` });
     } else {
-      earned = 0;
-      detail = `Creator holds ${creatorPct.toFixed(2)}% — very high dump risk`;
+      earned = 0; detail = `Creator holds ${creatorPct.toFixed(2)}% — very high dump risk`;
       flags.push({ type: "creator_whale", severity: "critical",
         msg: `Creator holds ${creatorPct.toFixed(1)}% of supply — extreme dump risk` });
     }
-    // Extra penalty: creator holds majority
     const penalty = creatorPct >= 50 ? -5 : (creatorPct >= 30 ? -3 : 0);
     signals.push({ id: "creator_holdings", category: "distribution",
       earned: Math.max(0, earned + penalty), max: 10, ok: earned >= 7,
       label: `Creator holds ${creatorPct.toFixed(2)}%`,
       detail,
-      creator_wallet: creator,
+      creator_wallet:  creator,
       creator_balance: creatorBalance.toString(),
     });
   } else {
@@ -505,7 +494,6 @@ async function computeScore(mint, mintInfo, ep, db) {
     });
   }
 
-  // C2. Top holder concentration (10 pts)
   const nonSpecial = holderData.filter(h =>
     h.owner !== BURN_ADDRESS && h.owner !== NULL_ADDR && !KNOWN_PROGRAMS.has(h.owner)
   );
@@ -545,16 +533,15 @@ async function computeScore(mint, mintInfo, ep, db) {
   onchain.creator_balance = creatorBalance.toString();
   onchain.creator_pct     = creatorPct !== null ? Number(creatorPct.toFixed(4)) : null;
 
-  // ── CATEGORY D: LEGITIMACY (15 pts) ───────────────────────────────────────
+  // ── D: LEGITIMACY (15 pts) ─────────────────────────────────────────────────
 
-  // D1. Metaplex metadata exists (5 pts)
   if (meta) {
     signals.push({ id: "has_metadata", category: "legitimacy",
       earned: 5, max: 5, ok: true,
       label: `Metadata: ${meta.name || "?"} (${meta.symbol || "?"})`,
       detail: meta.uri ? `URI: ${meta.uri.slice(0, 60)}` : "No off-chain URI" });
     onchain.metadata = {
-      pda: metaPda,
+      pda:              metaPda,
       name:             meta.name,
       symbol:           meta.symbol,
       uri:              meta.uri,
@@ -571,7 +558,6 @@ async function computeScore(mint, mintInfo, ep, db) {
     onchain.metadata = null;
   }
 
-  // D2. Metadata immutable / update authority revoked (5 pts)
   if (meta) {
     const updateAuth = meta.updateAuthority;
     const isRevoked  = !updateAuth || updateAuth === NULL_ADDR || meta.isMutable === false;
@@ -595,7 +581,6 @@ async function computeScore(mint, mintInfo, ep, db) {
       detail: "Cannot verify immutability without metadata" });
   }
 
-  // D3. Creator track record in HumbleTrust DB (5 pts)
   if (creator) {
     try {
       const { data: launches } = await db
@@ -612,9 +597,9 @@ async function computeScore(mint, mintInfo, ep, db) {
           earned, max: 5, ok: earned > 0,
           label: `${launches.length} HumbleTrust launch(es), avg score ${avgScore}${isVerified ? " — Verified Issuer ✓" : ""}`,
           detail: `${graduated} graduated to Raydium`,
-          creator_launches: launches.length,
+          creator_launches:  launches.length,
           creator_avg_score: avgScore,
-          creator_verified: isVerified,
+          creator_verified:  isVerified,
         });
         if (avgScore < 40 && launches.length > 0) {
           flags.push({ type: "creator_low_record", severity: "low",
@@ -637,7 +622,7 @@ async function computeScore(mint, mintInfo, ep, db) {
       detail: "Could not identify creator wallet" });
   }
 
-  // ── ASSEMBLE RESULT ────────────────────────────────────────────────────────
+  // ── Assemble result ────────────────────────────────────────────────────────
 
   const byCategory = (cat) => signals.filter(s => s.category === cat);
   const earnedCat  = (cat) => Math.max(0, byCategory(cat).reduce((s, sig) => s + sig.earned, 0));
@@ -656,13 +641,111 @@ async function computeScore(mint, mintInfo, ep, db) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// Trust level & response helpers
+// Trust level helpers
 // ════════════════════════════════════════════════════════════════════════════
 
 const getTrustLevel = s =>
   s >= 85 ? "ELITE" : s >= 70 ? "STRONG" : s >= 40 ? "OK" : s >= 20 ? "WEAK" : "DANGER";
 
-const CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+const CACHE_TTL_MS      = 2 * 60 * 60 * 1000; // 2 h Supabase cache
+const HISTORY_MIN_DELTA = 3;                   // min score delta to write new history row
+
+// ════════════════════════════════════════════════════════════════════════════
+// Feature: SVG Score Badge  (?format=badge)
+// ════════════════════════════════════════════════════════════════════════════
+
+const BADGE_COLORS = {
+  ELITE:  { bg: "#00d4aa", text: "#003d30" },
+  STRONG: { bg: "#00b894", text: "#003d30" },
+  OK:     { bg: "#fdcb6e", text: "#5c4500" },
+  WEAK:   { bg: "#e17055", text: "#fff"    },
+  DANGER: { bg: "#d63031", text: "#fff"    },
+};
+
+function buildBadge(score, trust_level, tokenName) {
+  const c     = BADGE_COLORS[trust_level] || { bg: "#888", text: "#fff" };
+  const label = "HumbleTrust";
+  const value = `${trust_level}  ${score}`;
+  const title = `HumbleTrust TrustScore: ${trust_level} ${score}/100${tokenName ? ` — ${tokenName}` : ""}`;
+
+  // ~6.5 px per char at font-size 11, + 20 px horizontal padding
+  const lw = Math.ceil(label.length * 6.5 + 20);
+  const vw = Math.ceil(value.length * 6.5 + 20);
+  const W  = lw + vw;
+  const H  = 20;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" role="img" aria-label="${label}: ${score}">
+<title>${title}</title>
+<defs>
+  <linearGradient id="g" x2="0" y2="100%">
+    <stop offset="0"  stop-color="#eee" stop-opacity=".2"/>
+    <stop offset="1"  stop-opacity=".1"/>
+  </linearGradient>
+  <mask id="m"><rect width="${W}" height="${H}" rx="4" fill="#fff"/></mask>
+</defs>
+<g mask="url(#m)">
+  <rect width="${lw}" height="${H}" fill="#444"/>
+  <rect x="${lw}" width="${vw}" height="${H}" fill="${c.bg}"/>
+  <rect width="${W}" height="${H}" fill="url(#g)"/>
+</g>
+<g font-family="DejaVu Sans,Verdana,Geneva,Lucida,sans-serif" font-size="11" text-anchor="middle">
+  <text x="${lw / 2}" y="14" fill="#010101" fill-opacity=".35">${label}</text>
+  <text x="${lw / 2}" y="13" fill="#fff">${label}</text>
+  <text x="${lw + vw / 2}" y="14" fill="#010101" fill-opacity=".35" font-weight="bold">${value}</text>
+  <text x="${lw + vw / 2}" y="13" fill="${c.text}" font-weight="bold">${value}</text>
+</g>
+</svg>`;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Feature: Score History  (?view=history)
+// ════════════════════════════════════════════════════════════════════════════
+
+async function handleHistory(req, res, mint, db) {
+  const limit = Math.min(parseInt(req.query.limit) || 30, 90);
+
+  const { data: rows } = await db
+    .from("score_history")
+    .select("score, trust_level, computed_at")
+    .eq("mint", mint)
+    .order("computed_at", { ascending: false })
+    .limit(limit);
+
+  if (!rows?.length) {
+    const { data: cached } = await db
+      .from("token_score_cache")
+      .select("score, trust_level, computed_at")
+      .eq("mint", mint)
+      .single();
+    return res.json({
+      mint,
+      history: cached
+        ? [{ score: cached.score, trust_level: cached.trust_level, computed_at: cached.computed_at }]
+        : [],
+      trend:         "stable",
+      delta_7d:      null,
+      current_score: cached?.score || null,
+      periods:       cached ? 1 : 0,
+      note: "Score history tracking started. Trend data will accumulate over time.",
+    });
+  }
+
+  const latest       = rows[0];
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const row7d        = rows.find(r => r.computed_at <= sevenDaysAgo);
+  const delta7d      = row7d ? latest.score - row7d.score : null;
+  const trend        = delta7d === null ? "stable" : delta7d > 5 ? "up" : delta7d < -5 ? "down" : "stable";
+
+  return res.json({
+    mint,
+    history: rows.map(r => ({ score: r.score, trust_level: r.trust_level, computed_at: r.computed_at })),
+    trend,
+    delta_7d:            delta7d,
+    current_score:       latest.score,
+    current_trust_level: latest.trust_level,
+    periods:             rows.length,
+  });
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // HTTP handler
@@ -678,63 +761,70 @@ module.exports = async (req, res) => {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY)
     return res.status(503).json({ error: "Service unavailable" });
 
-  const { mint, nocache } = req.query;
+  const { mint, nocache, format, view } = req.query;
   if (!mint)                return res.status(400).json({ error: "mint required" });
   if (!isValidWallet(mint)) return res.status(400).json({ error: "invalid mint address" });
 
   const db = getClient();
 
-  try {
-    // ── 1. HumbleTrust native token ──────────────────────────────────────────
-    const { data: token } = await db.from("tokens").select("*").eq("mint", mint).single();
+  // ── Route: score history ───────────────────────────────────────────────────
+  if (view === "history") {
+    return handleHistory(req, res, mint, db).catch(e => {
+      console.error("[api/score history]", e.message);
+      return res.status(500).json({ error: "Internal server error" });
+    });
+  }
 
-    if (token) {
-      const score   = token.trust_score || token.launch_score || 0;
-      const mintInfo = await fetchMintInfo(mint, DEVNET);
-      return res.json({
-        mint,
-        score,
-        trust_level: getTrustLevel(score),
-        source: "humbletrust",
-        network: "devnet",
-        platform: "humbletrust",
-        token: {
-          name:            token.name,
-          symbol:          token.symbol,
-          creator:         token.creator,
-          status:          token.status,
-          logo_uri:        token.logo_uri,
-          description:     token.description,
-          website:         token.website,
-          twitter:         token.twitter,
-          telegram:        token.telegram,
-          created_at:      token.created_at,
-          raydium_pool:    token.raydium_pool,
-          certificate_mint:      token.certificate_mint,
-          verified_issuer:       token.verified_issuer  || false,
-          verified_issuer_level: token.verified_issuer_level || 0,
-        },
-        categories: null,
-        signals: null,
-        flags: [],
-        breakdown: {
-          lock_percent: token.lock_percent,
-          burn_option:  token.burn_option,
-          tier:         token.tier,
-          trust_level:  token.trust_level,
-        },
-        onchain: mintInfo ? {
-          mint_authority:   mintInfo.mintAuthority   || null,
-          freeze_authority: mintInfo.freezeAuthority || null,
-          supply:           mintInfo.supply,
-          decimals:         mintInfo.decimals,
-        } : null,
-        computed_at: new Date().toISOString(),
-      });
+  const isBadge = format === "badge";
+
+  try {
+    // ── L1 memory cache (warm container, 30 s) ────────────────────────────────
+    let scoreData = nocache ? null : l1get(mint);
+
+    // ── Native HumbleTrust token ──────────────────────────────────────────────
+    if (!scoreData) {
+      const { data: token } = await db.from("tokens").select("*").eq("mint", mint).single();
+
+      if (token) {
+        const score       = token.trust_score || token.launch_score || 0;
+        const mintInfo    = await fetchMintInfo(mint, DEVNET);
+        const trust_level = getTrustLevel(score);
+        scoreData = {
+          score, trust_level,
+          source:   "humbletrust",
+          network:  "devnet",
+          platform: "humbletrust",
+          token: {
+            name:                  token.name,
+            symbol:                token.symbol,
+            creator:               token.creator,
+            status:                token.status,
+            logo_uri:              token.logo_uri,
+            description:           token.description,
+            website:               token.website,
+            twitter:               token.twitter,
+            telegram:              token.telegram,
+            created_at:            token.created_at,
+            raydium_pool:          token.raydium_pool,
+            certificate_mint:      token.certificate_mint,
+            verified_issuer:       token.verified_issuer || false,
+            verified_issuer_level: token.verified_issuer_level || 0,
+          },
+          categories: null, signals: null, flags: [],
+          onchain: mintInfo ? {
+            mint_authority:   mintInfo.mintAuthority   || null,
+            freeze_authority: mintInfo.freezeAuthority || null,
+            supply:           mintInfo.supply,
+            decimals:         mintInfo.decimals,
+          } : null,
+          _nativeToken: true,
+        };
+        l1set(mint, scoreData);
+      }
     }
 
-    // ── 2. Cache check (skip with ?nocache=1) ────────────────────────────────
-    if (!nocache) {
+    // ── L2 Supabase cache (external tokens, 2 h TTL) ──────────────────────────
+    if (!scoreData && !nocache) {
       const { data: cached } = await db
         .from("token_score_cache")
         .select("*")
@@ -744,96 +834,146 @@ module.exports = async (req, res) => {
 
       if (cached) {
         const d = cached.score_components || {};
-        return res.json({
-          mint,
+        scoreData = {
           score:       cached.score,
           trust_level: cached.trust_level,
           source:      "external_cached",
-          network:     d.network  || "unknown",
-          platform:    d.platform || "unknown",
-          token:       d.token    || null,
+          network:     d.network   || "unknown",
+          platform:    d.platform  || "unknown",
+          token:       d.token     || null,
           categories:  d.categories || null,
-          signals:     d.signals  || [],
-          flags:       d.flags    || [],
-          onchain:     d.onchain  || null,
-          warning:     "Score from cache — use ?nocache=1 to force recompute",
-          computed_at:   cached.computed_at,
-          cache_expires: cached.expires_at,
-        });
+          signals:     d.signals   || [],
+          flags:       d.flags     || [],
+          onchain:     d.onchain   || null,
+          _cachedAt:   cached.computed_at,
+          _expiresAt:  cached.expires_at,
+        };
+        l1set(mint, scoreData);
       }
     }
 
-    // ── 3. Resolve mint from chain (mainnet first, devnet fallback) ──────────
-    let mintInfo = await fetchMintInfo(mint, MAINNET);
-    let ep      = MAINNET;
-    let network = "mainnet-beta";
-
-    if (!mintInfo) {
-      mintInfo = await fetchMintInfo(mint, DEVNET);
-      ep       = DEVNET;
-      network  = mintInfo ? "devnet" : "unknown";
-    }
-    if (!mintInfo) {
-      return res.status(404).json({ error: "Mint account not found on mainnet or devnet", mint });
+    // ── Badge fast-path: score from cache → return SVG without full compute ───
+    if (isBadge && scoreData) {
+      const tokenName = scoreData.token?.name || scoreData.token?.symbol || null;
+      res.setHeader("Content-Type", "image/svg+xml");
+      res.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+      return res.send(buildBadge(scoreData.score, scoreData.trust_level, tokenName));
     }
 
-    // ── 4. Platform detection + scoring (parallel) ───────────────────────────
-    const [platform, { score, categories, signals, flags, onchain, creator }] =
-      await Promise.all([
+    // ── L3 Full on-chain computation ──────────────────────────────────────────
+    if (!scoreData) {
+      let mintInfo = await fetchMintInfo(mint, MAINNET);
+      let ep       = MAINNET;
+      let network  = "mainnet-beta";
+
+      if (!mintInfo) {
+        mintInfo = await fetchMintInfo(mint, DEVNET);
+        ep       = DEVNET;
+        network  = mintInfo ? "devnet" : "unknown";
+      }
+      if (!mintInfo) {
+        return res.status(404).json({ error: "Mint account not found on mainnet or devnet", mint });
+      }
+
+      const [platform, computed] = await Promise.all([
         detectPlatform(mint, mintInfo.mintAuthority, ep),
         computeScore(mint, mintInfo, ep, db),
       ]);
 
-    // ── 5. Basic token info ──────────────────────────────────────────────────
-    const metaParsed = onchain.metadata;
-    const supply     = Number(BigInt(mintInfo.supply || 0));
-    const tokenInfo  = {
-      name:     metaParsed?.name    || null,
-      symbol:   metaParsed?.symbol  || null,
-      uri:      metaParsed?.uri     || null,
-      creator,
-      decimals: mintInfo.decimals,
-      supply:   mintInfo.supply,
-      supply_human: mintInfo.decimals != null && supply > 0
-        ? (supply / Math.pow(10, mintInfo.decimals)).toLocaleString("en-US", { maximumFractionDigits: 0 })
-        : null,
-      network,
-      platform,
-    };
+      const { score, categories, signals, flags, onchain, creator } = computed;
+      const metaParsed  = onchain.metadata;
+      const supply      = Number(BigInt(mintInfo.supply || 0));
+      const trust_level = getTrustLevel(score);
+      const now         = new Date();
 
-    // Add supply & decimals to onchain
-    onchain.supply   = mintInfo.supply;
-    onchain.decimals = mintInfo.decimals;
-    onchain.platform = platform;
+      const tokenInfo = {
+        name:     metaParsed?.name   || null,
+        symbol:   metaParsed?.symbol || null,
+        uri:      metaParsed?.uri    || null,
+        creator,
+        decimals: mintInfo.decimals,
+        supply:   mintInfo.supply,
+        supply_human: mintInfo.decimals != null && supply > 0
+          ? (supply / Math.pow(10, mintInfo.decimals)).toLocaleString("en-US", { maximumFractionDigits: 0 })
+          : null,
+        network, platform,
+      };
 
-    const trust_level = getTrustLevel(score);
-    const now = new Date();
+      onchain.supply   = mintInfo.supply;
+      onchain.decimals = mintInfo.decimals;
+      onchain.platform = platform;
 
-    // ── 6. Cache result ──────────────────────────────────────────────────────
-    await db.from("token_score_cache").upsert({
-      mint, score, trust_level, source: "external",
-      score_components: { categories, signals, flags, onchain, token: tokenInfo, network, platform },
-      computed_at:  now.toISOString(),
-      expires_at:   new Date(now.getTime() + CACHE_TTL_MS).toISOString(),
-    }, { onConflict: "mint" }).catch(() => {});
+      scoreData = {
+        score, trust_level,
+        source:   "external",
+        network,  platform,
+        token:    tokenInfo,
+        categories, signals, flags, onchain,
+        _computedAt: now.toISOString(),
+        _expiresAt:  new Date(now.getTime() + CACHE_TTL_MS).toISOString(),
+      };
 
-    // ── 7. Response ──────────────────────────────────────────────────────────
+      // L1 + L2 cache (fire-and-forget on DB write)
+      l1set(mint, scoreData);
+      db.from("token_score_cache").upsert({
+        mint, score, trust_level, source: "external",
+        score_components: { categories, signals, flags, onchain, token: tokenInfo, network, platform },
+        computed_at: now.toISOString(),
+        expires_at:  scoreData._expiresAt,
+      }, { onConflict: "mint" }).catch(() => {});
+
+      // History: write only if score moved by >= HISTORY_MIN_DELTA points
+      db.from("score_history")
+        .select("score")
+        .eq("mint", mint)
+        .order("computed_at", { ascending: false })
+        .limit(1)
+        .single()
+        .then(({ data: last }) => {
+          if (!last || Math.abs(last.score - score) >= HISTORY_MIN_DELTA) {
+            return db.from("score_history").insert({
+              mint, score, trust_level, categories, flags,
+              computed_at: now.toISOString(),
+            });
+          }
+        })
+        .catch(() => {});
+    }
+
+    // ── Badge response (post L3 compute) ──────────────────────────────────────
+    if (isBadge) {
+      const tokenName = scoreData.token?.name || scoreData.token?.symbol || null;
+      res.setHeader("Content-Type", "image/svg+xml");
+      res.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+      return res.send(buildBadge(scoreData.score, scoreData.trust_level, tokenName));
+    }
+
+    // ── JSON response ──────────────────────────────────────────────────────────
+    const isNative = scoreData._nativeToken;
+    const isCached = scoreData.source === "external_cached";
+
     return res.json({
       mint,
-      score,
-      trust_level,
-      source:   "external",
-      network,
-      platform,
-      token:    tokenInfo,
-      categories,
-      signals,
-      flags,
-      onchain,
-      warning: "External token — not in HumbleTrust registry. Score is based on on-chain data only.",
-      cta: "Launch on HumbleTrust for a full TrustScore with LP lock verification, Certificate NFT, and verified issuer badge.",
-      computed_at:  now.toISOString(),
-      cache_expires: new Date(now.getTime() + CACHE_TTL_MS).toISOString(),
+      score:       scoreData.score,
+      trust_level: scoreData.trust_level,
+      source:      scoreData.source,
+      network:     scoreData.network,
+      platform:    scoreData.platform,
+      token:       scoreData.token,
+      categories:  scoreData.categories,
+      signals:     scoreData.signals,
+      flags:       scoreData.flags,
+      onchain:     scoreData.onchain,
+      ...(isNative ? {} : {
+        warning: isCached
+          ? "Score from cache — use ?nocache=1 to force recompute"
+          : "External token — not in HumbleTrust registry. Score based on on-chain data only.",
+        cta: "Launch on HumbleTrust for a full TrustScore with LP lock verification, Certificate NFT, and verified issuer badge.",
+      }),
+      computed_at:   scoreData._cachedAt  || scoreData._computedAt || new Date().toISOString(),
+      cache_expires: scoreData._expiresAt || null,
+      badge_url:     `/api/score/${mint}?format=badge`,
+      history_url:   `/api/score/${mint}?view=history`,
     });
 
   } catch (e) {
