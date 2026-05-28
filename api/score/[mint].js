@@ -185,7 +185,7 @@ function metadataPda(mint) {
 // ════════════════════════════════════════════════════════════════════════════
 
 let _id = 0;
-async function rpcCall(endpoint, method, params = [], timeout = 7000) {
+async function rpcCall(endpoint, method, params = [], timeout = 4000) {
   try {
     const r = await fetch(endpoint, {
       method: "POST",
@@ -226,9 +226,9 @@ async function fetchTokenCreator(mint, ep) {
   try {
     let before;
     let oldest = null;
-    for (let page = 0; page < 4; page++) {
+    for (let page = 0; page < 2; page++) {
       const sigs = await rpcCall(ep, "getSignaturesForAddress",
-        [mint, { limit: 1000, ...(before ? { before } : {}) }], 5000);
+        [mint, { limit: 1000, ...(before ? { before } : {}) }], 3000);
       if (!sigs?.length) break;
       oldest = sigs[sigs.length - 1];
       if (sigs.length < 1000) break;
@@ -237,7 +237,7 @@ async function fetchTokenCreator(mint, ep) {
     if (!oldest?.signature) return null;
 
     const tx = await rpcCall(ep, "getTransaction", [oldest.signature,
-      { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }], 5000);
+      { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }], 3000);
     const keys = tx?.transaction?.message?.accountKeys
               || tx?.transaction?.message?.staticAccountKeys || [];
     const signer = keys.find(k => typeof k === "object" && k.signer && k.writable);
@@ -361,7 +361,9 @@ async function computeScore(mint, mintInfo, ep, db) {
   } else if (meta?.updateAuthority && !KNOWN_PROGRAMS.has(meta.updateAuthority)
              && meta.updateAuthority !== NULL_ADDR && meta.updateAuthority !== BURN_ADDRESS) {
     creator = meta.updateAuthority;
-  } else {
+  } else if (mintInfo?.mintAuthority !== PUMP_FUN_PROGRAM
+             && mintInfo?.mintAuthority !== PUMP_FUN_MIGRATION) {
+    // Skip expensive tx-history lookup for pump.fun — creator is the program, not a human wallet
     creator = await fetchTokenCreator(mint, ep);
   }
 
@@ -752,27 +754,45 @@ async function handleHistory(req, res, mint, db) {
 // ════════════════════════════════════════════════════════════════════════════
 
 module.exports = async (req, res) => {
+  // Hard 9-second guard: if computation stalls, return a 503 before Vercel kills the fn
+  const _guard = setTimeout(() => {
+    if (!res.headersSent) {
+      const { mint } = req.query || {};
+      console.error("[api/score] guard timeout", mint);
+      res.status(503).json({
+        error: "Score computation timed out",
+        hint: "Token has extensive on-chain history. Retry in a few seconds — result will be cached.",
+        mint: mint || null,
+      });
+    }
+  }, 9000);
+
   setCors(req, res);
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("X-HumbleTrust-Version", "2.0");
-  if (req.method === "OPTIONS") return res.status(204).end();
-  if (req.method !== "GET")     return res.status(405).json({ error: "Method not allowed" });
+  if (req.method === "OPTIONS") { clearTimeout(_guard); return res.status(204).end(); }
+  if (req.method !== "GET")     { clearTimeout(_guard); return res.status(405).json({ error: "Method not allowed" }); }
 
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY)
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
+    clearTimeout(_guard);
     return res.status(503).json({ error: "Service unavailable" });
+  }
 
   const { mint, nocache, format, view } = req.query;
-  if (!mint)                return res.status(400).json({ error: "mint required" });
-  if (!isValidWallet(mint)) return res.status(400).json({ error: "invalid mint address" });
+  if (!mint)                { clearTimeout(_guard); return res.status(400).json({ error: "mint required" }); }
+  if (!isValidWallet(mint)) { clearTimeout(_guard); return res.status(400).json({ error: "invalid mint address" }); }
 
   const db = getClient();
 
   // ── Route: score history ───────────────────────────────────────────────────
   if (view === "history") {
-    return handleHistory(req, res, mint, db).catch(e => {
-      console.error("[api/score history]", e.message);
-      return res.status(500).json({ error: "Internal server error" });
-    });
+    return handleHistory(req, res, mint, db)
+      .then(r => { clearTimeout(_guard); return r; })
+      .catch(e => {
+        clearTimeout(_guard);
+        console.error("[api/score history]", e.message);
+        return res.status(500).json({ error: "Internal server error" });
+      });
   }
 
   const isBadge = format === "badge";
@@ -855,6 +875,7 @@ module.exports = async (req, res) => {
     // ── Badge fast-path: score from cache → return SVG without full compute ───
     if (isBadge && scoreData) {
       const tokenName = scoreData.token?.name || scoreData.token?.symbol || null;
+      clearTimeout(_guard);
       res.setHeader("Content-Type", "image/svg+xml");
       res.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
       return res.send(buildBadge(scoreData.score, scoreData.trust_level, tokenName));
@@ -872,6 +893,7 @@ module.exports = async (req, res) => {
         network  = mintInfo ? "devnet" : "unknown";
       }
       if (!mintInfo) {
+        clearTimeout(_guard);
         return res.status(404).json({ error: "Mint account not found on mainnet or devnet", mint });
       }
 
@@ -943,6 +965,7 @@ module.exports = async (req, res) => {
     // ── Badge response (post L3 compute) ──────────────────────────────────────
     if (isBadge) {
       const tokenName = scoreData.token?.name || scoreData.token?.symbol || null;
+      clearTimeout(_guard);
       res.setHeader("Content-Type", "image/svg+xml");
       res.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
       return res.send(buildBadge(scoreData.score, scoreData.trust_level, tokenName));
@@ -952,6 +975,7 @@ module.exports = async (req, res) => {
     const isNative = scoreData._nativeToken;
     const isCached = scoreData.source === "external_cached";
 
+    clearTimeout(_guard);
     return res.json({
       mint,
       score:       scoreData.score,
@@ -977,7 +1001,8 @@ module.exports = async (req, res) => {
     });
 
   } catch (e) {
-    console.error("[api/score]", e.message, e.stack?.split("\n")[1]);
+    clearTimeout(_guard);
+    console.error("[api/score]", mint, e.message, e.stack);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
