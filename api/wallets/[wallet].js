@@ -1,11 +1,6 @@
 const { getClient } = require("../_lib/db");
 const { isValidWallet, setCors } = require("../_lib/validate");
-
-const getTrustLevel = s =>
-  s >= 85 ? "ELITE" : s >= 70 ? "STRONG" : s >= 40 ? "OK" : s >= 20 ? "WEAK" : "DANGER";
-
-const getRiskLevel = r =>
-  r >= 75 ? "LOW" : r >= 50 ? "MEDIUM" : r >= 25 ? "HIGH" : "CRITICAL";
+const { getTrustLevel, getRiskLevel } = require("../_lib/trust");
 
 module.exports = async (req, res) => {
   setCors(req, res);

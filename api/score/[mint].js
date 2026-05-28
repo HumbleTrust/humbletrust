@@ -22,6 +22,7 @@
 const { createHash } = require("crypto");
 const { getClient }       = require("../_lib/db");
 const { isValidWallet, setCors } = require("../_lib/validate");
+const { getTrustLevel } = require("../_lib/trust");
 
 // ── RPC endpoints ─────────────────────────────────────────────────────────────
 const MAINNET = process.env.SOLANA_MAINNET_RPC || "https://api.mainnet-beta.solana.com";
@@ -645,9 +646,6 @@ async function computeScore(mint, mintInfo, ep, db) {
 // ════════════════════════════════════════════════════════════════════════════
 // Trust level helpers
 // ════════════════════════════════════════════════════════════════════════════
-
-const getTrustLevel = s =>
-  s >= 85 ? "ELITE" : s >= 70 ? "STRONG" : s >= 40 ? "OK" : s >= 20 ? "WEAK" : "DANGER";
 
 const CACHE_TTL_MS      = 2 * 60 * 60 * 1000; // 2 h Supabase cache
 const HISTORY_MIN_DELTA = 3;                   // min score delta to write new history row

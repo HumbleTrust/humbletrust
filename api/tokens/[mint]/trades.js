@@ -174,9 +174,9 @@ async function handleGetTrades(mint, req, res) {
 }
 
 async function handleGetOhlcv(mint, req, res) {
-  const tf        = req.query.tf || "1m";
-  const periodSec = TF_SECONDS[tf] || 60;
-  const limit     = Math.min(Number(req.query.limit) || 500, 1000);
+  const tf         = TF_SECONDS[req.query.tf] ? req.query.tf : "1m";
+  const periodSec  = TF_SECONDS[tf];
+  const tradeFetch = Math.min(Math.max(1, Number(req.query.limit) || 500), 1000);
   const { data, error } = await getClient()
     .from("trades")
     .select("price_sol, sol_amount, block_time")
@@ -185,9 +185,12 @@ async function handleGetOhlcv(mint, req, res) {
     .gt("price_sol", 0)
     .gt("token_amount", 0)
     .gt("sol_amount", 0)
-    .order("block_time", { ascending: true }).limit(limit);
+    .order("block_time", { ascending: true }).limit(tradeFetch);
   if (error) throw error;
-  if (!data || data.length === 0) return res.json({ candles: [], timeframe: tf });
+  if (!data || data.length === 0) {
+    res.setHeader("Cache-Control", "public, max-age=10, stale-while-revalidate=30");
+    return res.json({ candles: [], timeframe: tf });
+  }
 
   const buckets = new Map();
   for (const row of data) {
@@ -199,7 +202,13 @@ async function handleGetOhlcv(mint, req, res) {
     if (!b) buckets.set(bucket, { time: bucket, open: price, high: price, low: price, close: price, volume: vol });
     else { b.high = Math.max(b.high, price); b.low = Math.min(b.low, price); b.close = price; b.volume += vol; }
   }
-  const candles = [...buckets.entries()].sort(([a], [b]) => a - b).map(([, c]) => c);
+  // Return at most 500 candles (newest), sorted ascending for chart libraries
+  const candles = [...buckets.entries()]
+    .sort(([a], [b]) => a - b)
+    .slice(-500)
+    .map(([, c]) => c);
+
+  res.setHeader("Cache-Control", "public, max-age=10, stale-while-revalidate=30");
   return res.json({ candles, timeframe: tf });
 }
 

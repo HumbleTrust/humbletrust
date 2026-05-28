@@ -2,12 +2,7 @@
 // Returns Metaplex-compatible NFT metadata JSON.
 
 const { setCors } = require('../_lib/validate');
-
-const VALID_ZODIACS = new Set([
-  'Aries','Taurus','Gemini','Cancer','Leo','Virgo',
-  'Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces',
-]);
-const VALID_ELEMENTS = new Set(['Fire','Water','Earth','Air']);
+const { VALID_ZODIACS, VALID_ELEMENTS } = require('../_lib/trust');
 
 module.exports = (req, res) => {
   setCors(req, res);

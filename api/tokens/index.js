@@ -1,5 +1,6 @@
 const { getClient } = require("../_lib/db");
 const { isValidWallet, setCors } = require("../_lib/validate");
+const { getTrustLevel } = require("../_lib/trust");
 
 module.exports = async (req, res) => {
   setCors(req, res);
@@ -39,7 +40,7 @@ module.exports = async (req, res) => {
       if (symbol && typeof symbol === 'string' && symbol.length > 10) return res.status(400).json({ error: "symbol too long (max 10)" });
 
       const score = Math.min(100, Math.max(0, Number(launchScore) || 0));
-      const trustLevel = score >= 85 ? "ELITE" : score >= 70 ? "STRONG" : score >= 40 ? "OK" : "WEAK";
+      const trustLevel = getTrustLevel(score);
       const tierValue = tier === 1 ? 'premium' : 'standard';
 
       const { error } = await db.from("tokens").upsert({

@@ -3,14 +3,11 @@
 
 const { getClient } = require('../_lib/db');
 const { isValidWallet, setCors } = require('../_lib/validate');
+const { VALID_ZODIACS, VALID_ELEMENTS } = require('../_lib/trust');
 
 const MINT_PRICE_SOL = 0.2;
-
-const VALID_ZODIACS = new Set([
-  'Aries','Taurus','Gemini','Cancer','Leo','Virgo',
-  'Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces',
-]);
-const VALID_ELEMENTS = new Set(['Fire','Water','Earth','Air']);
+// Solana tx signature: 64-byte Ed25519, base58-encoded → 87-88 chars
+const TX_SIG_RE = /^[1-9A-HJ-NP-Za-km-z]{87,88}$/;
 
 module.exports = async (req, res) => {
   setCors(req, res);
@@ -26,7 +23,7 @@ module.exports = async (req, res) => {
 
   if (!wallet || !isValidWallet(wallet)) return res.status(400).json({ error: 'invalid wallet' });
   if (!badge_mint || !isValidWallet(badge_mint)) return res.status(400).json({ error: 'invalid badge_mint' });
-  if (!tx_signature || typeof tx_signature !== 'string') return res.status(400).json({ error: 'tx_signature required' });
+  if (!tx_signature || !TX_SIG_RE.test(tx_signature)) return res.status(400).json({ error: 'invalid tx_signature' });
   if (!zodiac || !VALID_ZODIACS.has(zodiac)) return res.status(400).json({ error: 'invalid zodiac' });
   if (!element || !VALID_ELEMENTS.has(element)) return res.status(400).json({ error: 'invalid element' });
   if (!aura_color || !/^#[0-9A-Fa-f]{6}$/.test(aura_color)) return res.status(400).json({ error: 'invalid aura_color' });

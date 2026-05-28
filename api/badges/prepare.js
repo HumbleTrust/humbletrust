@@ -60,7 +60,9 @@ module.exports = async (req, res) => {
     const { data: edition, error: edErr } = await db.rpc('increment_badge_edition', { z: zodiac });
     if (edErr) throw edErr;
 
-    const origin = `https://${req.headers.host}`;
+    const origin = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : `https://${req.headers.host || 'humbletrust.vercel.app'}`;
     const metadataUri = `${origin}/api/badges/metadata?zodiac=${encodeURIComponent(zodiac)}&element=${encodeURIComponent(element)}&aura=${auraHex}&edition=${edition}`;
 
     return res.json({

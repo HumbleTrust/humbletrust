@@ -28,7 +28,7 @@ module.exports = async (req, res) => {
     }
 
     // List all active badges (leaderboard / directory)
-    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const limit = Math.min(Math.max(1, Number(req.query.limit) || 50), 200);
     const { data, error } = await db
       .from('badges')
       .select('wallet,zodiac,element,aura_color,edition,status,minted_at')
