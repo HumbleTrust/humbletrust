@@ -29,7 +29,8 @@ const { scoreProtocol }    = require('../_lib/scorers/protocol');
 const { scoreEcosystem }   = require('../_lib/scorers/ecosystem');
 const { scoreEvm }         = require('../_lib/scorers/evm');
 const { scoreBitcoin }     = require('../_lib/scorers/bitcoin');
-const { fetchJupiterPrice } = require('../_lib/enrichers/jupiterPrice');
+const { scoreTon }         = require('../_lib/scorers/ton');
+const { fetchJupiterPrice, fetchMarketContext } = require('../_lib/enrichers/jupiterPrice');
 const knownTokens          = require('../_lib/knownTokens.json');
 
 // ── RPC endpoints ─────────────────────────────────────────────────────────────
@@ -766,10 +767,12 @@ function computeRugRisk(flags = []) {
     lp_not_burned:           20,
     extreme_concentration:   20,
     no_metadata:             18, // unverifiable identity = major red flag
+    price_crash:             25, // price dropped ≥70% in 24h
     creator_large_holdings:  10,
     high_concentration:       8,
     no_liquidity_data:        8, // can't verify pool safety
     metadata_mutable:         8,
+    low_liquidity:            8, // < $10K pool liquidity
     no_holder_data:           5, // can't verify concentration
     creator_low_record:       3,
   };
@@ -896,26 +899,36 @@ module.exports = async (req, res) => {
       const mintNorm = mint.toLowerCase();
       const isNativeAlias = ['native','btc','bitcoin','eth','ether','bnb','bsc','ton','toncoin','sol','solana','matic','polygon'].includes(mintNorm);
       const knownEntry = chainRegistry[mint] || chainRegistry[mintNorm] || (isNativeAlias ? chainRegistry['native'] : null);
-      const isBtcLike = chain === 'bitcoin' || chain === 'ton';
-      const result = isBtcLike
-        ? scoreBitcoin(chain, mint)
-        : scoreEvm(chain, mint, knownEntry);
+      const isBitcoin = chain === 'bitcoin';
+      let result;
+      if (chain === 'ton') {
+        result = await scoreTon(mint, knownEntry);
+      } else if (isBitcoin) {
+        result = scoreBitcoin(chain, mint);
+      } else {
+        result = scoreEvm(chain, mint, knownEntry);
+      }
       const rugRisk = computeRugRisk(result.flags || []);
+      const tokenInfo = result.onchain?.name
+        ? { name: result.onchain.name, symbol: result.onchain.symbol || null, status: null, logo_uri: result.onchain.image || null, creator: null, verified_issuer: false }
+        : knownEntry ? { name: knownEntry.name, symbol: knownEntry.symbol, status: null, logo_uri: null, creator: null, verified_issuer: false }
+        : null;
       clearTimeout(_guard);
       return res.json({
         mint,
         chain,
-        archetype: knownEntry?.archetype || (isBtcLike ? 'protocol' : 'unknown'),
+        archetype: knownEntry?.archetype || (chain === 'ton' ? 'unknown' : isBitcoin ? 'protocol' : 'unknown'),
         known_token: !!knownEntry,
         score:          result.score,
         trust_level:    result.trust_level,
+        data_quality:   result.data_quality || null,
         rug_risk:       rugRisk.rug_risk,
         rug_risk_score: rugRisk.rug_risk_score,
         rug_indicators: rugRisk.rug_indicators,
         source:         result.source || 'registry',
         network:        chain,
-        platform:       knownEntry?.name ?? null,
-        token: knownEntry ? { name: knownEntry.name, symbol: knownEntry.symbol, status: null, logo_uri: null, creator: null, verified_issuer: false } : null,
+        platform:       chain === 'ton' ? 'ton' : (knownEntry?.name ?? null),
+        token:          tokenInfo,
         categories:     result.categories,
         signals:        result.signals,
         flags:          result.flags,
@@ -1125,12 +1138,47 @@ module.exports = async (req, res) => {
       onchain.decimals = mintInfo.decimals;
       onchain.platform = platform;
 
+      // ── Market context enrichment (non-blocking, best-effort) ─────────────
+      // Adds price_crash / low_liquidity flags using Birdeye free API.
+      let mktScore = score;
+      let mktFlags = flags;
+      let mktSignals = signals;
+      try {
+        const mkt = await fetchMarketContext(mint);
+        if (mkt) {
+          onchain.market = mkt;
+          // Price crash: ≤ -70% in 24h
+          if (mkt.price_change_24h !== null && mkt.price_change_24h <= -70) {
+            mktFlags = [...mktFlags, { type: "price_crash", severity: "critical",
+              msg: `Price dropped ${mkt.price_change_24h.toFixed(1)}% in 24h — possible rug pull` }];
+            mktSignals = [...mktSignals, { id: "price_crash", category: "liquidity",
+              earned: -15, max: 0, ok: false,
+              label: `Price crashed ${mkt.price_change_24h.toFixed(1)}% in 24h`,
+              detail: "Extreme price drop — likely rug pull or mass exit" }];
+            mktScore = Math.max(0, mktScore - 20);
+          } else if (mkt.price_change_24h !== null && mkt.price_change_24h <= -40) {
+            mktFlags = [...mktFlags, { type: "price_crash", severity: "high",
+              msg: `Price dropped ${mkt.price_change_24h.toFixed(1)}% in 24h — high sell pressure` }];
+            mktScore = Math.max(0, mktScore - 8);
+          }
+          // Low liquidity: < $10K USD
+          if (mkt.liquidity_usd !== null && mkt.liquidity_usd < 10_000) {
+            mktFlags = [...mktFlags, { type: "low_liquidity", severity: "high",
+              msg: `Pool liquidity only $${mkt.liquidity_usd.toLocaleString("en-US", { maximumFractionDigits: 0 })} — easy to manipulate` }];
+            mktScore = Math.max(0, mktScore - 5);
+          }
+        }
+      } catch { /* non-fatal */ }
+
+      const finalScore      = Math.min(mktScore, score <= 40 ? score : mktScore); // never inflate
+      const finalTrustLevel = getTrustLevel(finalScore);
+
       scoreData = {
-        score, trust_level, data_quality,
+        score: finalScore, trust_level: finalTrustLevel, data_quality,
         source:   "external",
         network,  platform,
         token:    tokenInfo,
-        categories, signals, flags, onchain,
+        categories, signals: mktSignals, flags: mktFlags, onchain,
         _computedAt: now.toISOString(),
         _expiresAt:  new Date(now.getTime() + CACHE_TTL_MS).toISOString(),
       };
@@ -1138,8 +1186,8 @@ module.exports = async (req, res) => {
       // L1 + L2 cache (fire-and-forget on DB write)
       l1set(mint, scoreData);
       db.from("token_score_cache").upsert({
-        mint, score, trust_level, source: "external",
-        score_components: { categories, signals, flags, onchain, token: tokenInfo, network, platform, data_quality },
+        mint, score: finalScore, trust_level: finalTrustLevel, source: "external",
+        score_components: { categories, signals: mktSignals, flags: mktFlags, onchain, token: tokenInfo, network, platform, data_quality },
         computed_at: now.toISOString(),
         expires_at:  scoreData._expiresAt,
       }, { onConflict: "mint" })
@@ -1156,7 +1204,7 @@ module.exports = async (req, res) => {
         .then(({ data: last }) => {
           if (!last || Math.abs(last.score - score) >= HISTORY_MIN_DELTA) {
             return db.from("score_history").insert({
-              mint, score, trust_level, categories, flags,
+              mint, score: finalScore, trust_level: finalTrustLevel, categories, flags: mktFlags,
               computed_at: now.toISOString(),
             });
           }
