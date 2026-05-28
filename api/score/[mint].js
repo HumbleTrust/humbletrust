@@ -459,6 +459,8 @@ async function computeScore(mint, mintInfo, ep, db) {
       earned: 0, max: 20, ok: null,
       label: "No liquidity data",
       detail: "No holder or pool information available" });
+    flags.push({ type: "no_liquidity_data", severity: "medium",
+      msg: "Liquidity status unverifiable — cannot confirm pool safety or LP lock" });
   } else {
     signals.push({ id: "lp_not_burned", category: "liquidity",
       earned: 0, max: 20, ok: false,
@@ -563,6 +565,8 @@ async function computeScore(mint, mintInfo, ep, db) {
       label: "No holder data available",
       detail: "Could not fetch top holders from chain",
     });
+    flags.push({ type: "no_holder_data", severity: "low",
+      msg: "Holder concentration unverifiable — whale risk cannot be assessed" });
   }
 
   onchain.creator         = creator;
@@ -588,9 +592,9 @@ async function computeScore(mint, mintInfo, ep, db) {
     signals.push({ id: "no_metadata", category: "legitimacy",
       earned: 0, max: 5, ok: false,
       label: "No on-chain Metaplex metadata",
-      detail: "Token has no Metaplex metadata — common in low-effort launches" });
-    flags.push({ type: "no_metadata", severity: "low",
-      msg: "No Metaplex metadata found — token name/symbol not verifiable on-chain" });
+      detail: "Token has no Metaplex metadata — token identity is unverifiable" });
+    flags.push({ type: "no_metadata", severity: "high",
+      msg: "No Metaplex metadata — token name, symbol and image cannot be verified on-chain" });
     onchain.metadata = null;
   }
 
@@ -671,9 +675,24 @@ async function computeScore(mint, mintInfo, ep, db) {
   };
 
   const rawScore = Object.values(categories).reduce((s, c) => s + c.earned, 0);
-  const score    = Math.max(0, Math.min(100, Math.round(rawScore)));
 
-  return { score, categories, signals, flags, onchain, creator };
+  // ── Data confidence: penalise scores built on missing data ────────────────
+  // Points where ok===null are "unknown" — we couldn't fetch the data.
+  // A token that scores 50 purely because we couldn't measure 60% of it is NOT "OK".
+  const nullPts  = signals.filter(s => s.ok === null).reduce((a, s) => a + s.max, 0);
+  const totalPts = signals.reduce((a, s) => a + s.max, 0);
+  const knownRatio = totalPts > 0 ? 1 - nullPts / totalPts : 1;
+  // FULL ≥70% data resolved, PARTIAL ≥40%, INSUFFICIENT <40%
+  const data_quality =
+    knownRatio >= 0.70 ? "FULL"         :
+    knownRatio >= 0.40 ? "PARTIAL"      : "INSUFFICIENT";
+
+  // Cap the raw score so missing data cannot masquerade as a good score.
+  // Only the positive signals we *could* measure count toward trust.
+  const cap = data_quality === "INSUFFICIENT" ? 45 : data_quality === "PARTIAL" ? 62 : 100;
+  const score = Math.max(0, Math.min(cap, Math.round(rawScore)));
+
+  return { score, data_quality, categories, signals, flags, onchain, creator };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -741,10 +760,12 @@ function computeRugRisk(flags = []) {
     freeze_authority_active: 25,
     lp_not_burned:           20,
     extreme_concentration:   20,
+    no_metadata:             18, // unverifiable identity = major red flag
     creator_large_holdings:  10,
     high_concentration:       8,
-    metadata_mutable:         5,
-    no_metadata:              5,
+    no_liquidity_data:        8, // can't verify pool safety
+    metadata_mutable:         8,
+    no_holder_data:           5, // can't verify concentration
     creator_low_record:       3,
   };
   let riskScore = 0;
@@ -1028,18 +1049,19 @@ module.exports = async (req, res) => {
       if (cached) {
         const d = cached.score_components || {};
         scoreData = {
-          score:       cached.score,
-          trust_level: cached.trust_level,
-          source:      "external_cached",
-          network:     d.network   || "unknown",
-          platform:    d.platform  || "unknown",
-          token:       d.token     || null,
-          categories:  d.categories || null,
-          signals:     d.signals   || [],
-          flags:       d.flags     || [],
-          onchain:     d.onchain   || null,
-          _cachedAt:   cached.computed_at,
-          _expiresAt:  cached.expires_at,
+          score:        cached.score,
+          trust_level:  cached.trust_level,
+          data_quality: d.data_quality || null,
+          source:       "external_cached",
+          network:      d.network   || "unknown",
+          platform:     d.platform  || "unknown",
+          token:        d.token     || null,
+          categories:   d.categories || null,
+          signals:      d.signals   || [],
+          flags:        d.flags     || [],
+          onchain:      d.onchain   || null,
+          _cachedAt:    cached.computed_at,
+          _expiresAt:   cached.expires_at,
         };
         l1set(mint, scoreData);
       }
@@ -1075,7 +1097,7 @@ module.exports = async (req, res) => {
         computeScore(mint, mintInfo, ep, db),
       ]);
 
-      const { score, categories, signals, flags, onchain, creator } = computed;
+      const { score, data_quality, categories, signals, flags, onchain, creator } = computed;
       const metaParsed  = onchain.metadata;
       const supply      = Number(BigInt(mintInfo.supply || 0));
       const trust_level = getTrustLevel(score);
@@ -1099,7 +1121,7 @@ module.exports = async (req, res) => {
       onchain.platform = platform;
 
       scoreData = {
-        score, trust_level,
+        score, trust_level, data_quality,
         source:   "external",
         network,  platform,
         token:    tokenInfo,
@@ -1112,7 +1134,7 @@ module.exports = async (req, res) => {
       l1set(mint, scoreData);
       db.from("token_score_cache").upsert({
         mint, score, trust_level, source: "external",
-        score_components: { categories, signals, flags, onchain, token: tokenInfo, network, platform },
+        score_components: { categories, signals, flags, onchain, token: tokenInfo, network, platform, data_quality },
         computed_at: now.toISOString(),
         expires_at:  scoreData._expiresAt,
       }, { onConflict: "mint" })
@@ -1171,6 +1193,7 @@ module.exports = async (req, res) => {
       known_token:    false,
       score:          scoreData.score,
       trust_level:    scoreData.trust_level,
+      data_quality:   scoreData.data_quality || null,
       rug_risk:       rugRisk.rug_risk,
       rug_risk_score: rugRisk.rug_risk_score,
       rug_indicators: rugRisk.rug_indicators,

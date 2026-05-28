@@ -238,7 +238,23 @@ export function ScorePage() {
                   )}
                 </div>
               </div>
-              {scoreResult.warning && (
+              {/* Data quality warning — shown when score is based on insufficient data */}
+              {scoreResult.data_quality === "INSUFFICIENT" && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/8 border border-red-500/25 mb-3">
+                  <AlertTriangle size={12} className="text-red-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-red-400 text-xs font-semibold">Score unverifiable — insufficient on-chain data</p>
+                    <p className="text-red-400/60 text-[10px] mt-0.5">Most signals could not be fetched. Score is capped and should NOT be treated as a trust signal. Treat as HIGH RISK.</p>
+                  </div>
+                </div>
+              )}
+              {scoreResult.data_quality === "PARTIAL" && !scoreResult.known_token && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-orange-500/5 border border-orange-500/20 mb-3">
+                  <AlertTriangle size={12} className="text-orange-400 mt-0.5 shrink-0" />
+                  <p className="text-orange-400/70 text-xs">Partial data — some signals could not be verified. Score may not reflect full risk.</p>
+                </div>
+              )}
+              {scoreResult.warning && scoreResult.data_quality !== "INSUFFICIENT" && (
                 <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-500/5 border border-yellow-500/15 mb-3">
                   <AlertTriangle size={12} className="text-yellow-400 mt-0.5 shrink-0" />
                   <p className="text-yellow-400/70 text-xs">{scoreResult.warning}</p>
@@ -369,6 +385,16 @@ export function ScorePage() {
           {riskResult && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
               className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+              {/* Data quality warning for wallets */}
+              {riskResult.data_quality === "INSUFFICIENT" && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/8 border border-red-500/25 mb-3">
+                  <AlertTriangle size={12} className="text-red-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-red-400 text-xs font-semibold">Unverified wallet — no HumbleTrust launch history</p>
+                    <p className="text-red-400/60 text-[10px] mt-0.5">Score is based on zero launches on our platform. Creator risk is unknown — proceed with caution.</p>
+                  </div>
+                </div>
+              )}
               <div className="flex items-center gap-4 mb-4">
                 <div className="text-center">
                   <div className="text-4xl font-extrabold font-mono" style={{ color: RISK_COLORS[riskResult.risk_level] }}>
@@ -380,7 +406,7 @@ export function ScorePage() {
                 </div>
                 <div className="flex-1 grid grid-cols-3 gap-2">
                   {[
-                    { label: "Launches",    val: riskResult.launches.total },
+                    { label: "HT Launches", val: riskResult.launches.total },
                     { label: "Graduated",   val: riskResult.launches.graduated },
                     { label: "Avg Score",   val: riskResult.launches.avg_trust_score ?? "—" },
                   ].map(({ label, val }) => (
