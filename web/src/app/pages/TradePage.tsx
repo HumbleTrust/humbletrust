@@ -117,6 +117,7 @@ const friendlyError = (msg: string): string => {
   if (msg.includes("0x1")) return "Insufficient token balance";
   if (msg.includes("AccountNotFound") || msg.includes("account not found")) return "Token account not found — make sure the mint address is correct";
   if (msg.includes("network") || msg.includes("fetch")) return "Network error — check your connection and try again";
+  if (msg.includes("AlreadyMigrated") || msg.includes("6037")) return "This token has graduated to Raydium — use the Raydium swap link below to trade";
   return msg.length > 120 ? msg.slice(0, 120) + "…" : msg;
 };
 
@@ -626,7 +627,17 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       ]);
       fetchChartTrades(mintInput.trim(), true);
     } catch (e: any) {
-      setTradeError(friendlyError(e.message || String(e)));
+      const errMsg = e.message || String(e);
+      if (errMsg.includes("AlreadyMigrated") || errMsg.includes("6037")) {
+        setV2Available(true);
+        try {
+          const mint = new PublicKey(mintInput.trim());
+          const [ms, ls] = await Promise.all([fetchMigrationState(connection, mint), fetchLpLockState(connection, mint)]);
+          setMigrationState(ms);
+          setLpLockState(ls);
+        } catch {}
+      }
+      setTradeError(friendlyError(errMsg));
     } finally {
       setBusy(null);
     }
@@ -675,7 +686,17 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
       ]);
       fetchChartTrades(mintInput.trim(), true);
     } catch (e: any) {
-      setTradeError(friendlyError(e.message || String(e)));
+      const errMsg = e.message || String(e);
+      if (errMsg.includes("AlreadyMigrated") || errMsg.includes("6037")) {
+        setV2Available(true);
+        try {
+          const mint = new PublicKey(mintInput.trim());
+          const [ms, ls] = await Promise.all([fetchMigrationState(connection, mint), fetchLpLockState(connection, mint)]);
+          setMigrationState(ms);
+          setLpLockState(ls);
+        } catch {}
+      }
+      setTradeError(friendlyError(errMsg));
     } finally {
       setBusy(null);
     }

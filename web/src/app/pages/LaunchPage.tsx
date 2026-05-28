@@ -267,7 +267,7 @@ export function LaunchPage() {
 
   // ── Distribution math ─────────────────────────────────────────────────────
   const v2Circulation = useMemo(
-    () => 100 - lockPercent - creatorAlloc - curveLiquidity - airdrop,
+    () => Math.max(0, 100 - lockPercent - creatorAlloc - curveLiquidity - airdrop),
     [lockPercent, creatorAlloc, curveLiquidity, airdrop]
   );
   const v1Circulation = useMemo(
