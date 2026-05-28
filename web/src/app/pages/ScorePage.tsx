@@ -10,7 +10,7 @@ import { getTrustScore, getWalletRisk, type TrustScore, type WalletRisk } from "
 const BASE = "https://humbletrust.vercel.app/api";
 
 const SCORE_COLORS: Record<string, string> = {
-  ELITE: "#00FF41", STRONG: "#14F195", OK: "#FFDB2B", WEAK: "#FF7A2F",
+  ELITE: "#00FF41", STRONG: "#14F195", OK: "#FFDB2B", WEAK: "#FF7A2F", DANGER: "#FF4444",
 };
 const RISK_COLORS: Record<string, string> = {
   LOW: "#00FF41", MEDIUM: "#FFDB2B", HIGH: "#FF7A2F", CRITICAL: "#FF4444",
@@ -244,14 +244,99 @@ export function ScorePage() {
                   <p className="text-yellow-400/70 text-xs">{scoreResult.warning}</p>
                 </div>
               )}
-              <details className="group">
-                <summary className="text-xs text-white/30 cursor-pointer hover:text-white/50 transition-colors">
-                  Show breakdown →
-                </summary>
-                <pre className="mt-2 p-3 rounded-lg bg-black/40 text-[10px] text-white/40 font-mono overflow-auto max-h-48">
-                  {JSON.stringify(scoreResult.breakdown, null, 2)}
-                </pre>
-              </details>
+              {/* Rug Risk */}
+              {scoreResult.rug_risk && (
+                <div className="mb-3 flex items-center gap-3 p-3 rounded-lg border"
+                  style={{
+                    borderColor: `${RISK_COLORS[scoreResult.rug_risk]}30`,
+                    background: `${RISK_COLORS[scoreResult.rug_risk]}08`,
+                  }}>
+                  <div>
+                    <span className="text-[10px] font-mono text-white/35 uppercase tracking-widest">Rug Risk</span>
+                    <div className="text-sm font-bold font-mono mt-0.5" style={{ color: RISK_COLORS[scoreResult.rug_risk] }}>
+                      {scoreResult.rug_risk}
+                      <span className="text-white/30 font-normal ml-2 text-xs">{scoreResult.rug_risk_score}/100</span>
+                    </div>
+                  </div>
+                  {scoreResult.rug_indicators?.length > 0 && (
+                    <div className="flex-1 flex flex-wrap gap-1.5 justify-end">
+                      {scoreResult.rug_indicators.slice(0, 4).map((f, i) => (
+                        <span key={i} className="text-[9px] font-mono px-1.5 py-0.5 rounded border"
+                          style={{
+                            borderColor: f.severity === "critical" ? "#FF444440" : f.severity === "high" ? "#FF7A2F40" : "#FFDB2B30",
+                            color:       f.severity === "critical" ? "#FF4444"   : f.severity === "high" ? "#FF7A2F"   : "#FFDB2B",
+                            background:  f.severity === "critical" ? "#FF444410" : f.severity === "high" ? "#FF7A2F10" : "#FFDB2B08",
+                          }}>
+                          {f.type.replace(/_/g, " ")}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Rug Indicators */}
+              {scoreResult.rug_indicators?.length > 0 && (
+                <div className="space-y-1.5 mb-3">
+                  {scoreResult.rug_indicators.map((f, i) => (
+                    <div key={i} className="flex items-start gap-2 p-2 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+                      <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
+                        f.severity === "critical" ? "bg-[#FF4444]" :
+                        f.severity === "high"     ? "bg-[#FF7A2F]" :
+                        f.severity === "medium"   ? "bg-[#FFDB2B]" : "bg-white/30"
+                      }`} />
+                      <p className="text-xs text-white/55">{f.msg}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Category Scores */}
+              {scoreResult.categories && (
+                <div className="grid grid-cols-2 gap-1.5 mb-3">
+                  {Object.entries(scoreResult.categories).map(([cat, val]) => {
+                    if (!val) return null;
+                    const pct = val.max > 0 ? val.earned / val.max : 0;
+                    const color = pct >= 0.8 ? "#00FF41" : pct >= 0.5 ? "#FFDB2B" : "#FF7A2F";
+                    return (
+                      <div key={cat} className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-[9px] font-mono text-white/35 uppercase tracking-wider">{cat.replace(/_/g, " ")}</span>
+                          <span className="text-[10px] font-mono font-bold" style={{ color }}>{val.earned}/{val.max}</span>
+                        </div>
+                        <div className="h-0.5 rounded bg-white/10 overflow-hidden">
+                          <div className="h-full rounded transition-all" style={{ width: `${pct * 100}%`, background: color }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Signal Details */}
+              {scoreResult.signals?.length ? (
+                <details className="group">
+                  <summary className="text-xs text-white/30 cursor-pointer hover:text-white/50 transition-colors">
+                    Show all signals ({scoreResult.signals.length}) →
+                  </summary>
+                  <div className="mt-2 space-y-1">
+                    {scoreResult.signals.map((s, i) => (
+                      <div key={i} className="flex items-start gap-2 p-2 rounded bg-black/30 border border-white/[0.04]">
+                        <span className={`text-[9px] mt-0.5 ${s.ok === true ? "text-[#00FF41]" : s.ok === false ? "text-[#FF7A2F]" : "text-white/25"}`}>
+                          {s.ok === true ? "✓" : s.ok === false ? "✗" : "–"}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] text-white/60">{s.label}</p>
+                          {s.detail && <p className="text-[9px] text-white/30 mt-0.5">{s.detail}</p>}
+                        </div>
+                        <span className="text-[9px] font-mono text-white/30 shrink-0">{s.earned}/{s.max}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              ) : (
+                <p className="text-[10px] text-white/25 font-mono">No signal breakdown available for this token.</p>
+              )}
             </motion.div>
           )}
         </GlassPanel>

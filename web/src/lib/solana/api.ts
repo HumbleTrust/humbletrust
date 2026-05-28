@@ -153,11 +153,32 @@ export const recordTrade = (
 
 // ── Trust Infrastructure API ──────────────────────────────────────────────────
 
+export interface TrustScoreSignal {
+  id: string;
+  category: string;
+  earned: number;
+  max: number;
+  ok: boolean | null;
+  label: string;
+  detail?: string;
+}
+
+export interface TrustScoreFlag {
+  type: string;
+  severity: "low" | "medium" | "high" | "critical";
+  msg: string;
+}
+
 export interface TrustScore {
   mint: string;
   score: number;
-  trust_level: "WEAK" | "OK" | "STRONG" | "ELITE";
+  trust_level: "DANGER" | "WEAK" | "OK" | "STRONG" | "ELITE";
+  rug_risk: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  rug_risk_score: number;
+  rug_indicators: TrustScoreFlag[];
   source: "humbletrust" | "external" | "external_cached";
+  network?: string;
+  platform?: string;
   token: {
     name?: string | null;
     symbol?: string | null;
@@ -167,11 +188,19 @@ export interface TrustScore {
     verified_issuer?: boolean;
     verified_issuer_level?: number;
   } | null;
-  breakdown: Record<string, unknown>;
-  onchain_verification?: Record<string, unknown> | null;
+  categories?: {
+    supply_control?: { earned: number; max: number };
+    liquidity?:      { earned: number; max: number };
+    distribution?:   { earned: number; max: number };
+    legitimacy?:     { earned: number; max: number };
+  } | null;
+  signals?: TrustScoreSignal[] | null;
+  flags?: TrustScoreFlag[];
+  onchain?: Record<string, unknown> | null;
   warning?: string;
   cta?: string;
   computed_at: string;
+  cache_expires?: string | null;
 }
 
 export interface WalletRisk {

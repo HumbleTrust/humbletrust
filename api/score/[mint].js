@@ -542,6 +542,13 @@ async function computeScore(mint, mintInfo, ep, db) {
       detail: `Top ${Math.min(5, nonSpecial.length)} non-LP holders analyzed`,
       top_holder_pct: topPct,
     });
+  } else if (holderData.length > 0) {
+    // All top holders are recognized as protocol vaults (DEX pools, bonding curves) — that's good
+    signals.push({ id: "holder_concentration", category: "distribution",
+      earned: 10, max: 10, ok: true,
+      label: "Tokens distributed in DEX pools",
+      detail: "No single-wallet whale detected — liquidity spread across DEX vaults",
+    });
   } else {
     signals.push({ id: "holder_concentration", category: "distribution",
       earned: 0, max: 10, ok: null,
@@ -713,6 +720,33 @@ function buildBadge(score, trust_level, tokenName) {
   <text x="${lw + vw / 2}" y="13" fill="${c.text}" font-weight="bold">${value}</text>
 </g>
 </svg>`;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Feature: Rug Risk Assessment
+// ════════════════════════════════════════════════════════════════════════════
+
+function computeRugRisk(flags = []) {
+  const WEIGHTS = {
+    mint_authority_active:   40,
+    creator_whale:           30,
+    freeze_authority_active: 25,
+    lp_not_burned:           20,
+    extreme_concentration:   20,
+    creator_large_holdings:  10,
+    high_concentration:       8,
+    metadata_mutable:         5,
+    no_metadata:              5,
+    creator_low_record:       3,
+  };
+  let riskScore = 0;
+  for (const f of flags) riskScore += WEIGHTS[f.type] || 0;
+  riskScore = Math.min(100, riskScore);
+  const rug_risk =
+    riskScore >= 75 ? "CRITICAL" :
+    riskScore >= 50 ? "HIGH"     :
+    riskScore >= 25 ? "MEDIUM"   : "LOW";
+  return { rug_risk, rug_risk_score: riskScore, rug_indicators: flags };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -992,20 +1026,24 @@ module.exports = async (req, res) => {
     // ── JSON response ──────────────────────────────────────────────────────────
     const isNative = scoreData._nativeToken;
     const isCached = scoreData.source === "external_cached";
+    const rugRisk  = computeRugRisk(scoreData.flags || []);
 
     clearTimeout(_guard);
     return res.json({
       mint,
-      score:       scoreData.score,
-      trust_level: scoreData.trust_level,
-      source:      scoreData.source,
-      network:     scoreData.network,
-      platform:    scoreData.platform,
-      token:       scoreData.token,
-      categories:  scoreData.categories,
-      signals:     scoreData.signals,
-      flags:       scoreData.flags,
-      onchain:     scoreData.onchain,
+      score:          scoreData.score,
+      trust_level:    scoreData.trust_level,
+      rug_risk:       rugRisk.rug_risk,
+      rug_risk_score: rugRisk.rug_risk_score,
+      rug_indicators: rugRisk.rug_indicators,
+      source:         scoreData.source,
+      network:        scoreData.network,
+      platform:       scoreData.platform,
+      token:          scoreData.token,
+      categories:     scoreData.categories,
+      signals:        scoreData.signals,
+      flags:          scoreData.flags,
+      onchain:        scoreData.onchain,
       ...(isNative ? {} : {
         warning: isCached
           ? "Score from cache — use ?nocache=1 to force recompute"
