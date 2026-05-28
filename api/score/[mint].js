@@ -29,7 +29,8 @@ const { scoreProtocol }    = require('../_lib/scorers/protocol');
 const { scoreEcosystem }   = require('../_lib/scorers/ecosystem');
 const { scoreEvm }         = require('../_lib/scorers/evm');
 const { scoreBitcoin }     = require('../_lib/scorers/bitcoin');
-const { fetchJupiterPrice } = require('../_lib/enrichers/jupiterPrice');
+const { scoreTon }         = require('../_lib/scorers/ton');
+const { fetchJupiterPrice, fetchMarketContext } = require('../_lib/enrichers/jupiterPrice');
 const knownTokens          = require('../_lib/knownTokens.json');
 
 // ── RPC endpoints ─────────────────────────────────────────────────────────────
@@ -456,9 +457,11 @@ async function computeScore(mint, mintInfo, ep, db) {
       detail: "Liquidity pool tokens sent to burn address — liquidity is permanent" });
   } else if (!hasPool && holderData.length === 0) {
     signals.push({ id: "lp_unknown", category: "liquidity",
-      earned: 0, max: 20, ok: null,
+      earned: -8, max: 20, ok: null,
       label: "No liquidity data",
-      detail: "No holder or pool information available" });
+      detail: "Cannot verify pool safety or LP lock — unverifiable = risk" });
+    flags.push({ type: "no_liquidity_data", severity: "medium",
+      msg: "Liquidity status unverifiable — cannot confirm pool safety or LP lock" });
   } else {
     signals.push({ id: "lp_not_burned", category: "liquidity",
       earned: 0, max: 20, ok: false,
@@ -559,10 +562,12 @@ async function computeScore(mint, mintInfo, ep, db) {
     });
   } else {
     signals.push({ id: "holder_concentration", category: "distribution",
-      earned: 0, max: 10, ok: null,
+      earned: -5, max: 10, ok: null,
       label: "No holder data available",
-      detail: "Could not fetch top holders from chain",
+      detail: "Whale concentration unverifiable — hidden risk cannot be ruled out",
     });
+    flags.push({ type: "no_holder_data", severity: "low",
+      msg: "Holder concentration unverifiable — whale risk cannot be assessed" });
   }
 
   onchain.creator         = creator;
@@ -586,11 +591,11 @@ async function computeScore(mint, mintInfo, ep, db) {
     };
   } else {
     signals.push({ id: "no_metadata", category: "legitimacy",
-      earned: 0, max: 5, ok: false,
+      earned: -10, max: 5, ok: false,
       label: "No on-chain Metaplex metadata",
-      detail: "Token has no Metaplex metadata — common in low-effort launches" });
-    flags.push({ type: "no_metadata", severity: "low",
-      msg: "No Metaplex metadata found — token name/symbol not verifiable on-chain" });
+      detail: "Token identity is unverifiable — no legitimate project skips metadata" });
+    flags.push({ type: "no_metadata", severity: "high",
+      msg: "No Metaplex metadata — token name, symbol and image cannot be verified on-chain" });
     onchain.metadata = null;
   }
 
@@ -661,7 +666,12 @@ async function computeScore(mint, mintInfo, ep, db) {
   // ── Assemble result ────────────────────────────────────────────────────────
 
   const byCategory = (cat) => signals.filter(s => s.category === cat);
-  const earnedCat  = (cat) => Math.max(0, byCategory(cat).reduce((s, sig) => s + sig.earned, 0));
+  // Allow negative sums so penalties propagate — floor per category is -max (can't go below -100%)
+  const earnedCat  = (cat) => {
+    const raw = byCategory(cat).reduce((s, sig) => s + sig.earned, 0);
+    const max  = MAX[cat] || 100;
+    return Math.max(-max, raw);
+  };
 
   const categories = {
     supply_control: { earned: earnedCat("supply_control"), max: MAX.supply_control },
@@ -671,9 +681,24 @@ async function computeScore(mint, mintInfo, ep, db) {
   };
 
   const rawScore = Object.values(categories).reduce((s, c) => s + c.earned, 0);
-  const score    = Math.max(0, Math.min(100, Math.round(rawScore)));
 
-  return { score, categories, signals, flags, onchain, creator };
+  // ── Data confidence: penalise scores built on missing data ────────────────
+  // Points where ok===null are "unknown" — we couldn't fetch the data.
+  // A token that scores 50 purely because we couldn't measure 60% of it is NOT "OK".
+  const nullPts  = signals.filter(s => s.ok === null).reduce((a, s) => a + s.max, 0);
+  const totalPts = signals.reduce((a, s) => a + s.max, 0);
+  const knownRatio = totalPts > 0 ? 1 - nullPts / totalPts : 1;
+  // FULL ≥75% data resolved, PARTIAL ≥55%, INSUFFICIENT <55%
+  const data_quality =
+    knownRatio >= 0.75 ? "FULL"         :
+    knownRatio >= 0.55 ? "PARTIAL"      : "INSUFFICIENT";
+
+  // Cap ensures supply-control-only scores can't masquerade as trust.
+  // Active penalties above already lower the raw score; cap is a safety net.
+  const cap = data_quality === "INSUFFICIENT" ? 40 : data_quality === "PARTIAL" ? 58 : 100;
+  const score = Math.max(0, Math.min(cap, Math.round(rawScore)));
+
+  return { score, data_quality, categories, signals, flags, onchain, creator };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -741,10 +766,14 @@ function computeRugRisk(flags = []) {
     freeze_authority_active: 25,
     lp_not_burned:           20,
     extreme_concentration:   20,
+    no_metadata:             18, // unverifiable identity = major red flag
+    price_crash:             25, // price dropped ≥70% in 24h
     creator_large_holdings:  10,
     high_concentration:       8,
-    metadata_mutable:         5,
-    no_metadata:              5,
+    no_liquidity_data:        8, // can't verify pool safety
+    metadata_mutable:         8,
+    low_liquidity:            8, // < $10K pool liquidity
+    no_holder_data:           5, // can't verify concentration
     creator_low_record:       3,
   };
   let riskScore = 0;
@@ -870,26 +899,36 @@ module.exports = async (req, res) => {
       const mintNorm = mint.toLowerCase();
       const isNativeAlias = ['native','btc','bitcoin','eth','ether','bnb','bsc','ton','toncoin','sol','solana','matic','polygon'].includes(mintNorm);
       const knownEntry = chainRegistry[mint] || chainRegistry[mintNorm] || (isNativeAlias ? chainRegistry['native'] : null);
-      const isBtcLike = chain === 'bitcoin' || chain === 'ton';
-      const result = isBtcLike
-        ? scoreBitcoin(chain, mint)
-        : scoreEvm(chain, mint, knownEntry);
+      const isBitcoin = chain === 'bitcoin';
+      let result;
+      if (chain === 'ton') {
+        result = await scoreTon(mint, knownEntry);
+      } else if (isBitcoin) {
+        result = scoreBitcoin(chain, mint);
+      } else {
+        result = scoreEvm(chain, mint, knownEntry);
+      }
       const rugRisk = computeRugRisk(result.flags || []);
+      const tokenInfo = result.onchain?.name
+        ? { name: result.onchain.name, symbol: result.onchain.symbol || null, status: null, logo_uri: result.onchain.image || null, creator: null, verified_issuer: false }
+        : knownEntry ? { name: knownEntry.name, symbol: knownEntry.symbol, status: null, logo_uri: null, creator: null, verified_issuer: false }
+        : null;
       clearTimeout(_guard);
       return res.json({
         mint,
         chain,
-        archetype: knownEntry?.archetype || (isBtcLike ? 'protocol' : 'unknown'),
+        archetype: knownEntry?.archetype || (chain === 'ton' ? 'unknown' : isBitcoin ? 'protocol' : 'unknown'),
         known_token: !!knownEntry,
         score:          result.score,
         trust_level:    result.trust_level,
+        data_quality:   result.data_quality || null,
         rug_risk:       rugRisk.rug_risk,
         rug_risk_score: rugRisk.rug_risk_score,
         rug_indicators: rugRisk.rug_indicators,
         source:         result.source || 'registry',
         network:        chain,
-        platform:       knownEntry?.name ?? null,
-        token: knownEntry ? { name: knownEntry.name, symbol: knownEntry.symbol, status: null, logo_uri: null, creator: null, verified_issuer: false } : null,
+        platform:       chain === 'ton' ? 'ton' : (knownEntry?.name ?? null),
+        token:          tokenInfo,
         categories:     result.categories,
         signals:        result.signals,
         flags:          result.flags,
@@ -1028,18 +1067,19 @@ module.exports = async (req, res) => {
       if (cached) {
         const d = cached.score_components || {};
         scoreData = {
-          score:       cached.score,
-          trust_level: cached.trust_level,
-          source:      "external_cached",
-          network:     d.network   || "unknown",
-          platform:    d.platform  || "unknown",
-          token:       d.token     || null,
-          categories:  d.categories || null,
-          signals:     d.signals   || [],
-          flags:       d.flags     || [],
-          onchain:     d.onchain   || null,
-          _cachedAt:   cached.computed_at,
-          _expiresAt:  cached.expires_at,
+          score:        cached.score,
+          trust_level:  cached.trust_level,
+          data_quality: d.data_quality || null,
+          source:       "external_cached",
+          network:      d.network   || "unknown",
+          platform:     d.platform  || "unknown",
+          token:        d.token     || null,
+          categories:   d.categories || null,
+          signals:      d.signals   || [],
+          flags:        d.flags     || [],
+          onchain:      d.onchain   || null,
+          _cachedAt:    cached.computed_at,
+          _expiresAt:   cached.expires_at,
         };
         l1set(mint, scoreData);
       }
@@ -1075,7 +1115,7 @@ module.exports = async (req, res) => {
         computeScore(mint, mintInfo, ep, db),
       ]);
 
-      const { score, categories, signals, flags, onchain, creator } = computed;
+      const { score, data_quality, categories, signals, flags, onchain, creator } = computed;
       const metaParsed  = onchain.metadata;
       const supply      = Number(BigInt(mintInfo.supply || 0));
       const trust_level = getTrustLevel(score);
@@ -1098,12 +1138,47 @@ module.exports = async (req, res) => {
       onchain.decimals = mintInfo.decimals;
       onchain.platform = platform;
 
+      // ── Market context enrichment (non-blocking, best-effort) ─────────────
+      // Adds price_crash / low_liquidity flags using Birdeye free API.
+      let mktScore = score;
+      let mktFlags = flags;
+      let mktSignals = signals;
+      try {
+        const mkt = await fetchMarketContext(mint);
+        if (mkt) {
+          onchain.market = mkt;
+          // Price crash: ≤ -70% in 24h
+          if (mkt.price_change_24h !== null && mkt.price_change_24h <= -70) {
+            mktFlags = [...mktFlags, { type: "price_crash", severity: "critical",
+              msg: `Price dropped ${mkt.price_change_24h.toFixed(1)}% in 24h — possible rug pull` }];
+            mktSignals = [...mktSignals, { id: "price_crash", category: "liquidity",
+              earned: -15, max: 0, ok: false,
+              label: `Price crashed ${mkt.price_change_24h.toFixed(1)}% in 24h`,
+              detail: "Extreme price drop — likely rug pull or mass exit" }];
+            mktScore = Math.max(0, mktScore - 20);
+          } else if (mkt.price_change_24h !== null && mkt.price_change_24h <= -40) {
+            mktFlags = [...mktFlags, { type: "price_crash", severity: "high",
+              msg: `Price dropped ${mkt.price_change_24h.toFixed(1)}% in 24h — high sell pressure` }];
+            mktScore = Math.max(0, mktScore - 8);
+          }
+          // Low liquidity: < $10K USD
+          if (mkt.liquidity_usd !== null && mkt.liquidity_usd < 10_000) {
+            mktFlags = [...mktFlags, { type: "low_liquidity", severity: "high",
+              msg: `Pool liquidity only $${mkt.liquidity_usd.toLocaleString("en-US", { maximumFractionDigits: 0 })} — easy to manipulate` }];
+            mktScore = Math.max(0, mktScore - 5);
+          }
+        }
+      } catch { /* non-fatal */ }
+
+      const finalScore      = Math.min(mktScore, score <= 40 ? score : mktScore); // never inflate
+      const finalTrustLevel = getTrustLevel(finalScore);
+
       scoreData = {
-        score, trust_level,
+        score: finalScore, trust_level: finalTrustLevel, data_quality,
         source:   "external",
         network,  platform,
         token:    tokenInfo,
-        categories, signals, flags, onchain,
+        categories, signals: mktSignals, flags: mktFlags, onchain,
         _computedAt: now.toISOString(),
         _expiresAt:  new Date(now.getTime() + CACHE_TTL_MS).toISOString(),
       };
@@ -1111,8 +1186,8 @@ module.exports = async (req, res) => {
       // L1 + L2 cache (fire-and-forget on DB write)
       l1set(mint, scoreData);
       db.from("token_score_cache").upsert({
-        mint, score, trust_level, source: "external",
-        score_components: { categories, signals, flags, onchain, token: tokenInfo, network, platform },
+        mint, score: finalScore, trust_level: finalTrustLevel, source: "external",
+        score_components: { categories, signals: mktSignals, flags: mktFlags, onchain, token: tokenInfo, network, platform, data_quality },
         computed_at: now.toISOString(),
         expires_at:  scoreData._expiresAt,
       }, { onConflict: "mint" })
@@ -1129,7 +1204,7 @@ module.exports = async (req, res) => {
         .then(({ data: last }) => {
           if (!last || Math.abs(last.score - score) >= HISTORY_MIN_DELTA) {
             return db.from("score_history").insert({
-              mint, score, trust_level, categories, flags,
+              mint, score: finalScore, trust_level: finalTrustLevel, categories, flags: mktFlags,
               computed_at: now.toISOString(),
             });
           }
@@ -1171,6 +1246,7 @@ module.exports = async (req, res) => {
       known_token:    false,
       score:          scoreData.score,
       trust_level:    scoreData.trust_level,
+      data_quality:   scoreData.data_quality || null,
       rug_risk:       rugRisk.rug_risk,
       rug_risk_score: rugRisk.rug_risk_score,
       rug_indicators: rugRisk.rug_indicators,

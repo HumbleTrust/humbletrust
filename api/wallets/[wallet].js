@@ -53,9 +53,10 @@ module.exports = async (req, res) => {
     const sells          = trades?.filter(t => t.side === "sell").length || 0;
     const totalSolTraded = trades?.reduce((s, t) => s + Number(t.sol_amount || 0), 0) || 0;
 
-    let reputation = 50;
+    // No launch history = unverified, not neutral.
+    // 35 → HIGH risk (we have no data, not "medium/unknown").
+    let reputation = totalLaunches > 0 ? (avgScore || 50) : 35;
     if (totalLaunches > 0) {
-      reputation = avgScore || 50;
       if (totalLaunches >= 3 && highScore / totalLaunches >= 0.8) reputation += 10;
       reputation -= lowScore * 10;
       reputation += graduated * 8;
@@ -65,9 +66,9 @@ module.exports = async (req, res) => {
 
     const flags = [];
     if (lowScore > 0)
-      flags.push({ type: "low_trust_launches", severity: "warning", message: `${lowScore} launch(es) with TrustScore < 40` });
+      flags.push({ type: "low_trust_launches", severity: "warning", message: `${lowScore} launch(es) with TrustScore < 40 on HumbleTrust` });
     if (totalLaunches === 0)
-      flags.push({ type: "no_history", severity: "info", message: "No launches found in HumbleTrust registry" });
+      flags.push({ type: "no_history", severity: "medium", message: "No launches found in HumbleTrust registry — creator risk cannot be assessed" });
     if (totalLaunches > 0 && avgScore !== null && avgScore < 40)
       flags.push({ type: "low_avg_score", severity: "warning", message: `Average TrustScore is ${avgScore} — below recommended 70` });
     if (sells > buys * 2 && totalTrades > 10)
@@ -79,9 +80,11 @@ module.exports = async (req, res) => {
       wallet,
       reputation_score: reputation,
       risk_level: getRiskLevel(reputation),
+      data_quality: totalLaunches === 0 ? "INSUFFICIENT" : (totalLaunches < 3 ? "PARTIAL" : "FULL"),
       verified_issuer: isVerified,
       launches: {
         total:           totalLaunches,
+        platform:        "humbletrust",
         avg_trust_score: avgScore,
         graduated,
         high_score:      highScore,

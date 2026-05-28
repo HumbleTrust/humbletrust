@@ -176,6 +176,7 @@ export interface TrustScore {
   known_token?: boolean;
   score: number;
   trust_level: "DANGER" | "WEAK" | "OK" | "STRONG" | "ELITE";
+  data_quality?: "FULL" | "PARTIAL" | "INSUFFICIENT" | null;
   rug_risk: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   rug_risk_score: number;
   rug_indicators: TrustScoreFlag[];
@@ -210,9 +211,11 @@ export interface WalletRisk {
   wallet: string;
   reputation_score: number;
   risk_level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  data_quality?: "FULL" | "PARTIAL" | "INSUFFICIENT";
   verified_issuer: boolean;
   launches: {
     total: number;
+    platform: string;
     avg_trust_score: number | null;
     graduated: number;
     high_score: number;

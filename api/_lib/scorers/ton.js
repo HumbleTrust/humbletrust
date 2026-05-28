@@ -30,25 +30,8 @@ async function fetchJettonHolders(address) {
 }
 
 async function fetchDeDustPool(address) {
-  // DeDust /v2/pools returns ALL pools — we need to filter client-side.
-  // To keep this fast, use the /v2/jettons/{address} endpoint first,
-  // then fall back to checking the first page of pools for the address.
-  try {
-    // Try DeDust jetton-specific endpoint first
-    const jettonInfo = await fetchJson(`${DEDUST}/jettons/${encodeAddr(address)}`, 4000);
-    if (jettonInfo && !jettonInfo.error) return { pools: [jettonInfo] };
-
-    // Fallback: fetch pool page and filter (max 200 pools to avoid overload)
-    const all = await fetchJson(`${DEDUST}/pools?limit=200`, 4000);
-    if (!Array.isArray(all)) return null;
-    const addr = address.toLowerCase();
-    const matched = all.filter(p =>
-      Array.isArray(p.assets) && p.assets.some(a =>
-        (a.address || a.jetton_address || "").toLowerCase().includes(addr.split(":").pop() || addr)
-      )
-    );
-    return matched.length > 0 ? { pools: matched } : null;
-  } catch { return null; }
+  // Check if there's a DeDust pool for this jetton
+  return fetchJson(`${DEDUST}/pools?jetton=${encodeAddr(address)}`, 4000);
 }
 
 async function scoreTon(address, knownToken) {
