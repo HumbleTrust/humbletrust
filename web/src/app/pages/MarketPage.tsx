@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { Search, X, RefreshCw, BarChart2, TrendingUp, TrendingDown, Globe } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { GlassPanel } from "../components/GlassPanel";
@@ -67,6 +67,47 @@ const TV_SYMBOL_MAP: Record<string, string> = {
 const getTvSymbol = (coin: CoinGeckoCoin) =>
   TV_SYMBOL_MAP[coin.symbol.toLowerCase()] ??
   `BINANCE:${coin.symbol.toUpperCase()}USDT`;
+
+// ── TradingView widget (script injection) ─────────────────────────────────────
+
+const TradingViewChart = memo(({ symbol }: { symbol: string }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const uid = `tv_${Date.now()}`;
+    el.innerHTML = `<div id="${uid}" style="height:100%;width:100%"></div>`;
+
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/tv.js";
+    script.async = true;
+    script.onload = () => {
+      const TV = (window as any).TradingView;
+      if (!TV) return;
+      new TV.widget({
+        autosize: true,
+        symbol,
+        interval: "D",
+        timezone: "Etc/UTC",
+        theme: "dark",
+        style: "1",
+        locale: "en",
+        toolbar_bg: "#0d0d0d",
+        enable_publishing: false,
+        hide_side_toolbar: false,
+        allow_symbol_change: true,
+        container_id: uid,
+      });
+    };
+    el.appendChild(script);
+
+    return () => { el.innerHTML = ""; };
+  }, [symbol]);
+
+  return <div ref={containerRef} className="flex-1 w-full min-h-0" />;
+});
 
 // ── CoinGecko config (Demo plan) ─────────────────────────────────────────────
 
@@ -211,15 +252,7 @@ export const MarketPage = () => {
                   </div>
                 </div>
 
-                {/* TradingView iframe */}
-                <iframe
-                  key={selected.id}
-                  src={`https://www.tradingview.com/widgetembed/?symbol=${encodeURIComponent(getTvSymbol(selected))}&interval=D&theme=dark&locale=en&style=1&toolbar_bg=%230d0d0d&withdateranges=1&hide_side_toolbar=0&allow_symbol_change=1&save_image=0&studies=%5B%5D&show_popup_button=1&popup_width=1000&popup_height=650`}
-                  className="flex-1 w-full border-0 rounded-b-lg"
-                  title={`${selected.name} chart`}
-                  sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-                  referrerPolicy="no-referrer-when-downgrade"
-                />
+                <TradingViewChart symbol={getTvSymbol(selected)} />
               </GlassPanel>
             </motion.div>
           </motion.div>
