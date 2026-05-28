@@ -1,5 +1,5 @@
-const { getClient } = require("../../_lib/db");
-const { isValidWallet, setCors } = require("../../_lib/validate");
+const { getClient } = require("../_lib/db");
+const { isValidWallet, setCors } = require("../_lib/validate");
 
 const getRiskLevel = (r) =>
   r >= 75 ? "LOW" : r >= 50 ? "MEDIUM" : r >= 25 ? "HIGH" : "CRITICAL";
@@ -109,7 +109,7 @@ module.exports = async (req, res) => {
     });
 
   } catch (e) {
-    console.error("[api/wallets/risk]", e.message);
+    console.error("[api/wallets]", e.message);
     return res.status(500).json({ error: "Internal server error" });
   }
 };

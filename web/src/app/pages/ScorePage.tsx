@@ -38,17 +38,17 @@ const ENDPOINTS = [
   },
   {
     method: "GET",
-    path: "/wallets/{wallet}/risk",
+    path: "/wallets/{wallet}",
     desc: "Reputation score and risk profile for a creator wallet based on launch history and trade patterns.",
     params: [{ name: "wallet", type: "string", desc: "Solana wallet address (base58)" }],
-    example: `curl "${BASE}/wallets/{wallet}/risk"`,
+    example: `curl "${BASE}/wallets/{wallet}"`,
   },
   {
     method: "GET",
-    path: "/tokens/{mint}/health",
+    path: "/tokens/{mint}?check=health",
     desc: "Real-time token health: 24h volume, buy/sell ratio, price change, anomaly detection.",
     params: [{ name: "mint", type: "string", desc: "Solana token mint address (base58)" }],
-    example: `curl "${BASE}/tokens/{mint}/health"`,
+    example: `curl "${BASE}/tokens/{mint}?check=health"`,
   },
   {
     method: "GET",
@@ -67,7 +67,7 @@ const getScore = async (mint) => {
 };
 
 const getWalletRisk = async (wallet) => {
-  const r = await fetch(\`${BASE}/wallets/\${wallet}/risk\`);
+  const r = await fetch(\`${BASE}/wallets/\${wallet}\`);
   const { reputation_score, risk_level, flags } = await r.json();
   return { reputation_score, risk_level, flags };
 };`;
@@ -82,7 +82,7 @@ def get_score(mint: str) -> dict:
     return d
 
 def get_health(mint: str) -> dict:
-    return requests.get(f"${BASE}/tokens/{mint}/health", timeout=8).json()`;
+    return requests.get(f"${BASE}/tokens/{mint}?check=health", timeout=8).json()`;
 
 export function ScorePage() {
   const [mintInput, setMintInput]     = useState("");

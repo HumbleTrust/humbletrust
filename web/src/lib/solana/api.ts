@@ -219,10 +219,10 @@ export const getTrustScore = (mint: string) =>
   request<TrustScore>(`/score/${mint}`);
 
 export const getWalletRisk = (wallet: string) =>
-  request<WalletRisk>(`/wallets/${wallet}/risk`);
+  request<WalletRisk>(`/wallets/${wallet}`);
 
 export const getTokenHealth = (mint: string) =>
-  request<TokenHealth>(`/tokens/${mint}/health`);
+  request<TokenHealth>(`/tokens/${mint}?check=health`);
 
 // ─────────────────────────────────────────────────────────────────────────────
 
