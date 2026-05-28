@@ -154,6 +154,14 @@ function isOnEd25519Curve(bytes) {
   }
 }
 
+// Returns true if address is a real Ed25519 wallet (on-curve).
+// Returns false for PDAs (off-curve by design) — bonding curves, AMM vaults, etc.
+function isWalletAddress(addr) {
+  if (!addr || typeof addr !== "string") return false;
+  const bytes = b58Decode(addr);
+  return bytes ? isOnEd25519Curve(bytes) : false;
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // PDA derivation
 // ════════════════════════════════════════════════════════════════════════════
@@ -357,14 +365,20 @@ async function computeScore(mint, mintInfo, ep, db) {
   }
 
   let creator = null;
-  if (mintInfo?.mintAuthority && !KNOWN_PROGRAMS.has(mintInfo.mintAuthority)) {
+  if (mintInfo?.mintAuthority
+      && !KNOWN_PROGRAMS.has(mintInfo.mintAuthority)
+      && isWalletAddress(mintInfo.mintAuthority)) {
+    // Mint authority is a real wallet — that wallet is the creator
     creator = mintInfo.mintAuthority;
-  } else if (meta?.updateAuthority && !KNOWN_PROGRAMS.has(meta.updateAuthority)
-             && meta.updateAuthority !== NULL_ADDR && meta.updateAuthority !== BURN_ADDRESS) {
+  } else if (meta?.updateAuthority
+             && !KNOWN_PROGRAMS.has(meta.updateAuthority)
+             && meta.updateAuthority !== NULL_ADDR
+             && meta.updateAuthority !== BURN_ADDRESS) {
+    // Metadata update authority (works for graduated tokens & most others)
     creator = meta.updateAuthority;
   } else if (mintInfo?.mintAuthority !== PUMP_FUN_PROGRAM
              && mintInfo?.mintAuthority !== PUMP_FUN_MIGRATION) {
-    // Skip expensive tx-history lookup for pump.fun — creator is the program, not a human wallet
+    // PDA mint authority (bonding curve) or null — fall back to tx history
     creator = await fetchTokenCreator(mint, ep);
   }
 
@@ -423,6 +437,8 @@ async function computeScore(mint, mintInfo, ep, db) {
     if (!h.owner) continue;
     if (h.owner === BURN_ADDRESS || h.owner === NULL_ADDR) lpBurned = true;
     if (KNOWN_PROGRAMS.has(h.owner) && h.owner !== TOKEN_PROGRAM && h.owner !== TOKEN_2022) hasPool = true;
+    // PDA owner with >10% = bonding curve / AMM vault → treat as a liquidity pool
+    if (!KNOWN_PROGRAMS.has(h.owner) && h.pct > 10 && !isWalletAddress(h.owner)) hasPool = true;
   }
 
   if (lpBurned) {
@@ -498,7 +514,9 @@ async function computeScore(mint, mintInfo, ep, db) {
   }
 
   const nonSpecial = holderData.filter(h =>
-    h.owner !== BURN_ADDRESS && h.owner !== NULL_ADDR && !KNOWN_PROGRAMS.has(h.owner)
+    h.owner !== BURN_ADDRESS && h.owner !== NULL_ADDR
+    && !KNOWN_PROGRAMS.has(h.owner)
+    && isWalletAddress(h.owner) // Exclude PDA vaults (bonding curves, AMM pools) from distribution
   );
   if (nonSpecial.length > 0) {
     const topPct = nonSpecial[0].pct;
@@ -940,7 +958,9 @@ module.exports = async (req, res) => {
         score_components: { categories, signals, flags, onchain, token: tokenInfo, network, platform },
         computed_at: now.toISOString(),
         expires_at:  scoreData._expiresAt,
-      }, { onConflict: "mint" }).catch(() => {});
+      }, { onConflict: "mint" })
+        .then(({ error }) => { if (error) console.error("[api/score] cache upsert:", error.message, error.code, mint.slice(0,8)); })
+        .catch(e => console.error("[api/score] cache upsert throw:", e.message, mint.slice(0,8)));
 
       // History: write only if score moved by >= HISTORY_MIN_DELTA points
       db.from("score_history")
@@ -957,7 +977,7 @@ module.exports = async (req, res) => {
             });
           }
         })
-        .catch(() => {});
+        .catch(e => console.error("[api/score] history insert:", e.message, mint.slice(0,8)));
     }
 
     // ── Badge response (post L3 compute) ──────────────────────────────────────
