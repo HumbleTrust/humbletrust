@@ -68,6 +68,20 @@ const getTvSymbol = (coin: CoinGeckoCoin) =>
   TV_SYMBOL_MAP[coin.symbol.toLowerCase()] ??
   `BINANCE:${coin.symbol.toUpperCase()}USDT`;
 
+// ── CoinGecko config (Demo plan) ─────────────────────────────────────────────
+
+const CG_BASE = "https://api.coingecko.com/api/v3";
+const CG_KEY  = (import.meta.env.VITE_COINGECKO_API_KEY as string) || "CG-mGH1d5uGSUubaj8sKxxBbwZT";
+
+async function cgFetch(path: string, signal?: AbortSignal) {
+  const res = await fetch(`${CG_BASE}${path}`, {
+    signal,
+    headers: CG_KEY ? { "x-cg-demo-api-key": CG_KEY } : undefined,
+  });
+  if (!res.ok) throw new Error(`CoinGecko HTTP ${res.status}`);
+  return res.json();
+}
+
 // ── MarketPage ────────────────────────────────────────────────────────────────
 
 export const MarketPage = () => {
@@ -86,12 +100,10 @@ export const MarketPage = () => {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(
-        "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=20&page=1&price_change_percentage=24h&sparkline=false",
-        { signal: ctrl.signal }
+      const data: CoinGeckoCoin[] = await cgFetch(
+        "/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=20&page=1&price_change_percentage=24h&sparkline=false",
+        ctrl.signal,
       );
-      if (!res.ok) throw new Error(`CoinGecko: HTTP ${res.status}`);
-      const data: CoinGeckoCoin[] = await res.json();
       setCoins(data);
       setFiltered(data);
     } catch (e: any) {
