@@ -23,6 +23,14 @@ const { createHash } = require("crypto");
 const { getClient }       = require("../_lib/db");
 const { isValidWallet, setCors } = require("../_lib/validate");
 const { getTrustLevel } = require("../_lib/trust");
+const { detectChain }      = require('../_lib/chains/detect');
+const { fingerprintToken } = require('../_lib/tokenFingerprint');
+const { scoreProtocol }    = require('../_lib/scorers/protocol');
+const { scoreEcosystem }   = require('../_lib/scorers/ecosystem');
+const { scoreEvm }         = require('../_lib/scorers/evm');
+const { scoreBitcoin }     = require('../_lib/scorers/bitcoin');
+const { fetchJupiterPrice } = require('../_lib/enrichers/jupiterPrice');
+const knownTokens          = require('../_lib/knownTokens.json');
 
 // ── RPC endpoints ─────────────────────────────────────────────────────────────
 const MAINNET = process.env.SOLANA_MAINNET_RPC || "https://api.mainnet-beta.solana.com";
@@ -830,7 +838,11 @@ module.exports = async (req, res) => {
 
   const { mint, nocache, format, view } = req.query;
   if (!mint)                { clearTimeout(_guard); return res.status(400).json({ error: "mint required" }); }
-  if (!isValidWallet(mint)) { clearTimeout(_guard); return res.status(400).json({ error: "invalid mint address" }); }
+
+  // Multi-chain address validation: allow EVM, BTC, TON addresses in addition to Solana
+  const _chainDetect = detectChain(mint);
+  const _isNonSolana = _chainDetect.chain !== 'solana' && _chainDetect.chain !== 'unknown' && _chainDetect.confidence > 0;
+  if (!_isNonSolana && !isValidWallet(mint)) { clearTimeout(_guard); return res.status(400).json({ error: "invalid mint address" }); }
 
   const db = getClient();
 
@@ -848,6 +860,117 @@ module.exports = async (req, res) => {
   const isBadge = format === "badge";
 
   try {
+    // ── Multi-chain fast path ────────────────────────────────────────────────────
+    const chainInfo = detectChain(mint);
+    const chain = chainInfo.chain;
+
+    // Fast path: non-Solana chains
+    if (chain !== 'solana' && chain !== 'unknown') {
+      const chainRegistry = knownTokens[chain] || {};
+      const mintNorm = mint.toLowerCase();
+      const isNativeAlias = ['native','btc','bitcoin','eth','ether','bnb','bsc','ton','toncoin','sol','solana','matic','polygon'].includes(mintNorm);
+      const knownEntry = chainRegistry[mint] || chainRegistry[mintNorm] || (isNativeAlias ? chainRegistry['native'] : null);
+      const isBtcLike = chain === 'bitcoin' || chain === 'ton';
+      const result = isBtcLike
+        ? scoreBitcoin(chain, mint)
+        : scoreEvm(chain, mint, knownEntry);
+      const rugRisk = computeRugRisk(result.flags || []);
+      clearTimeout(_guard);
+      return res.json({
+        mint,
+        chain,
+        archetype: knownEntry?.archetype || (isBtcLike ? 'protocol' : 'unknown'),
+        known_token: !!knownEntry,
+        score:          result.score,
+        trust_level:    result.trust_level,
+        rug_risk:       rugRisk.rug_risk,
+        rug_risk_score: rugRisk.rug_risk_score,
+        rug_indicators: rugRisk.rug_indicators,
+        source:         result.source || 'registry',
+        network:        chain,
+        platform:       knownEntry?.name ?? null,
+        token: knownEntry ? { name: knownEntry.name, symbol: knownEntry.symbol, status: null, logo_uri: null, creator: null, verified_issuer: false } : null,
+        categories:     result.categories,
+        signals:        result.signals,
+        flags:          result.flags,
+        onchain:        null,
+        ...(knownEntry ? {} : {
+          warning: `${chain.toUpperCase()} token not in HumbleTrust registry. Score based on registry lookup only.`,
+          cta: 'HumbleTrust on-chain analysis is currently available for Solana tokens only.',
+        }),
+        computed_at:   new Date().toISOString(),
+        cache_expires: null,
+        badge_url:   `/api/score/${mint}?format=badge`,
+        history_url: `/api/score/${mint}?view=history`,
+      });
+    }
+
+    // ── Solana known-token fast path ─────────────────────────────────────────────
+    const solanaRegistry = knownTokens['solana'] || {};
+    const knownSolanaToken = solanaRegistry[mint];
+    if (knownSolanaToken && !nocache) {
+      // For ecosystem/protocol tokens, still do basic on-chain checks (mint auth, freeze auth)
+      // but skip the heavy LP/holder analysis
+      const archetype = knownSolanaToken.archetype;
+
+      // Quick mint info fetch (just mintInfo, no holder/LP analysis)
+      let onchainBasic = {};
+      try {
+        const mintInfoRes = await Promise.race([
+          fetch(`${MAINNET}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getAccountInfo', params: [mint, { encoding: 'jsonParsed' }] }),
+          }).then(r => r.json()),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 3000)),
+        ]);
+        const info = mintInfoRes?.result?.value?.data?.parsed?.info;
+        if (info) {
+          onchainBasic.mintAuthRevoked   = info.mintAuthority   === null;
+          onchainBasic.freezeAuthRevoked = info.freezeAuthority === null;
+        }
+      } catch { /* skip */ }
+
+      const result = archetype === 'protocol'
+        ? scoreProtocol(knownSolanaToken, onchainBasic)
+        : scoreEcosystem(knownSolanaToken, onchainBasic);
+
+      // Try Jupiter price enrichment (non-blocking)
+      let priceData = null;
+      try { priceData = await fetchJupiterPrice(mint); } catch { /* skip */ }
+      if (priceData?.has_price) {
+        result.signals.push({ id: 'jup_price', category: 'liquidity', earned: 10, max: 10, ok: true, label: `Active trading: $${priceData.price_usd?.toFixed(6) ?? '?'}`, detail: 'Token has active price on Jupiter' });
+        if (result.categories) result.categories.liquidity = { earned: 20, max: 25 };
+        result.score = Math.min(99, result.score + (archetype === 'protocol' ? 0 : 5));
+      }
+
+      const rugRisk = computeRugRisk(result.flags || []);
+      clearTimeout(_guard);
+      return res.json({
+        mint,
+        chain: 'solana',
+        archetype,
+        known_token: true,
+        score:          result.score,
+        trust_level:    result.trust_level,
+        rug_risk:       rugRisk.rug_risk,
+        rug_risk_score: rugRisk.rug_risk_score,
+        rug_indicators: rugRisk.rug_indicators,
+        source:         result.source || 'registry+onchain',
+        network:        'solana',
+        platform:       knownSolanaToken.name,
+        token: { name: knownSolanaToken.name, symbol: knownSolanaToken.symbol, status: null, logo_uri: null, creator: null, verified_issuer: false },
+        categories:     result.categories,
+        signals:        result.signals,
+        flags:          result.flags,
+        onchain:        onchainBasic,
+        computed_at:   new Date().toISOString(),
+        cache_expires: null,
+        badge_url:   `/api/score/${mint}?format=badge`,
+        history_url: `/api/score/${mint}?view=history`,
+      });
+    }
+
     // ── L1 memory cache (warm container, 30 s) ────────────────────────────────
     let scoreData = nocache ? null : l1get(mint);
 
@@ -1028,9 +1151,24 @@ module.exports = async (req, res) => {
     const isCached = scoreData.source === "external_cached";
     const rugRisk  = computeRugRisk(scoreData.flags || []);
 
+    // Determine archetype for unknown Solana tokens
+    let tokenArchetype = 'unknown';
+    if (isNative) {
+      tokenArchetype = 'humbletrust';
+    } else if (scoreData.platform === 'pump.fun' || scoreData.platform === 'pump_fun') {
+      tokenArchetype = scoreData.onchain?.graduated ? 'meme_graduated' : 'meme_active';
+    } else if (scoreData.platform === 'pump_fun_graduated') {
+      tokenArchetype = 'meme_graduated';
+    } else if (scoreData.platform === 'pump_fun_likely') {
+      tokenArchetype = 'meme_active';
+    }
+
     clearTimeout(_guard);
     return res.json({
       mint,
+      chain:          'solana',
+      archetype:      tokenArchetype,
+      known_token:    false,
       score:          scoreData.score,
       trust_level:    scoreData.trust_level,
       rug_risk:       rugRisk.rug_risk,
