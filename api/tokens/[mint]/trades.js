@@ -12,12 +12,10 @@ const { isValidWallet, setCors } = require("../../_lib/validate");
 const { parseCurveTradeEvents } = require("../../_lib/curve-events");
 
 const PROGRAM_ID_V2    = "FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr";
-const RAYDIUM_CPMM     = "DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb";
+const RAYDIUM_CPMM_DEVNET = "DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb";
 const WSOL_MINT        = "So11111111111111111111111111111111111111112";
 const RPC_ENDPOINT     = process.env.SOLANA_RPC || "https://api.devnet.solana.com";
 const LAMPORTS_PER_SOL = 1_000_000_000;
-const WSOL_MINT        = "So11111111111111111111111111111111111111112";
-const RAYDIUM_CPMM_DEVNET = "DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb";
 
 const TF_SECONDS = {
   "1s": 1, "5s": 5, "15s": 15,
@@ -235,7 +233,7 @@ async function handleSyncTrades(mint, req, res) {
   const { Connection } = getWeb3();
   const limit = Math.min(Number(req.query.limit) || 100, 500);
   const conn  = new Connection(RPC_ENDPOINT, "confirmed");
-  const pdas = derivePdas(mint);
+  const pdas = deriveCurvePdas(mint);
   const { curveTreasurySol, curvePoolVault, raydiumPoolState } = pdas;
 
   const [curveSigs, raydiumSigs] = await Promise.all([
