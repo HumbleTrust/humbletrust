@@ -171,6 +171,9 @@ export interface TrustScoreFlag {
 
 export interface TrustScore {
   mint: string;
+  chain?: string;
+  archetype?: 'protocol' | 'ecosystem' | 'meme_active' | 'meme_graduated' | 'defi' | 'humbletrust' | 'unknown';
+  known_token?: boolean;
   score: number;
   trust_level: "DANGER" | "WEAK" | "OK" | "STRONG" | "ELITE";
   rug_risk: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
