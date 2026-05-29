@@ -221,6 +221,74 @@ function ScoreRing({ score, color }: { score: number; color: string }) {
   );
 }
 
+// ── Reputation bars chart (wallet) ───────────────────────────────────────────
+
+function ReputationChart({ risk, color }: { risk: WalletRisk; color: string }) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => { const t = requestAnimationFrame(() => setReady(true)); return () => cancelAnimationFrame(t); }, []);
+
+  const gradRate   = risk.launches.total > 0 ? risk.launches.graduated / risk.launches.total : 0;
+  const avgScore   = (risk.launches.avg_trust_score ?? 0) / 100;
+  const buyRatio   = (risk.trading.buys + risk.trading.sells) > 0
+    ? risk.trading.buys / (risk.trading.buys + risk.trading.sells) : null;
+  const highScore  = (risk.launches.high_score ?? 0) / 100;
+
+  const bars = [
+    {
+      label: "Graduation rate",
+      value: gradRate,
+      display: risk.launches.total > 0 ? `${risk.launches.graduated} / ${risk.launches.total}` : "No launches",
+      color: gradRate > 0.5 ? "#00FF41" : gradRate > 0.2 ? "#FFDB2B" : "#FF7A2F",
+    },
+    {
+      label: "Avg trust score",
+      value: avgScore,
+      display: risk.launches.avg_trust_score != null ? `${risk.launches.avg_trust_score}/100` : "—",
+      color: avgScore > 0.7 ? "#00FF41" : avgScore > 0.4 ? "#FFDB2B" : "#FF7A2F",
+    },
+    {
+      label: "Best token score",
+      value: highScore,
+      display: risk.launches.high_score > 0 ? `${risk.launches.high_score} ↑ / ${risk.launches.low_score} ↓` : "—",
+      color: "#B026FF",
+    },
+    {
+      label: "Buy/sell ratio",
+      value: buyRatio ?? 0,
+      display: buyRatio != null
+        ? `${risk.trading.buys}B · ${risk.trading.sells}S`
+        : `${risk.trading.total_trades} trades`,
+      color: "#00D4FF",
+    },
+  ];
+
+  return (
+    <div className="w-full space-y-4 py-1">
+      {bars.map((bar, i) => (
+        <div key={bar.label}
+          style={{
+            opacity: ready ? 1 : 0,
+            transform: ready ? "translateX(0)" : "translateX(-14px)",
+            transition: `opacity 0.4s ease ${i * 0.1}s, transform 0.4s ease ${i * 0.1}s`,
+          }}>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[9px] font-mono text-white/35 uppercase tracking-wider">{bar.label}</span>
+            <span className="text-[10px] font-mono font-bold" style={{ color: bar.color }}>{bar.display}</span>
+          </div>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+            <div className="h-full rounded-full" style={{
+              width: ready ? `${Math.max(2, Math.round(bar.value * 100))}%` : "2%",
+              background: bar.color,
+              boxShadow: `0 0 8px ${bar.color}50`,
+              transition: `width 0.9s cubic-bezier(0.4,0,0.2,1) ${0.15 + i * 0.12}s`,
+            }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function ScorePage() {
@@ -519,50 +587,105 @@ export function ScorePage() {
           {riskErr && <p className="text-red-400 text-xs mb-3">{riskErr}</p>}
           {riskResult && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-              {/* Data quality warning for wallets */}
+              className="rounded-xl border border-white/10 bg-white/[0.03] overflow-hidden">
+
+              {/* Header */}
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.07] bg-white/[0.02]">
+                <div className="w-8 h-8 rounded-full bg-[#B026FF]/20 border border-[#B026FF]/30 flex items-center justify-center shrink-0">
+                  <span className="text-[10px] font-mono text-[#B026FF] font-bold">W</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-semibold text-sm font-mono truncate">
+                    {walletInput.slice(0, 8)}…{walletInput.slice(-6)}
+                  </p>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    <span className="text-[9px] font-mono text-white/30">via {riskResult.launches.platform ?? "humbletrust"}</span>
+                    {riskResult.verified_issuer && (
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#00FF41]/10 border border-[#00FF41]/20 text-[#00FF41]">✓ VERIFIED ISSUER</span>
+                    )}
+                  </div>
+                </div>
+                {riskResult.data_quality && (
+                  <span className="text-[9px] font-mono px-2 py-1 rounded border shrink-0" style={{
+                    borderColor: riskResult.data_quality === "FULL" ? "#00FF4130" : riskResult.data_quality === "PARTIAL" ? "#FF7A2F30" : "#FF444430",
+                    color:       riskResult.data_quality === "FULL" ? "#00FF41"   : riskResult.data_quality === "PARTIAL" ? "#FF7A2F"   : "#FF4444",
+                    background:  riskResult.data_quality === "FULL" ? "#00FF4108" : riskResult.data_quality === "PARTIAL" ? "#FF7A2F08" : "#FF444408",
+                  }}>{riskResult.data_quality}</span>
+                )}
+              </div>
+
+              {/* Main visual: bars + score ring */}
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto]">
+                <div className="flex items-center px-5 py-5 sm:border-r border-white/[0.06]">
+                  <ReputationChart risk={riskResult} color={RISK_COLORS[riskResult.risk_level]} />
+                </div>
+                <div className="flex flex-col items-center justify-center gap-3 px-6 py-4 min-w-[180px]">
+                  <ScoreRing score={riskResult.reputation_score} color={RISK_COLORS[riskResult.risk_level]} />
+                  <span className="text-sm font-bold font-mono tracking-widest"
+                    style={{ color: RISK_COLORS[riskResult.risk_level] }}>
+                    {riskResult.risk_level} RISK
+                  </span>
+                  <div className="w-full grid grid-cols-2 gap-1.5">
+                    {[
+                      { label: "Launches", val: riskResult.launches.total },
+                      { label: "Graduated", val: riskResult.launches.graduated },
+                    ].map(({ label, val }) => (
+                      <div key={label} className="text-center p-2 rounded-lg bg-white/[0.04] border border-white/[0.06]">
+                        <div className="text-sm font-bold text-white font-mono">{val}</div>
+                        <div className="text-[9px] text-white/30">{label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* INSUFFICIENT warning */}
               {riskResult.data_quality === "INSUFFICIENT" && (
-                <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/8 border border-red-500/25 mb-3">
-                  <AlertTriangle size={12} className="text-red-400 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-red-400 text-xs font-semibold">Unverified wallet — no HumbleTrust launch history</p>
-                    <p className="text-red-400/60 text-[10px] mt-0.5">Score is based on zero launches on our platform. Creator risk is unknown — proceed with caution.</p>
+                <div className="px-4 py-3 border-t border-white/[0.06]">
+                  <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/8 border border-red-500/25">
+                    <AlertTriangle size={12} className="text-red-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-red-400 text-xs font-semibold">Unverified wallet — no HumbleTrust launch history</p>
+                      <p className="text-red-400/60 text-[10px] mt-0.5">Score based on zero launches. Creator risk unknown — proceed with caution.</p>
+                    </div>
                   </div>
                 </div>
               )}
-              <div className="flex items-center gap-4 mb-4">
-                <div className="text-center">
-                  <div className="text-4xl font-extrabold font-mono" style={{ color: RISK_COLORS[riskResult.risk_level] }}>
-                    {riskResult.reputation_score}
-                  </div>
-                  <div className="text-xs font-mono mt-0.5" style={{ color: RISK_COLORS[riskResult.risk_level] }}>
-                    {riskResult.risk_level} RISK
-                  </div>
-                </div>
-                <div className="flex-1 grid grid-cols-3 gap-2">
-                  {[
-                    { label: "HT Launches", val: riskResult.launches.total },
-                    { label: "Graduated",   val: riskResult.launches.graduated },
-                    { label: "Avg Score",   val: riskResult.launches.avg_trust_score ?? "—" },
-                  ].map(({ label, val }) => (
-                    <div key={label} className="text-center p-2 rounded-lg bg-white/[0.03] border border-white/[0.06]">
-                      <div className="text-base font-bold text-white font-mono">{val}</div>
-                      <div className="text-[10px] text-white/35">{label}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+
+              {/* Flags */}
               {riskResult.flags.length > 0 && (
-                <div className="space-y-1.5">
+                <div className="px-4 py-3 border-t border-white/[0.06] space-y-1.5">
+                  <p className="text-[9px] font-mono text-white/25 uppercase tracking-widest mb-2">Risk Flags</p>
                   {riskResult.flags.map((f, i) => (
-                    <div key={i} className="flex items-start gap-2 p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06]">
+                    <div key={i} className="flex items-start gap-2 p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05]">
                       <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
-                        f.severity === "warning" ? "bg-yellow-400" :
-                        f.severity === "info" ? "bg-[#00FF41]" : "bg-red-400"
+                        f.severity === "warning" || f.severity === "high" ? "bg-[#FF7A2F]" :
+                        f.severity === "critical" ? "bg-[#FF4444]" :
+                        f.severity === "info"     ? "bg-[#00FF41]" : "bg-[#FFDB2B]"
                       }`} />
                       <p className="text-xs text-white/55">{f.message}</p>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Recent launches (collapsible) */}
+              {riskResult.launches.recent?.length > 0 && (
+                <div className="px-4 py-3 border-t border-white/[0.06]">
+                  <details>
+                    <summary className="text-xs text-white/30 cursor-pointer hover:text-white/50 transition-colors select-none">
+                      Recent launches ({riskResult.launches.recent.length}) →
+                    </summary>
+                    <div className="mt-2 space-y-1">
+                      {riskResult.launches.recent.map((t, i) => (
+                        <div key={i} className="flex items-center gap-2 p-2 rounded bg-black/30 border border-white/[0.04]">
+                          <span className="text-[9px] font-mono text-white/30 shrink-0">{t.trust_score}</span>
+                          <span className="text-[10px] text-white/60 truncate flex-1">{t.name ?? t.mint.slice(0, 8) + "…"}</span>
+                          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded text-white/30 bg-white/5">{t.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
                 </div>
               )}
             </motion.div>
