@@ -33,6 +33,51 @@ const { scoreTon }         = require('../_lib/scorers/ton');
 const { fetchJupiterPrice, fetchMarketContext } = require('../_lib/enrichers/jupiterPrice');
 const knownTokens          = require('../_lib/knownTokens.json');
 
+// ── Category system ──────────────────────────────────────────────────────────
+// Categories: l1 | stablecoin | lsd | dao | defi | oracle | ai | gaming |
+//             meme | nft | infrastructure | bridge | rwa | unknown
+
+// Meme/gaming tokens have inherently higher risk — cap their max achievable score
+const CATEGORY_CAPS = { meme: 78, gaming: 82, nft: 80 };
+
+function applyCategoryCap(score, category) {
+  const cap = CATEGORY_CAPS[category];
+  return cap !== undefined ? Math.min(score, cap) : score;
+}
+
+// Derive category label for unknown Solana tokens from platform detection
+function categoryFromPlatform(platform) {
+  if (!platform) return 'unknown';
+  if (platform.startsWith('pump_fun') || platform === 'pump_fun_likely') return 'meme';
+  if (platform === 'raydium_cpmm' || platform === 'raydium_amm') return 'defi';
+  if (platform === 'orca_whirlpool') return 'defi';
+  if (platform === 'meteora_dlmm')   return 'defi';
+  return 'unknown';
+}
+
+// Category-specific signals added to response
+function categorySignal(category, tokenName) {
+  const labels = {
+    l1:             { label: 'Layer-1 native asset', detail: 'Core blockchain asset — highest trust tier' },
+    stablecoin:     { label: 'Stablecoin', detail: 'Designed to maintain peg to fiat currency' },
+    lsd:            { label: 'Liquid staking derivative', detail: 'Staked asset wrapper — backed by validator rewards' },
+    dao:            { label: 'DAO / Governance token', detail: 'Grants voting rights in a decentralised protocol' },
+    defi:           { label: 'DeFi protocol token', detail: 'Powers a decentralised finance application' },
+    oracle:         { label: 'Oracle network token', detail: 'Provides verified real-world data on-chain' },
+    ai:             { label: 'AI / Data economy token', detail: 'Powers an AI or data marketplace protocol' },
+    gaming:         { label: 'GameFi / Gaming token', detail: 'In-game economy or play-to-earn token' },
+    meme:           { label: 'Meme token', detail: 'Community-driven token — high volatility, higher inherent risk' },
+    nft:            { label: 'NFT ecosystem token', detail: 'Powers an NFT platform or metaverse' },
+    infrastructure: { label: 'Physical infrastructure token', detail: 'Incentivises real-world network deployment' },
+    bridge:         { label: 'Bridged / Wrapped asset', detail: 'Canonical cross-chain representation of another asset' },
+    rwa:            { label: 'Real World Asset token', detail: 'Tokenised exposure to off-chain financial assets' },
+  };
+  const c = labels[category];
+  if (!c) return null;
+  return { id: `category_${category}`, category: 'legitimacy', earned: 0, max: 0, ok: null,
+    label: c.label, detail: c.detail };
+}
+
 // ── RPC endpoints ─────────────────────────────────────────────────────────────
 const MAINNET = process.env.SOLANA_MAINNET_RPC || "https://api.mainnet-beta.solana.com";
 const DEVNET  = process.env.SOLANA_RPC          || "https://api.devnet.solana.com";
@@ -897,7 +942,8 @@ module.exports = async (req, res) => {
     if (chain !== 'solana' && chain !== 'unknown') {
       const chainRegistry = knownTokens[chain] || {};
       const mintNorm = mint.toLowerCase();
-      const isNativeAlias = ['native','btc','bitcoin','eth','ether','bnb','bsc','ton','toncoin','sol','solana','matic','polygon'].includes(mintNorm);
+      const NATIVE_ALIASES = new Set(['native','btc','bitcoin','eth','ether','bnb','bsc','ton','toncoin','sol','solana','matic','polygon','op','optimism','avax','avalanche','arb','arbitrum','base','ftm','fantom','near','sui','apt','aptos','algo','algorand','atom','cosmos','ada','cardano','dot','polkadot','xrp','trx','tron']);
+      const isNativeAlias = NATIVE_ALIASES.has(mintNorm);
       const knownEntry = chainRegistry[mint] || chainRegistry[mintNorm] || (isNativeAlias ? chainRegistry['native'] : null);
       const isBitcoin = chain === 'bitcoin';
       let result;
@@ -908,6 +954,12 @@ module.exports = async (req, res) => {
       } else {
         result = scoreEvm(chain, mint, knownEntry);
       }
+
+      const category = knownEntry?.category || (isBitcoin ? 'l1' : 'unknown');
+      const catCappedScore = applyCategoryCap(result.score, category);
+      const catSignal = categorySignal(category, knownEntry?.name);
+      const resultSignals = catSignal ? [...(result.signals || []), catSignal] : (result.signals || []);
+
       const rugRisk = computeRugRisk(result.flags || []);
       const tokenInfo = result.onchain?.name
         ? { name: result.onchain.name, symbol: result.onchain.symbol || null, status: null, logo_uri: result.onchain.image || null, creator: null, verified_issuer: false }
@@ -917,10 +969,11 @@ module.exports = async (req, res) => {
       return res.json({
         mint,
         chain,
-        archetype: knownEntry?.archetype || (chain === 'ton' ? 'unknown' : isBitcoin ? 'protocol' : 'unknown'),
+        archetype:  knownEntry?.archetype || (chain === 'ton' ? 'unknown' : isBitcoin ? 'protocol' : 'unknown'),
+        category,
         known_token: !!knownEntry,
-        score:          result.score,
-        trust_level:    result.trust_level,
+        score:          catCappedScore,
+        trust_level:    getTrustLevel(catCappedScore),
         data_quality:   result.data_quality || null,
         rug_risk:       rugRisk.rug_risk,
         rug_risk_score: rugRisk.rug_risk_score,
@@ -930,7 +983,7 @@ module.exports = async (req, res) => {
         platform:       chain === 'ton' ? 'ton' : (knownEntry?.name ?? null),
         token:          tokenInfo,
         categories:     result.categories,
-        signals:        result.signals,
+        signals:        resultSignals,
         flags:          result.flags,
         onchain:        null,
         ...(knownEntry ? {} : {
@@ -974,14 +1027,45 @@ module.exports = async (req, res) => {
         ? scoreProtocol(knownSolanaToken, onchainBasic)
         : scoreEcosystem(knownSolanaToken, onchainBasic);
 
+      const knownCategory = knownSolanaToken.category || null;
+
       // Try Jupiter price enrichment (non-blocking)
       let priceData = null;
       try { priceData = await fetchJupiterPrice(mint); } catch { /* skip */ }
       if (priceData?.has_price) {
-        result.signals.push({ id: 'jup_price', category: 'liquidity', earned: 10, max: 10, ok: true, label: `Active trading: $${priceData.price_usd?.toFixed(6) ?? '?'}`, detail: 'Token has active price on Jupiter' });
+        result.signals.push({ id: 'jup_price', category: 'liquidity', earned: 10, max: 10, ok: true,
+          label: `Active trading: $${priceData.price_usd?.toFixed(6) ?? '?'}`, detail: 'Token has active price on Jupiter' });
         if (result.categories) result.categories.liquidity = { earned: 20, max: 25 };
         result.score = Math.min(99, result.score + (archetype === 'protocol' ? 0 : 5));
+
+        // Stablecoin peg check — only meaningful if we have a live price
+        if (knownCategory === 'stablecoin') {
+          const priceDev = Math.abs((priceData.price_usd || 1) - 1.0) * 100; // % deviation from $1
+          if (priceDev > 5) {
+            result.flags.push({ type: 'stablecoin_depeg', severity: 'critical',
+              msg: `Stablecoin trading at $${(priceData.price_usd || 0).toFixed(4)} — ${priceDev.toFixed(1)}% off peg` });
+            result.score = Math.max(0, result.score - 20);
+            result.signals.push({ id: 'peg_deviation', category: 'legitimacy', earned: -10, max: 0, ok: false,
+              label: `DEPEG: $${(priceData.price_usd || 0).toFixed(4)} (${priceDev.toFixed(1)}% off $1)`,
+              detail: 'Severe peg deviation — stablecoin may be failing' });
+          } else if (priceDev > 2) {
+            result.flags.push({ type: 'stablecoin_depeg', severity: 'high',
+              msg: `Stablecoin trading at $${(priceData.price_usd || 0).toFixed(4)} — slight depeg` });
+            result.score = Math.max(0, result.score - 8);
+            result.signals.push({ id: 'peg_deviation', category: 'legitimacy', earned: -3, max: 0, ok: false,
+              label: `Slight depeg: $${(priceData.price_usd || 0).toFixed(4)}`, detail: 'Minor peg deviation' });
+          } else {
+            result.signals.push({ id: 'peg_maintained', category: 'legitimacy', earned: 5, max: 5, ok: true,
+              label: `Peg maintained: $${(priceData.price_usd || 0).toFixed(4)}`,
+              detail: 'Trading within 2% of $1.00 — peg is healthy' });
+          }
+        }
       }
+
+      // Append category signal and apply cap
+      const catSig = categorySignal(knownCategory, knownSolanaToken.name);
+      if (catSig) result.signals.push(catSig);
+      const cappedScore = applyCategoryCap(result.score, knownCategory);
 
       const rugRisk = computeRugRisk(result.flags || []);
       clearTimeout(_guard);
@@ -989,9 +1073,10 @@ module.exports = async (req, res) => {
         mint,
         chain: 'solana',
         archetype,
+        category:       knownCategory,
         known_token: true,
-        score:          result.score,
-        trust_level:    result.trust_level,
+        score:          cappedScore,
+        trust_level:    getTrustLevel(cappedScore),
         rug_risk:       rugRisk.rug_risk,
         rug_risk_score: rugRisk.rug_risk_score,
         rug_indicators: rugRisk.rug_indicators,
@@ -1226,7 +1311,7 @@ module.exports = async (req, res) => {
     const isCached = scoreData.source === "external_cached";
     const rugRisk  = computeRugRisk(scoreData.flags || []);
 
-    // Determine archetype for unknown Solana tokens
+    // Determine archetype + category for unknown Solana tokens
     let tokenArchetype = 'unknown';
     if (isNative) {
       tokenArchetype = 'humbletrust';
@@ -1238,14 +1323,27 @@ module.exports = async (req, res) => {
       tokenArchetype = 'meme_active';
     }
 
+    // category from cache (already computed) or derive from platform
+    const tokenCategory = scoreData.category || (isNative ? 'unknown' : categoryFromPlatform(scoreData.platform));
+    const finalCapped   = isNative ? scoreData.score : applyCategoryCap(scoreData.score, tokenCategory);
+    const finalTrust    = getTrustLevel(finalCapped);
+
+    // Append category signal if not already present
+    let finalSignals = scoreData.signals || [];
+    if (!isNative && !finalSignals.find(s => s.id?.startsWith('category_'))) {
+      const catSig = categorySignal(tokenCategory, scoreData.token?.name);
+      if (catSig) finalSignals = [...finalSignals, catSig];
+    }
+
     clearTimeout(_guard);
     return res.json({
       mint,
       chain:          'solana',
       archetype:      tokenArchetype,
+      category:       tokenCategory,
       known_token:    false,
-      score:          scoreData.score,
-      trust_level:    scoreData.trust_level,
+      score:          finalCapped,
+      trust_level:    finalTrust,
       data_quality:   scoreData.data_quality || null,
       rug_risk:       rugRisk.rug_risk,
       rug_risk_score: rugRisk.rug_risk_score,
@@ -1255,7 +1353,7 @@ module.exports = async (req, res) => {
       platform:       scoreData.platform,
       token:          scoreData.token,
       categories:     scoreData.categories,
-      signals:        scoreData.signals,
+      signals:        finalSignals,
       flags:          scoreData.flags,
       onchain:        scoreData.onchain,
       ...(isNative ? {} : {
