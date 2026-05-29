@@ -1,16 +1,17 @@
-import { ReactNode } from "react";
+import { ReactNode, HTMLAttributes } from "react";
 import { cn } from "./ui/utils";
 
-interface GlassPanelProps {
+interface GlassPanelProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
   className?: string;
   hover?: boolean;
   glow?: "green" | "purple" | "none";
 }
 
-export function GlassPanel({ children, className, hover = false, glow = "none" }: GlassPanelProps) {
+export function GlassPanel({ children, className, hover = false, glow = "none", ...rest }: GlassPanelProps) {
   return (
     <div
+      {...rest}
       className={cn(
         "rounded-lg backdrop-blur-xl bg-[rgba(20,20,30,0.5)] border border-white/10",
         "shadow-[0_8px_32px_rgba(0,0,0,0.3)]",

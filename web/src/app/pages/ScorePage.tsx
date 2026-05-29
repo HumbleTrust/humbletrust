@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import {
   Shield, Search, ExternalLink, Copy, CheckCircle2,
@@ -83,6 +83,145 @@ def get_score(mint: str) -> dict:
 
 def get_health(mint: str) -> dict:
     return requests.get(f"${BASE}/tokens/{mint}?check=health", timeout=8).json()`;
+
+// ── Radar chart (SVG, no external lib) ───────────────────────────────────────
+
+function RadarChart({ categories, color }: {
+  categories: NonNullable<TrustScore["categories"]>;
+  color: string;
+}) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => { const t = requestAnimationFrame(() => setReady(true)); return () => cancelAnimationFrame(t); }, []);
+
+  const CATS = [
+    { key: "supply_control" as const, label: "Supply",       angle: -90 },
+    { key: "liquidity"      as const, label: "Liquidity",    angle:   0 },
+    { key: "distribution"   as const, label: "Distribution", angle:  90 },
+    { key: "legitimacy"     as const, label: "Legitimacy",   angle: 180 },
+  ];
+  const cx = 110, cy = 110, r = 72;
+  const pt = (angle: number, radius: number): [number, number] => {
+    const rad = (angle * Math.PI) / 180;
+    return [cx + radius * Math.cos(rad), cy + radius * Math.sin(rad)];
+  };
+  const values = CATS.map(c => {
+    const v = categories[c.key];
+    return v && v.max > 0 ? Math.max(0, Math.min(1, v.earned / v.max)) : 0;
+  });
+  const zeroPolygon = CATS.map(c => `${cx},${cy}`).join(" ");
+  const polygon     = CATS.map((c, i) => pt(c.angle, values[i] * r).join(",")).join(" ");
+
+  return (
+    <svg viewBox="0 0 220 220" className="w-full h-full">
+      {/* Grid rings */}
+      {[0.25, 0.5, 0.75, 1].map((lvl, i) => (
+        <circle key={lvl} cx={cx} cy={cy} r={r * lvl}
+          fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1"
+          style={{ opacity: ready ? 1 : 0, transition: `opacity 0.4s ease ${i * 0.08}s` }} />
+      ))}
+      {/* Axes */}
+      {CATS.map((c, i) => {
+        const [x, y] = pt(c.angle, r);
+        return <line key={c.key} x1={cx} y1={cy} x2={x} y2={y}
+          stroke="rgba(255,255,255,0.08)" strokeWidth="1"
+          style={{ opacity: ready ? 1 : 0, transition: `opacity 0.3s ease ${0.2 + i * 0.07}s` }} />;
+      })}
+      {/* Filled polygon — grows from center */}
+      <polygon
+        points={ready ? polygon : zeroPolygon}
+        fill={`${color}22`} stroke={color} strokeWidth="1.5" strokeLinejoin="round"
+        style={{ transition: "points 0.9s cubic-bezier(0.34,1.56,0.64,1)" }}
+      />
+      {/* Data points */}
+      {CATS.map((c, i) => {
+        const [x, y] = pt(c.angle, values[i] * r);
+        return <circle key={c.key} cx={x} cy={y} r="3.5" fill={color}
+          style={{
+            opacity: ready ? 1 : 0,
+            transform: ready ? "scale(1)" : "scale(0)",
+            transformOrigin: `${x}px ${y}px`,
+            transition: `opacity 0.3s ease ${0.7 + i * 0.1}s, transform 0.4s cubic-bezier(0.34,1.56,0.64,1) ${0.7 + i * 0.1}s`,
+            filter: `drop-shadow(0 0 5px ${color})`,
+          }} />;
+      })}
+      {/* Labels */}
+      {CATS.map((c, i) => {
+        const [x, y] = pt(c.angle, r + 20);
+        const v = categories[c.key];
+        const valColor = v && v.earned < 0 ? "#FF4444" : color;
+        return (
+          <g key={c.key} style={{ opacity: ready ? 1 : 0, transition: `opacity 0.4s ease ${0.9 + i * 0.08}s` }}>
+            <text x={x} y={y - 6} textAnchor="middle" dominantBaseline="middle"
+              fontSize="8" fill="rgba(255,255,255,0.35)" fontFamily="monospace">
+              {c.label.toUpperCase()}
+            </text>
+            <text x={x} y={y + 7} textAnchor="middle" dominantBaseline="middle"
+              fontSize="9" fill={valColor} fontFamily="monospace" fontWeight="bold">
+              {v ? `${v.earned}/${v.max}` : "—"}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ── Score ring (SVG) ──────────────────────────────────────────────────────────
+
+function ScoreRing({ score, color }: { score: number; color: string }) {
+  const [mounted, setMounted] = useState(false);
+  const [displayed, setDisplayed] = useState(0);
+  const R = 38;
+  const circ = 2 * Math.PI * R;
+  const targetDash = Math.max(0, Math.min(1, score / 100)) * circ;
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // Count-up number animation
+  useEffect(() => {
+    if (!mounted) return;
+    let start = 0;
+    const duration = 900;
+    const startTime = performance.now();
+    const tick = (now: number) => {
+      const pct = Math.min(1, (now - startTime) / duration);
+      const eased = 1 - Math.pow(1 - pct, 3);
+      setDisplayed(Math.round(eased * score));
+      if (pct < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, [mounted, score]);
+
+  return (
+    <svg viewBox="0 0 100 100" className="w-36 h-36">
+      {/* Background ring */}
+      <circle cx="50" cy="50" r={R} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="7" />
+      {/* Animated fill ring */}
+      <circle cx="50" cy="50" r={R} fill="none" stroke={color} strokeWidth="7"
+        strokeDasharray={circ}
+        strokeDashoffset={mounted ? circ - targetDash : circ}
+        strokeLinecap="round"
+        transform="rotate(-90 50 50)"
+        style={{
+          transition: "stroke-dashoffset 1.1s cubic-bezier(0.4,0,0.2,1)",
+          filter: `drop-shadow(0 0 10px ${color}90)`,
+        }} />
+      {/* Score number (counts up) */}
+      <text x="50" y="47" textAnchor="middle" dominantBaseline="middle"
+        fontSize="22" fontWeight="bold" fill={color} fontFamily="monospace"
+        style={{ transition: "opacity 0.3s", opacity: mounted ? 1 : 0 }}>
+        {displayed}
+      </text>
+      <text x="50" y="62" textAnchor="middle" dominantBaseline="middle"
+        fontSize="8" fill="rgba(255,255,255,0.30)" fontFamily="monospace">/100</text>
+    </svg>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function ScorePage() {
   const [mintInput, setMintInput]     = useState("");
@@ -213,89 +352,105 @@ export function ScorePage() {
           {scoreErr && <p className="text-red-400 text-xs mb-3">{scoreErr}</p>}
           {scoreResult && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="text-center">
-                  <div className="text-4xl font-extrabold font-mono" style={{ color: SCORE_COLORS[scoreResult.trust_level] }}>
-                    {scoreResult.score}
-                  </div>
-                  <div className="text-xs font-mono mt-0.5" style={{ color: SCORE_COLORS[scoreResult.trust_level] }}>
-                    {scoreResult.trust_level}
-                  </div>
-                </div>
-                <div className="flex-1">
-                  {scoreResult.token?.name && (
-                    <p className="text-white font-semibold text-sm">{scoreResult.token.name} ({scoreResult.token.symbol})</p>
-                  )}
-                  <p className="text-white/40 text-xs font-mono mt-0.5">
-                    Source: <span className="text-white/60">{scoreResult.source}</span>
-                    {scoreResult.token?.verified_issuer && (
-                      <span className="ml-2 px-1.5 py-0.5 rounded bg-[#00FF41]/15 text-[#00FF41]">✓ VERIFIED</span>
+              className="rounded-xl border border-white/10 bg-white/[0.03] overflow-hidden">
+
+              {/* Token header */}
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.07] bg-white/[0.02]">
+                {scoreResult.token?.logo_uri && (
+                  <img src={scoreResult.token.logo_uri} alt="" className="w-8 h-8 rounded-full border border-white/10 shrink-0"
+                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-semibold text-sm truncate">
+                    {scoreResult.token?.name ?? mintInput.slice(0, 12) + "…"}
+                    {scoreResult.token?.symbol && (
+                      <span className="text-white/40 ml-1.5 font-normal">({scoreResult.token.symbol})</span>
                     )}
                   </p>
-                  {scoreResult.token?.status && (
-                    <p className="text-white/30 text-xs mt-0.5">Status: {scoreResult.token.status}</p>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    <span className="text-[9px] font-mono text-white/30">via {scoreResult.source}</span>
+                    {scoreResult.chain && (
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-white/40 uppercase">{scoreResult.chain}</span>
+                    )}
+                    {scoreResult.known_token && (
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#00FF41]/10 border border-[#00FF41]/20 text-[#00FF41]">✓ VERIFIED</span>
+                    )}
+                    {scoreResult.token?.status && (
+                      <span className="text-[9px] font-mono text-white/25">{scoreResult.token.status}</span>
+                    )}
+                  </div>
+                </div>
+                {scoreResult.data_quality && (
+                  <span className="text-[9px] font-mono px-2 py-1 rounded border shrink-0" style={{
+                    borderColor: scoreResult.data_quality === "FULL" ? "#00FF4130" : scoreResult.data_quality === "PARTIAL" ? "#FF7A2F30" : "#FF444430",
+                    color:       scoreResult.data_quality === "FULL" ? "#00FF41"   : scoreResult.data_quality === "PARTIAL" ? "#FF7A2F"   : "#FF4444",
+                    background:  scoreResult.data_quality === "FULL" ? "#00FF4108" : scoreResult.data_quality === "PARTIAL" ? "#FF7A2F08" : "#FF444408",
+                  }}>{scoreResult.data_quality}</span>
+                )}
+              </div>
+
+              {/* Main visual */}
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto]">
+                <div className="flex items-center justify-center p-4 sm:border-r border-white/[0.06] h-64">
+                  {scoreResult.categories
+                    ? <RadarChart categories={scoreResult.categories} color={SCORE_COLORS[scoreResult.trust_level]} />
+                    : <span className="text-white/20 text-xs font-mono">No category breakdown</span>
+                  }
+                </div>
+                <div className="flex flex-col items-center justify-center gap-3 px-6 py-4 min-w-[180px]">
+                  <ScoreRing score={scoreResult.score} color={SCORE_COLORS[scoreResult.trust_level]} />
+                  <span className="text-sm font-bold font-mono tracking-widest"
+                    style={{ color: SCORE_COLORS[scoreResult.trust_level] }}>
+                    {scoreResult.trust_level}
+                  </span>
+                  {scoreResult.rug_risk && (
+                    <div className="w-full px-3 py-2 rounded-lg border text-center" style={{
+                      borderColor: `${RISK_COLORS[scoreResult.rug_risk]}30`,
+                      background:  `${RISK_COLORS[scoreResult.rug_risk]}08`,
+                    }}>
+                      <div className="text-[9px] font-mono text-white/30 mb-0.5">RUG RISK</div>
+                      <div className="font-bold text-sm font-mono" style={{ color: RISK_COLORS[scoreResult.rug_risk] }}>
+                        {scoreResult.rug_risk}
+                        <span className="text-white/30 font-normal text-[10px] ml-1.5">{scoreResult.rug_risk_score}/100</span>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
-              {/* Data quality warning — shown when score is based on insufficient data */}
-              {scoreResult.data_quality === "INSUFFICIENT" && (
-                <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/8 border border-red-500/25 mb-3">
-                  <AlertTriangle size={12} className="text-red-400 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-red-400 text-xs font-semibold">Score unverifiable — insufficient on-chain data</p>
-                    <p className="text-red-400/60 text-[10px] mt-0.5">Most signals could not be fetched. Score is capped and should NOT be treated as a trust signal. Treat as HIGH RISK.</p>
-                  </div>
-                </div>
-              )}
-              {scoreResult.data_quality === "PARTIAL" && !scoreResult.known_token && (
-                <div className="flex items-start gap-2 p-3 rounded-lg bg-orange-500/5 border border-orange-500/20 mb-3">
-                  <AlertTriangle size={12} className="text-orange-400 mt-0.5 shrink-0" />
-                  <p className="text-orange-400/70 text-xs">Partial data — some signals could not be verified. Score may not reflect full risk.</p>
-                </div>
-              )}
-              {scoreResult.warning && scoreResult.data_quality !== "INSUFFICIENT" && (
-                <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-500/5 border border-yellow-500/15 mb-3">
-                  <AlertTriangle size={12} className="text-yellow-400 mt-0.5 shrink-0" />
-                  <p className="text-yellow-400/70 text-xs">{scoreResult.warning}</p>
-                </div>
-              )}
-              {/* Rug Risk */}
-              {scoreResult.rug_risk && (
-                <div className="mb-3 flex items-center gap-3 p-3 rounded-lg border"
-                  style={{
-                    borderColor: `${RISK_COLORS[scoreResult.rug_risk]}30`,
-                    background: `${RISK_COLORS[scoreResult.rug_risk]}08`,
-                  }}>
-                  <div>
-                    <span className="text-[10px] font-mono text-white/35 uppercase tracking-widest">Rug Risk</span>
-                    <div className="text-sm font-bold font-mono mt-0.5" style={{ color: RISK_COLORS[scoreResult.rug_risk] }}>
-                      {scoreResult.rug_risk}
-                      <span className="text-white/30 font-normal ml-2 text-xs">{scoreResult.rug_risk_score}/100</span>
+
+              {/* Warnings */}
+              {(scoreResult.data_quality === "INSUFFICIENT" || (scoreResult.data_quality === "PARTIAL" && !scoreResult.known_token) || (scoreResult.warning && scoreResult.data_quality !== "INSUFFICIENT")) && (
+                <div className="px-4 pb-3 space-y-2 border-t border-white/[0.06] pt-3">
+                  {scoreResult.data_quality === "INSUFFICIENT" && (
+                    <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/8 border border-red-500/25">
+                      <AlertTriangle size={12} className="text-red-400 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-red-400 text-xs font-semibold">Score unverifiable — insufficient on-chain data</p>
+                        <p className="text-red-400/60 text-[10px] mt-0.5">Most signals could not be fetched. Treat as HIGH RISK.</p>
+                      </div>
                     </div>
-                  </div>
-                  {scoreResult.rug_indicators?.length > 0 && (
-                    <div className="flex-1 flex flex-wrap gap-1.5 justify-end">
-                      {scoreResult.rug_indicators.slice(0, 4).map((f, i) => (
-                        <span key={i} className="text-[9px] font-mono px-1.5 py-0.5 rounded border"
-                          style={{
-                            borderColor: f.severity === "critical" ? "#FF444440" : f.severity === "high" ? "#FF7A2F40" : "#FFDB2B30",
-                            color:       f.severity === "critical" ? "#FF4444"   : f.severity === "high" ? "#FF7A2F"   : "#FFDB2B",
-                            background:  f.severity === "critical" ? "#FF444410" : f.severity === "high" ? "#FF7A2F10" : "#FFDB2B08",
-                          }}>
-                          {f.type.replace(/_/g, " ")}
-                        </span>
-                      ))}
+                  )}
+                  {scoreResult.data_quality === "PARTIAL" && !scoreResult.known_token && (
+                    <div className="flex items-start gap-2 p-3 rounded-lg bg-orange-500/5 border border-orange-500/20">
+                      <AlertTriangle size={12} className="text-orange-400 mt-0.5 shrink-0" />
+                      <p className="text-orange-400/70 text-xs">Partial data — некоторые сигналы не удалось верифицировать.</p>
+                    </div>
+                  )}
+                  {scoreResult.warning && scoreResult.data_quality !== "INSUFFICIENT" && (
+                    <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-500/5 border border-yellow-500/15">
+                      <AlertTriangle size={12} className="text-yellow-400 mt-0.5 shrink-0" />
+                      <p className="text-yellow-400/70 text-xs">{scoreResult.warning}</p>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Rug Indicators */}
+              {/* Rug indicators */}
               {scoreResult.rug_indicators?.length > 0 && (
-                <div className="space-y-1.5 mb-3">
+                <div className="px-4 py-3 border-t border-white/[0.06] space-y-1.5">
+                  <p className="text-[9px] font-mono text-white/25 uppercase tracking-widest mb-2">Risk Indicators</p>
                   {scoreResult.rug_indicators.map((f, i) => (
-                    <div key={i} className="flex items-start gap-2 p-2 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+                    <div key={i} className="flex items-start gap-2 p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05]">
                       <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
                         f.severity === "critical" ? "bg-[#FF4444]" :
                         f.severity === "high"     ? "bg-[#FF7A2F]" :
@@ -307,59 +462,32 @@ export function ScorePage() {
                 </div>
               )}
 
-              {/* Category Scores */}
-              {scoreResult.categories && (
-                <div className="grid grid-cols-2 gap-1.5 mb-3">
-                  {Object.entries(scoreResult.categories).map(([cat, val]) => {
-                    if (!val) return null;
-                    const isNeg  = val.earned < 0;
-                    const pct    = val.max > 0 ? Math.max(0, val.earned / val.max) : 0;
-                    const color  = isNeg ? "#FF4444" : pct >= 0.8 ? "#00FF41" : pct >= 0.5 ? "#FFDB2B" : "#FF7A2F";
-                    const negPct = val.max > 0 ? Math.min(100, Math.abs(val.earned) / val.max * 100) : 0;
-                    return (
-                      <div key={cat} className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.05]">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="text-[9px] font-mono text-white/35 uppercase tracking-wider">{cat.replace(/_/g, " ")}</span>
-                          <span className="text-[10px] font-mono font-bold" style={{ color }}>
-                            {isNeg ? "" : ""}{val.earned}/{val.max}
+              {/* Signals */}
+              <div className="px-4 py-3 border-t border-white/[0.06]">
+                {scoreResult.signals?.length ? (
+                  <details className="group">
+                    <summary className="text-xs text-white/30 cursor-pointer hover:text-white/50 transition-colors select-none">
+                      Показать все сигналы ({scoreResult.signals.length}) →
+                    </summary>
+                    <div className="mt-2 space-y-1">
+                      {scoreResult.signals.map((s, i) => (
+                        <div key={i} className="flex items-start gap-2 p-2 rounded bg-black/30 border border-white/[0.04]">
+                          <span className={`text-[9px] mt-0.5 shrink-0 ${s.ok === true ? "text-[#00FF41]" : s.ok === false ? "text-[#FF7A2F]" : "text-white/25"}`}>
+                            {s.ok === true ? "✓" : s.ok === false ? "✗" : "–"}
                           </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] text-white/60">{s.label}</p>
+                            {s.detail && <p className="text-[9px] text-white/30 mt-0.5">{s.detail}</p>}
+                          </div>
+                          <span className="text-[9px] font-mono text-white/30 shrink-0">{s.earned}/{s.max}</span>
                         </div>
-                        <div className="h-0.5 rounded bg-white/10 overflow-hidden relative">
-                          {isNeg
-                            ? <div className="h-full rounded absolute right-0 transition-all" style={{ width: `${negPct}%`, background: "#FF4444" }} />
-                            : <div className="h-full rounded transition-all" style={{ width: `${pct * 100}%`, background: color }} />
-                          }
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Signal Details */}
-              {scoreResult.signals?.length ? (
-                <details className="group">
-                  <summary className="text-xs text-white/30 cursor-pointer hover:text-white/50 transition-colors">
-                    Show all signals ({scoreResult.signals.length}) →
-                  </summary>
-                  <div className="mt-2 space-y-1">
-                    {scoreResult.signals.map((s, i) => (
-                      <div key={i} className="flex items-start gap-2 p-2 rounded bg-black/30 border border-white/[0.04]">
-                        <span className={`text-[9px] mt-0.5 ${s.ok === true ? "text-[#00FF41]" : s.ok === false ? "text-[#FF7A2F]" : "text-white/25"}`}>
-                          {s.ok === true ? "✓" : s.ok === false ? "✗" : "–"}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[10px] text-white/60">{s.label}</p>
-                          {s.detail && <p className="text-[9px] text-white/30 mt-0.5">{s.detail}</p>}
-                        </div>
-                        <span className="text-[9px] font-mono text-white/30 shrink-0">{s.earned}/{s.max}</span>
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              ) : (
-                <p className="text-[10px] text-white/25 font-mono">No signal breakdown available for this token.</p>
-              )}
+                      ))}
+                    </div>
+                  </details>
+                ) : (
+                  <p className="text-[10px] text-white/25 font-mono">No signal breakdown available.</p>
+                )}
+              </div>
             </motion.div>
           )}
         </GlassPanel>
