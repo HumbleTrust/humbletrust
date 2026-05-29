@@ -7,26 +7,19 @@ interface TickerItem {
   change24h: number;
 }
 
-// crypto.com Exchange API instruments
+const CG_KEY = (import.meta.env.VITE_COINGECKO_API_KEY as string) || "CG-mGH1d5uGSUubaj8sKxxBbwZT";
+
 const COINS = [
-  { instrument: "SOL_USDT",  symbol: "SOL"  },
-  { instrument: "BTC_USDT",  symbol: "BTC"  },
-  { instrument: "ETH_USDT",  symbol: "ETH"  },
-  { instrument: "JUP_USDT",  symbol: "JUP"  },
-  { instrument: "BONK_USDT", symbol: "BONK" },
-  { instrument: "WIF_USDT",  symbol: "WIF"  },
-  { instrument: "JTO_USDT",  symbol: "JTO"  },
+  { id: "solana",                    symbol: "SOL"  },
+  { id: "bitcoin",                   symbol: "BTC"  },
+  { id: "ethereum",                  symbol: "ETH"  },
+  { id: "jupiter-exchange-solana",   symbol: "JUP"  },
+  { id: "bonk",                      symbol: "BONK" },
+  { id: "dogwifcoin",                symbol: "WIF"  },
+  { id: "jito-governance-token",     symbol: "JTO"  },
 ];
 
-const FALLBACK: TickerItem[] = [
-  { symbol: "SOL",  price: 178.42,     change24h:  2.41 },
-  { symbol: "BTC",  price: 103200,     change24h:  1.18 },
-  { symbol: "ETH",  price: 3940,       change24h:  0.82 },
-  { symbol: "JUP",  price: 0.892,      change24h: -1.32 },
-  { symbol: "BONK", price: 0.0000312,  change24h:  5.24 },
-  { symbol: "WIF",  price: 2.84,       change24h: -0.71 },
-  { symbol: "JTO",  price: 3.21,       change24h:  3.12 },
-];
+const IDS = COINS.map(c => c.id).join(",");
 
 function fmt(price: number, sym: string): string {
   if (sym === "BONK" || price < 0.0001) return price.toFixed(8);
@@ -38,7 +31,7 @@ function fmt(price: number, sym: string): string {
 }
 
 export function TickerBar() {
-  const [items, setItems] = useState<TickerItem[]>(FALLBACK);
+  const [items, setItems] = useState<TickerItem[]>([]);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -46,37 +39,34 @@ export function TickerBar() {
 
     const load = async () => {
       try {
-        // Fetch all tickers from crypto.com Exchange API v2 in a single call
         const r = await fetch(
-          "https://api.crypto.com/v2/public/get-ticker",
-          { signal: AbortSignal.timeout(8000) }
+          `https://api.coingecko.com/api/v3/simple/price?ids=${IDS}&vs_currencies=usd&include_24hr_change=true`,
+          {
+            signal: AbortSignal.timeout(8000),
+            headers: { "x-cg-demo-api-key": CG_KEY },
+          }
         );
         if (!r.ok || !mounted.current) return;
         const data = await r.json();
-        const allTickers: any[] = data?.result?.data ?? [];
-        const map = new Map<string, any>(allTickers.map((t: any) => [t.i, t]));
 
-        const next: TickerItem[] = COINS.map(({ instrument, symbol }) => {
-          const t = map.get(instrument);
-          if (!t) return FALLBACK.find((f) => f.symbol === symbol)!;
-          const price = Number(t.a) || 0;
-          // 'c' is 24h absolute price change; convert to percentage
-          const absChange = Number(t.c) || 0;
-          const prevPrice = price - absChange;
-          const change24h = prevPrice > 0 ? (absChange / prevPrice) * 100 : 0;
-          return { symbol, price, change24h };
-        });
+        const next: TickerItem[] = COINS.map(({ id, symbol }) => {
+          const d = data[id];
+          if (!d) return null;
+          return { symbol, price: d.usd ?? 0, change24h: d.usd_24h_change ?? 0 };
+        }).filter(Boolean) as TickerItem[];
 
-        if (mounted.current) setItems(next);
+        if (mounted.current && next.length > 0) setItems(next);
       } catch {
-        // keep current data / fallback
+        // keep current data
       }
     };
 
     load();
-    const id = setInterval(load, 30_000);
+    const id = setInterval(load, 60_000); // CoinGecko Demo: 30 req/min, refresh every 60s
     return () => { mounted.current = false; clearInterval(id); };
   }, []);
+
+  if (items.length === 0) return null;
 
   const doubled = [...items, ...items];
 
@@ -92,10 +82,7 @@ export function TickerBar() {
             <span key={i} className="inline-flex items-center gap-1.5 text-[11px] font-mono">
               <span className="text-white/40 font-bold tracking-widest">{symbol}</span>
               <span className="text-white/80">${fmt(price, symbol)}</span>
-              <span
-                className="flex items-center gap-0.5"
-                style={{ color: up ? "#00FF41" : "#f87171" }}
-              >
+              <span className="flex items-center gap-0.5" style={{ color: up ? "#00FF41" : "#f87171" }}>
                 {up ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
                 {Math.abs(change24h).toFixed(2)}%
               </span>
@@ -103,10 +90,8 @@ export function TickerBar() {
             </span>
           );
         })}
-        {/* Source attribution */}
         <span className="inline-flex items-center gap-1 text-[9px] font-mono text-white/20 shrink-0">
-          via crypto.com
-          <span className="text-white/10">·</span>
+          via CoinGecko <span className="text-white/10">·</span>
         </span>
       </div>
     </div>
