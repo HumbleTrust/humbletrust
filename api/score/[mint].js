@@ -23,6 +23,7 @@ const { createHash } = require("crypto");
 const { getClient }       = require("../_lib/db");
 const { isValidWallet, setCors } = require("../_lib/validate");
 const { getTrustLevel } = require("../_lib/trust");
+const { handleApiAuth, trackUsage } = require("../_lib/apiKey");
 const { detectChain }      = require('../_lib/chains/detect');
 const { fingerprintToken } = require('../_lib/tokenFingerprint');
 const { scoreProtocol }    = require('../_lib/scorers/protocol');
@@ -960,6 +961,13 @@ module.exports = async (req, res) => {
     return res.status(503).json({ error: "Service unavailable" });
   }
 
+  const authCtx = await handleApiAuth(req, res);
+  if (!authCtx) { clearTimeout(_guard); return; }
+  const doTrack = (fmt, cached = false) => {
+    const _m = (req.query || {}).mint;
+    trackUsage({ keyId: authCtx.keyId, ip: authCtx.ip, mint: _m, format: fmt, cached }).catch(() => {});
+  };
+
   const { mint, nocache, format, view } = req.query;
   if (!mint)                              { clearTimeout(_guard); return res.status(400).json({ error: "mint required" }); }
   if (typeof mint !== 'string' || mint.length > 100) { clearTimeout(_guard); return res.status(400).json({ error: "invalid mint address" }); }
@@ -977,7 +985,7 @@ module.exports = async (req, res) => {
   // ── Route: score history ───────────────────────────────────────────────────
   if (view === "history") {
     return handleHistory(req, res, mint, db)
-      .then(r => { clearTimeout(_guard); return r; })
+      .then(r => { doTrack("json", false); clearTimeout(_guard); return r; })
       .catch(e => {
         clearTimeout(_guard);
         console.error("[api/score history]", e.message);
@@ -1019,6 +1027,7 @@ module.exports = async (req, res) => {
         ? { name: result.onchain.name, symbol: result.onchain.symbol || null, status: null, logo_uri: result.onchain.image || null, creator: null, verified_issuer: false }
         : knownEntry ? { name: knownEntry.name, symbol: knownEntry.symbol, status: null, logo_uri: knownEntry.logo_uri || null, description: knownEntry.description || null, creator: null, verified_issuer: false }
         : null;
+      doTrack(isBadge ? "badge" : "json", false);
       clearTimeout(_guard);
       return res.json({
         mint,
@@ -1125,6 +1134,7 @@ module.exports = async (req, res) => {
       const cappedScore = applyCategoryCap(result.score, knownCategory);
 
       const rugRisk = computeRugRisk(result.flags || []);
+      doTrack(isBadge ? "badge" : "json", false);
       clearTimeout(_guard);
       if (!isBadge) res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=600");
       return res.json({
@@ -1230,6 +1240,7 @@ module.exports = async (req, res) => {
 
     // ── Badge fast-path: score from cache → return SVG without full compute ───
     if (isBadge && scoreData) {
+      doTrack("badge", true);
       clearTimeout(_guard);
       return sendBadgeResponse(res, scoreData);
     }
@@ -1354,6 +1365,7 @@ module.exports = async (req, res) => {
 
     // ── Badge response (post L3 compute) ──────────────────────────────────────
     if (isBadge) {
+      doTrack("badge", false);
       clearTimeout(_guard);
       return sendBadgeResponse(res, scoreData);
     }
@@ -1387,6 +1399,7 @@ module.exports = async (req, res) => {
       if (catSig) finalSignals = [...finalSignals, catSig];
     }
 
+    doTrack("json", isCached);
     clearTimeout(_guard);
     return res.json({
       mint,
