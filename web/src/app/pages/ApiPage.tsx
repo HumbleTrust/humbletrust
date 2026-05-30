@@ -5,15 +5,24 @@ import { HexScore } from "../components/HexAvatar";
 import {
   Zap, Shield, Code2, Copy, CheckCircle2, ExternalLink,
   Search, Check, X, Star, Crown, Key, Globe, Activity,
-  Chrome, Package, ArrowRight, Lock, Infinity,
+  Chrome, Package, ArrowRight, Lock,
 } from "lucide-react";
 import { cn } from "../components/ui/utils";
 
 const BASE = "https://humbletrust.vercel.app/api";
 const DEMO_MINT = "FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr";
-const PRO_EMAIL = "mailto:humble.trust@outlook.com?subject=PRO%20Subscription&body=I%27d%20like%20to%20subscribe%20to%20HumbleTrust%20PRO.";
-const ENT_EMAIL = "mailto:humble.trust@outlook.com?subject=Enterprise%20Plan&body=I%27d%20like%20to%20discuss%20the%20Enterprise%20plan.";
 const NFT_EMAIL = "mailto:humble.trust@outlook.com?subject=OG%20Pass%20Waitlist&body=Please%20add%20me%20to%20the%20OG%20Pass%20waitlist.";
+
+async function startCheckout(plan: "pro" | "enterprise", email?: string) {
+  const res = await fetch("/api/stripe/checkout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ plan, email }),
+  });
+  const data = await res.json();
+  if (data.url) window.location.href = data.url;
+  else throw new Error(data.message || "Checkout failed");
+}
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -29,6 +38,37 @@ function CopyBtn({ text, className }: { text: string; className?: string }) {
       className={cn("p-1.5 rounded text-white/30 hover:text-white/70 transition-colors", className)}
     >
       {ok ? <CheckCircle2 size={13} className="text-[#00FF41]" /> : <Copy size={13} />}
+    </button>
+  );
+}
+
+function PlanCTA({ plan, onScroll }: { plan: any; onScroll: () => void }) {
+  const [busy, setBusy] = useState(false);
+
+  const handle = async () => {
+    if (plan.action === "scroll") { onScroll(); return; }
+    if (plan.action.startsWith("stripe:")) {
+      setBusy(true);
+      try {
+        await startCheckout(plan.action.replace("stripe:", "") as "pro" | "enterprise");
+      } catch { setBusy(false); }
+      return;
+    }
+    window.location.href = plan.action;
+  };
+
+  return (
+    <button
+      onClick={handle}
+      disabled={busy}
+      className={cn(
+        "block w-full py-2.5 rounded-lg text-sm text-center transition-all cursor-pointer disabled:opacity-50",
+        plan.ctaStyle
+      )}
+    >
+      {busy ? (
+        <span className="inline-block w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+      ) : plan.cta}
     </button>
   );
 }
@@ -77,7 +117,7 @@ const PLANS = [
     ],
     cta: "Subscribe PRO",
     ctaStyle: "bg-[#00FF41] text-black font-bold hover:bg-[#00e63a]",
-    action: PRO_EMAIL,
+    action: "stripe:pro",
   },
   {
     id: "enterprise",
@@ -96,9 +136,9 @@ const PLANS = [
       { ok: true, text: "Webhooks + alerts" },
       { ok: true, text: "99.9% SLA + dedicated endpoint" },
     ],
-    cta: "Contact Us",
+    cta: "Subscribe Enterprise",
     ctaStyle: "border border-[#B026FF]/50 text-[#B026FF] hover:bg-[#B026FF]/10",
-    action: ENT_EMAIL,
+    action: "stripe:enterprise",
   },
   {
     id: "nft",
@@ -302,12 +342,12 @@ export const ApiPage = () => {
                 >
                   <Key size={14} /> Get Free Key
                 </button>
-                <a
-                  href={PRO_EMAIL}
+                <button
+                  onClick={() => startCheckout("pro")}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-lg border border-white/20 text-white text-sm hover:border-white/40 transition-all"
                 >
                   <Zap size={14} /> Subscribe PRO
-                </a>
+                </button>
               </div>
             </div>
 
@@ -485,18 +525,7 @@ export const ApiPage = () => {
                 </ul>
 
                 {/* CTA */}
-                <a
-                  href={plan.action === "scroll" ? undefined : plan.action}
-                  onClick={plan.action === "scroll" ? scrollToForm : undefined}
-                  target={plan.action.startsWith("mailto") ? undefined : "_blank"}
-                  rel="noreferrer"
-                  className={cn(
-                    "block w-full py-2.5 rounded-lg text-sm text-center transition-all cursor-pointer",
-                    plan.ctaStyle
-                  )}
-                >
-                  {plan.cta}
-                </a>
+                <PlanCTA plan={plan} onScroll={scrollToForm} />
               </GlassPanel>
             </motion.div>
           ))}
