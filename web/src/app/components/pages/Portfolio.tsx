@@ -1,4 +1,5 @@
 import { GlassPanel } from "../GlassPanel";
+import { HexAvatar } from "../HexAvatar";
 import { motion } from "motion/react";
 import { useState, useEffect, useCallback } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
@@ -154,7 +155,7 @@ export function Portfolio() {
               {solBalance !== null && (
                 <div className="flex items-center justify-between p-4 rounded-lg bg-white/5 border border-white/10">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-neon-green/20 border border-neon-green/30 flex items-center justify-center text-sm font-bold text-neon-green">◎</div>
+                    <HexAvatar label="SOL" size={32} color="#00FF41" />
                     <div>
                       <p className="font-medium text-white">SOL</p>
                       <p className="text-xs text-white/40">Native · Devnet</p>
@@ -169,16 +170,7 @@ export function Portfolio() {
                   className="flex items-center justify-between p-4 rounded-lg bg-white/5 border border-white/10 hover:border-white/20 transition-all"
                 >
                   <div className="flex items-center gap-3">
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                      style={{
-                        background: COLORS[i % COLORS.length] + "20",
-                        border: `1px solid ${COLORS[i % COLORS.length]}40`,
-                        color: COLORS[i % COLORS.length],
-                      }}
-                    >
-                      {t.symbol.slice(0, 2)}
-                    </div>
+                    <HexAvatar label={t.symbol} size={32} color={COLORS[i % COLORS.length]} />
                     <div>
                       <p className="font-medium text-white">
                         ${t.symbol}

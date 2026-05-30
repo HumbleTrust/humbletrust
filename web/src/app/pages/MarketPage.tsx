@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, memo } from "react";
+import { HexAvatar } from "../components/HexAvatar";
 import { Search, X, RefreshCw, BarChart2, TrendingUp, TrendingDown, Globe } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { GlassPanel } from "../components/GlassPanel";
@@ -229,7 +230,7 @@ export const MarketPage = () => {
                 {/* Modal header */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0">
                   <div className="flex items-center gap-3">
-                    <img src={selected.image} alt="" className="w-7 h-7 rounded-full" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                    <HexAvatar src={selected.image} label={selected.symbol} size={28} />
                     <div>
                       <span className="text-white font-semibold">{selected.name}</span>
                       <span className="text-white/40 font-normal ml-1.5 text-sm">{selected.symbol.toUpperCase()}</span>
@@ -288,14 +289,7 @@ export const MarketPage = () => {
               >
                 {/* Header */}
                 <div className="flex items-center gap-2.5 mb-3">
-                  <div className="w-10 h-10 rounded-full bg-white/10 border border-white/10 flex items-center justify-center shrink-0 overflow-hidden relative">
-                    <img
-                      src={coin.image}
-                      alt={coin.symbol}
-                      className="w-full h-full object-cover"
-                      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                    />
-                  </div>
+                  <HexAvatar src={coin.image} label={coin.symbol} size={40} />
                   <div className="flex-1 min-w-0">
                     <div className="text-white font-semibold text-sm">{coin.symbol.toUpperCase()}</div>
                     <div className="text-white/40 text-xs truncate">{coin.name}</div>

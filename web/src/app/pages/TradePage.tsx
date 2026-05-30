@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { HexAvatar } from "../components/HexAvatar";
 import { useAnchorWallet, useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { AnchorProvider } from "@coral-xyz/anchor";
 import { Connection, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
@@ -945,9 +946,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => selectWalletToken(token)}
                       >
-                        <div className="w-7 h-7 rounded-full bg-[#00FF41]/10 border border-[#00FF41]/20 flex items-center justify-center text-[10px] font-bold text-[#00FF41] shrink-0 overflow-hidden">
-                          {token.logo ? <img src={token.logo} alt="" className="w-full h-full object-cover" /> : token.symbol.slice(0, 2)}
-                        </div>
+                        <HexAvatar src={token.logo} label={token.symbol} size={28} />
                         <div className="flex-1 min-w-0">
                           <div className="text-white text-xs font-semibold">{token.symbol}</div>
                           <div className="text-white/40 text-[10px] truncate">{token.name} · {shortAddress(token.mint)}</div>
@@ -972,11 +971,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
             )}
             {!tokenDetecting && tokenInfo && (
               <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/[0.04] border border-white/10">
-                <div className="w-8 h-8 rounded-full bg-white/10 border border-white/10 shrink-0 overflow-hidden flex items-center justify-center text-xs font-bold text-white/60">
-                  {tokenInfo.logoUri
-                    ? <img src={tokenInfo.logoUri} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                    : tokenInfo.symbol.slice(0, 2)}
-                </div>
+                <HexAvatar src={tokenInfo.logoUri} label={tokenInfo.symbol} size={32} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="text-white text-sm font-semibold truncate">{tokenInfo.name}</span>

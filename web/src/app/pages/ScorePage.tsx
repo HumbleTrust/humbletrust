@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
+import { HexAvatar, HexScore } from "../components/HexAvatar";
 import {
   Shield, Search, ExternalLink, Copy, CheckCircle2,
   Zap, Globe, Activity, AlertTriangle, TrendingUp, Code2,
@@ -218,60 +219,7 @@ function RadarChart({ categories, color }: {
   );
 }
 
-// ── Score ring (SVG) ──────────────────────────────────────────────────────────
-
-function ScoreRing({ score, color }: { score: number; color: string }) {
-  const [mounted, setMounted] = useState(false);
-  const [displayed, setDisplayed] = useState(0);
-  const R = 38;
-  const circ = 2 * Math.PI * R;
-  const targetDash = Math.max(0, Math.min(1, score / 100)) * circ;
-
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => setMounted(true));
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
-  // Count-up number animation
-  useEffect(() => {
-    if (!mounted) return;
-    let start = 0;
-    const duration = 900;
-    const startTime = performance.now();
-    const tick = (now: number) => {
-      const pct = Math.min(1, (now - startTime) / duration);
-      const eased = 1 - Math.pow(1 - pct, 3);
-      setDisplayed(Math.round(eased * score));
-      if (pct < 1) requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  }, [mounted, score]);
-
-  return (
-    <svg viewBox="0 0 100 100" className="w-36 h-36">
-      {/* Background ring */}
-      <circle cx="50" cy="50" r={R} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="7" />
-      {/* Animated fill ring */}
-      <circle cx="50" cy="50" r={R} fill="none" stroke={color} strokeWidth="7"
-        strokeDasharray={circ}
-        strokeDashoffset={mounted ? circ - targetDash : circ}
-        strokeLinecap="round"
-        transform="rotate(-90 50 50)"
-        style={{
-          transition: "stroke-dashoffset 1.1s cubic-bezier(0.4,0,0.2,1)",
-          filter: `drop-shadow(0 0 10px ${color}90)`,
-        }} />
-      {/* Score number (counts up) */}
-      <text x="50" y="47" textAnchor="middle" dominantBaseline="middle"
-        fontSize="22" fontWeight="bold" fill={color} fontFamily="monospace"
-        style={{ transition: "opacity 0.3s", opacity: mounted ? 1 : 0 }}>
-        {displayed}
-      </text>
-      <text x="50" y="62" textAnchor="middle" dominantBaseline="middle"
-        fontSize="8" fill="rgba(255,255,255,0.30)" fontFamily="monospace">/100</text>
-    </svg>
-  );
-}
+// ScoreRing is replaced by HexScore (imported from HexAvatar.tsx)
 
 // ── Reputation bars chart (wallet) ───────────────────────────────────────────
 
@@ -476,10 +424,12 @@ export function ScorePage() {
 
               {/* Token header */}
               <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.07] bg-white/[0.02]">
-                {scoreResult.token?.logo_uri && (
-                  <img src={scoreResult.token.logo_uri} alt="" className="w-8 h-8 rounded-full border border-white/10 shrink-0"
-                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                )}
+                <HexAvatar
+                  src={scoreResult.token?.logo_uri}
+                  label={scoreResult.token?.symbol || scoreResult.token?.name || "?"}
+                  size={36}
+                  color={SCORE_COLORS[scoreResult.trust_level] || "#00FF41"}
+                />
                 <div className="flex-1 min-w-0">
                   <p className="text-white font-semibold text-sm truncate">
                     {scoreResult.token?.name ?? mintInput.slice(0, 12) + "…"}
@@ -521,7 +471,7 @@ export function ScorePage() {
                   }
                 </div>
                 <div className="flex flex-col items-center justify-center gap-3 px-6 py-4 min-w-[180px]">
-                  <ScoreRing score={scoreResult.score} color={SCORE_COLORS[scoreResult.trust_level]} />
+                  <HexScore score={scoreResult.score} color={SCORE_COLORS[scoreResult.trust_level]} />
                   <span className="text-sm font-bold font-mono tracking-widest"
                     style={{ color: SCORE_COLORS[scoreResult.trust_level] }}>
                     {scoreResult.trust_level}
@@ -734,7 +684,7 @@ export function ScorePage() {
                   <ReputationChart risk={riskResult} color={RISK_COLORS[riskResult.risk_level]} />
                 </div>
                 <div className="flex flex-col items-center justify-center gap-3 px-6 py-4 min-w-[180px]">
-                  <ScoreRing score={riskResult.reputation_score} color={RISK_COLORS[riskResult.risk_level]} />
+                  <HexScore score={riskResult.reputation_score} color={RISK_COLORS[riskResult.risk_level]} />
                   <span className="text-sm font-bold font-mono tracking-widest"
                     style={{ color: RISK_COLORS[riskResult.risk_level] }}>
                     {riskResult.risk_level} RISK
@@ -864,7 +814,7 @@ export function ScorePage() {
                   const pos = chg.startsWith("+");
                   return (
                     <div key={name} className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-white/[0.03] transition-colors">
-                      <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-bold text-white/50">{name[0]}</div>
+                      <HexAvatar label={name} size={24} color={c} />
                       <div className="flex-1 min-w-0">
                         <span className="text-[11px] font-semibold text-white">{name}</span>
                         <span className="text-[10px] text-white/35 ml-1.5">{full}</span>
@@ -896,7 +846,7 @@ export function ScorePage() {
                   const c = SCORE_COLORS[level] || "#888";
                   return (
                     <div key={sym} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/[0.03] transition-colors">
-                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-white/10 to-white/5 border border-white/10 flex items-center justify-center text-[10px] font-bold text-white/60">{sym[0]}</div>
+                      <HexAvatar label={sym} size={28} color={SCORE_COLORS[level]} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <span className="text-[11px] font-semibold text-white">{sym}</span>

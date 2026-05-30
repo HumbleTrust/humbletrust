@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { HexAvatar } from "../components/HexAvatar";
 import { ArrowLeft, Award, Check, Copy, ExternalLink, HardDrive, Lock, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { ApiToken, ApiTrade, getToken, getTokens, getTokenTrades } from "../../lib/solana/api";
@@ -433,23 +434,12 @@ export const DiscoverPage = ({ onOpenToken, initialMint, onBack }: DiscoverPageP
                   {/* Card top */}
                   <div className="flex items-center gap-3 mb-3">
                     {/* Logo */}
-                    <div className={cn(
-                      "w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold shrink-0 overflow-hidden",
-                      score >= 85
-                        ? "bg-gradient-to-br from-[#00FF41]/30 to-[#B026FF]/30 border border-[#00FF41]/40"
-                        : "bg-[#00FF41]/10 border border-[#00FF41]/20"
-                    )}>
-                      {t.logo_uri ? (
-                        <img
-                          src={t.logo_uri}
-                          alt={t.symbol || ""}
-                          className="w-full h-full object-cover"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                        />
-                      ) : (
-                        <span className="text-[#00FF41] font-mono">{initials}</span>
-                      )}
-                    </div>
+                    <HexAvatar
+                      src={t.logo_uri}
+                      label={t.symbol || t.name || "?"}
+                      size={48}
+                      gradient={score >= 85}
+                    />
                     {/* Meta */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
