@@ -963,7 +963,7 @@ module.exports = async (req, res) => {
       const rugRisk = computeRugRisk(result.flags || []);
       const tokenInfo = result.onchain?.name
         ? { name: result.onchain.name, symbol: result.onchain.symbol || null, status: null, logo_uri: result.onchain.image || null, creator: null, verified_issuer: false }
-        : knownEntry ? { name: knownEntry.name, symbol: knownEntry.symbol, status: null, logo_uri: null, creator: null, verified_issuer: false }
+        : knownEntry ? { name: knownEntry.name, symbol: knownEntry.symbol, status: null, logo_uri: knownEntry.logo_uri || null, description: knownEntry.description || null, creator: null, verified_issuer: false }
         : null;
       clearTimeout(_guard);
       return res.json({
@@ -1083,7 +1083,7 @@ module.exports = async (req, res) => {
         source:         result.source || 'registry+onchain',
         network:        'solana',
         platform:       knownSolanaToken.name,
-        token: { name: knownSolanaToken.name, symbol: knownSolanaToken.symbol, status: null, logo_uri: null, creator: null, verified_issuer: false },
+        token: { name: knownSolanaToken.name, symbol: knownSolanaToken.symbol, status: null, logo_uri: knownSolanaToken.logo_uri || null, description: knownSolanaToken.description || null, creator: null, verified_issuer: false },
         categories:     result.categories,
         signals:        result.signals,
         flags:          result.flags,

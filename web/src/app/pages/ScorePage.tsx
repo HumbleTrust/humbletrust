@@ -435,6 +435,9 @@ export function ScorePage() {
                       <span className="text-white/40 ml-1.5 font-normal">({scoreResult.token.symbol})</span>
                     )}
                   </p>
+                  {scoreResult.token?.description && (
+                    <p className="text-[11px] text-white/50 mt-0.5 leading-tight line-clamp-2">{scoreResult.token.description}</p>
+                  )}
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                     <span className="text-[9px] font-mono text-white/30">via {scoreResult.source}</span>
                     {scoreResult.chain && (
