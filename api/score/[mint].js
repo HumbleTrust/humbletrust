@@ -758,51 +758,87 @@ const HISTORY_MIN_DELTA = 3;                   // min score delta to write new h
 // ════════════════════════════════════════════════════════════════════════════
 
 const BADGE_COLORS = {
-  ELITE:  { bg: "#00d4aa", text: "#003d30" },
-  STRONG: { bg: "#00b894", text: "#003d30" },
-  OK:     { bg: "#fdcb6e", text: "#5c4500" },
-  WEAK:   { bg: "#e17055", text: "#fff"    },
-  DANGER: { bg: "#d63031", text: "#fff"    },
+  ELITE:  { bg: "#00c896", border: "#00a878", text: "#001f16", numBg: "#00a878" },
+  STRONG: { bg: "#00b07a", border: "#009060", text: "#001f16", numBg: "#009060" },
+  OK:     { bg: "#e8a020", border: "#c88010", text: "#1a0e00", numBg: "#c88010" },
+  WEAK:   { bg: "#d4562a", border: "#b03a18", text: "#fff",    numBg: "#b03a18" },
+  DANGER: { bg: "#c02020", border: "#9a0a0a", text: "#fff",    numBg: "#9a0a0a" },
 };
 
 function buildBadge(score, trust_level, tokenName) {
-  const c     = BADGE_COLORS[trust_level] || { bg: "#888", text: "#fff" };
+  const c = BADGE_COLORS[trust_level] || { bg: "#555", border: "#333", text: "#fff", numBg: "#333" };
+
+  const H = 22;
+  const FONT = "DejaVu Sans,Verdana,Geneva,Lucida,sans-serif";
+
+  // Left section: "HumbleTrust"
   const label = "HumbleTrust";
-  const value = `${trust_level}  ${score}`;
+  const lw    = Math.ceil(label.length * 6.6 + 22);
+
+  // Right section: "TRUST_LEVEL" + score pill
+  const lvLen  = trust_level.length;
+  const scLen  = String(score).length;
+  const lvW    = Math.ceil(lvLen * 6.6 + 14);
+  const numW   = Math.ceil(scLen * 7.8 + 14);   // wider chars for the number pill
+  const vw     = lvW + numW + 4;
+
+  const W     = lw + vw;
   const title = `HumbleTrust TrustScore: ${trust_level} ${score}/100${tokenName ? ` — ${tokenName}` : ""}`;
 
-  // ~6.5 px per char at font-size 11, + 20 px horizontal padding
-  const lw = Math.ceil(label.length * 6.5 + 20);
-  const vw = Math.ceil(value.length * 6.5 + 20);
-  const W  = lw + vw;
-  const H  = 20;
+  // Vertical centres
+  const yTxt  = Math.round(H / 2) + 4;   // baseline ≈ visual centre for 11px font
+  const yShad = yTxt + 1;
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" role="img" aria-label="${label}: ${score}">
+  // Right half x centres
+  const xLv   = lw + Math.round(lvW / 2);
+  const xNum  = lw + lvW + 4 + Math.round(numW / 2);
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" role="img" aria-label="TrustScore ${trust_level} ${score}/100">
 <title>${title}</title>
 <defs>
-  <linearGradient id="g" x2="0" y2="100%">
-    <stop offset="0"  stop-color="#eee" stop-opacity=".2"/>
-    <stop offset="1"  stop-opacity=".1"/>
+  <linearGradient id="sheen" x2="0" y2="100%">
+    <stop offset="0"  stop-color="#fff" stop-opacity=".14"/>
+    <stop offset="1"  stop-color="#000" stop-opacity=".10"/>
+  </linearGradient>
+  <!-- HumbleTrust brand gradient: green → purple -->
+  <linearGradient id="htg" x1="0" x2="1" y1="0" y2="0">
+    <stop offset="0%"   stop-color="#00FF41"/>
+    <stop offset="100%" stop-color="#B026FF"/>
   </linearGradient>
   <mask id="m"><rect width="${W}" height="${H}" rx="4" fill="#fff"/></mask>
 </defs>
 <g mask="url(#m)">
-  <rect width="${lw}" height="${H}" fill="#444"/>
+  <!-- left panel — near-black -->
+  <rect width="${lw}" height="${H}" fill="#0d1117"/>
+  <!-- right panel — trust level colour -->
   <rect x="${lw}" width="${vw}" height="${H}" fill="${c.bg}"/>
-  <rect width="${W}" height="${H}" fill="url(#g)"/>
+  <!-- score number pill — darker shade -->
+  <rect x="${lw + lvW + 4}" width="${numW}" height="${H}" fill="${c.numBg}"/>
+  <!-- shared gloss overlay -->
+  <rect width="${W}" height="${H}" fill="url(#sheen)"/>
+  <!-- separator line -->
+  <line x1="${lw}" y1="0" x2="${lw}" y2="${H}" stroke="#fff" stroke-opacity=".12" stroke-width="1"/>
+  <line x1="${lw + lvW + 4}" y1="3" x2="${lw + lvW + 4}" y2="${H - 3}" stroke="${c.text}" stroke-opacity=".25" stroke-width="1"/>
 </g>
-<g font-family="DejaVu Sans,Verdana,Geneva,Lucida,sans-serif" font-size="11" text-anchor="middle">
-  <text x="${lw / 2}" y="14" fill="#010101" fill-opacity=".35">${label}</text>
-  <text x="${lw / 2}" y="13" fill="#fff">${label}</text>
-  <text x="${lw + vw / 2}" y="14" fill="#010101" fill-opacity=".35" font-weight="bold">${value}</text>
-  <text x="${lw + vw / 2}" y="13" fill="${c.text}" font-weight="bold">${value}</text>
-</g>
-</svg>`;
+<!-- "HumbleTrust" — brand gradient text -->
+<text x="${lw / 2}" y="${yShad}" text-anchor="middle" fill="#000" fill-opacity=".4"
+  font-family="${FONT}" font-size="11" font-weight="700">${label}</text>
+<text x="${lw / 2}" y="${yTxt}" text-anchor="middle" fill="url(#htg)"
+  font-family="${FONT}" font-size="11" font-weight="700">${label}</text>
+<!-- Trust level label -->
+<text x="${xLv}" y="${yShad}" text-anchor="middle" fill="#000" fill-opacity=".3"
+  font-family="${FONT}" font-size="10" font-weight="700">${trust_level}</text>
+<text x="${xLv}" y="${yTxt}" text-anchor="middle" fill="${c.text}"
+  font-family="${FONT}" font-size="10" font-weight="700">${trust_level}</text>
+<!-- Score number — bold, slightly larger -->
+<text x="${xNum}" y="${yShad}" text-anchor="middle" fill="#000" fill-opacity=".3"
+  font-family="${FONT}" font-size="12" font-weight="900">${score}</text>
+<text x="${xNum}" y="${yTxt}" text-anchor="middle" fill="${c.text}"
+  font-family="${FONT}" font-size="12" font-weight="900">${score}</text>
+</svg>`
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// Feature: Rug Risk Assessment
-// ════════════════════════════════════════════════════════════════════════════
+
 
 function computeRugRisk(flags = []) {
   const WEIGHTS = {
