@@ -23,7 +23,7 @@
     "mb1eu7TzEc71KxDpsmsKoucSSuuoGLv1drys1oP2jh6":   { "name": "Helium Mobile",       "symbol": "MOBILE",  "archetype": "ecosystem",  "category": "infrastructure", "baseline_score": 65, "tier": 2 },
     "iotEVVZLEywoTn1QdwNPddxPWszn3zFhEot3MfL9fns":   { "name": "Helium IOT",          "symbol": "IOT",     "archetype": "ecosystem",  "category": "infrastructure", "baseline_score": 63, "tier": 2 },
     "rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof":  { "name": "Render",              "symbol": "RNDR",    "archetype": "ecosystem",  "category": "ai",             "baseline_score": 72, "tier": 1 },
-    "TNSRxcUxoT9xBG3de7A4QJ1Zd9xiFZLXxDt4reQNXP":   { "name": "Tensor",              "symbol": "TNSR",    "archetype": "ecosystem",  "category": "nft",            "baseline_score": 65, "tier": 2 },
+
     "EchesyfXePKdLtoiZSL8pBe8Myagyy8ZRqsACNCFGnvp":  { "name": "Bonfida",             "symbol": "FIDA",    "archetype": "ecosystem",  "category": "defi",           "baseline_score": 60, "tier": 2 },
     "StepAscQoEioFxxWGnh2sLBDFp9d8rvKz2Yp39iDpyT":  { "name": "Step Finance",        "symbol": "STEP",    "archetype": "ecosystem",  "category": "defi",           "baseline_score": 60, "tier": 2 },
     "ATLASXmbPQxBUYbxPsV97usA3fPQYEqzQBUHgiFCUsXx":  { "name": "Star Atlas",          "symbol": "ATLAS",   "archetype": "ecosystem",  "category": "gaming",         "baseline_score": 60, "tier": 2 },
