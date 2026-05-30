@@ -1281,7 +1281,7 @@ pub struct CreateTokenWithLock<'info> {
     #[account(mut)]
     pub creator: Signer<'info>,
 
-    /// CHECK: проверяется вручную
+    /// CHECK: validated manually
     #[account(mut)]
     pub fee_wallet: UncheckedAccount<'info>,
 

@@ -504,7 +504,7 @@ export function ScorePage() {
                   {scoreResult.data_quality === "PARTIAL" && !scoreResult.known_token && (
                     <div className="flex items-start gap-2 p-3 rounded-lg bg-orange-500/5 border border-orange-500/20">
                       <AlertTriangle size={12} className="text-orange-400 mt-0.5 shrink-0" />
-                      <p className="text-orange-400/70 text-xs">Partial data — некоторые сигналы не удалось верифицировать.</p>
+                      <p className="text-orange-400/70 text-xs">Partial data — some signals could not be verified.</p>
                     </div>
                   )}
                   {scoreResult.warning && scoreResult.data_quality !== "INSUFFICIENT" && (
@@ -538,7 +538,7 @@ export function ScorePage() {
                 {scoreResult.signals?.length ? (
                   <details className="group">
                     <summary className="text-xs text-white/30 cursor-pointer hover:text-white/50 transition-colors select-none">
-                      Показать все сигналы ({scoreResult.signals.length}) →
+                      Show all signals ({scoreResult.signals.length}) →
                     </summary>
                     <div className="mt-2 space-y-1">
                       {scoreResult.signals.map((s, i) => (

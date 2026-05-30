@@ -836,7 +836,7 @@ function computeRugRisk(flags = []) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function handleHistory(req, res, mint, db) {
-  const limit = Math.min(parseInt(req.query.limit) || 30, 90);
+  const limit = Math.max(1, Math.min(parseInt(req.query.limit) || 30, 90));
 
   const { data: rows } = await db
     .from("score_history")
@@ -882,6 +882,20 @@ async function handleHistory(req, res, mint, db) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// Badge helper — applies category cap then sends SVG
+// ════════════════════════════════════════════════════════════════════════════
+
+function sendBadgeResponse(res, scoreData) {
+  const category   = scoreData.category || categoryFromPlatform(scoreData.platform || '');
+  const capped     = scoreData._nativeToken ? scoreData.score : applyCategoryCap(scoreData.score, category);
+  const trustLevel = getTrustLevel(capped);
+  const tokenName  = scoreData.token?.name || scoreData.token?.symbol || null;
+  res.setHeader("Content-Type", "image/svg+xml");
+  res.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+  return res.send(buildBadge(capped, trustLevel, tokenName));
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // HTTP handler
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -911,12 +925,16 @@ module.exports = async (req, res) => {
   }
 
   const { mint, nocache, format, view } = req.query;
-  if (!mint)                { clearTimeout(_guard); return res.status(400).json({ error: "mint required" }); }
+  if (!mint)                              { clearTimeout(_guard); return res.status(400).json({ error: "mint required" }); }
+  if (typeof mint !== 'string' || mint.length > 100) { clearTimeout(_guard); return res.status(400).json({ error: "invalid mint address" }); }
 
-  // Multi-chain address validation: allow EVM, BTC, TON addresses in addition to Solana
-  const _chainDetect = detectChain(mint);
-  const _isNonSolana = _chainDetect.chain !== 'solana' && _chainDetect.chain !== 'unknown' && _chainDetect.confidence > 0;
-  if (!_isNonSolana && !isValidWallet(mint)) { clearTimeout(_guard); return res.status(400).json({ error: "invalid mint address" }); }
+  // Multi-chain address validation: allow EVM, BTC, TON addresses in addition to Solana.
+  // A string that passes isValidWallet() (32-byte Ed25519 base58) is always Solana —
+  // this prevents BTC_RE false-positives for short Solana addresses starting with 1/3.
+  const _isActualSolana = isValidWallet(mint);
+  const _chainDetect    = detectChain(mint);
+  const _isNonSolana    = !_isActualSolana && _chainDetect.chain !== 'solana' && _chainDetect.chain !== 'unknown' && _chainDetect.confidence > 0;
+  if (!_isNonSolana && !_isActualSolana) { clearTimeout(_guard); return res.status(400).json({ error: "invalid mint address" }); }
 
   const db = getClient();
 
@@ -935,14 +953,14 @@ module.exports = async (req, res) => {
 
   try {
     // ── Multi-chain fast path ────────────────────────────────────────────────────
-    const chainInfo = detectChain(mint);
+    const chainInfo = _chainDetect;   // reuse result from validation step above
     const chain = chainInfo.chain;
 
     // Fast path: non-Solana chains
     if (chain !== 'solana' && chain !== 'unknown') {
       const chainRegistry = knownTokens[chain] || {};
       const mintNorm = mint.toLowerCase();
-      const NATIVE_ALIASES = new Set(['native','btc','bitcoin','eth','ether','bnb','bsc','ton','toncoin','sol','solana','matic','polygon','op','optimism','avax','avalanche','arb','arbitrum','base','ftm','fantom','near','sui','apt','aptos','algo','algorand','atom','cosmos','ada','cardano','dot','polkadot','xrp','trx','tron']);
+      const NATIVE_ALIASES = new Set(['native','btc','bitcoin','eth','ether','ethereum','bnb','bsc','ton','toncoin','sol','solana','matic','polygon','pol','op','optimism','avax','avalanche','arb','arbitrum','base','ftm','fantom','near','sui','apt','aptos','algo','algorand','atom','cosmos','ada','cardano','dot','polkadot','xrp','ripple','trx','tron']);
       const isNativeAlias = NATIVE_ALIASES.has(mintNorm);
       const knownEntry = chainRegistry[mint] || chainRegistry[mintNorm] || (isNativeAlias ? chainRegistry['native'] : null);
       const isBitcoin = chain === 'bitcoin';
@@ -1040,24 +1058,27 @@ module.exports = async (req, res) => {
 
         // Stablecoin peg check — only meaningful if we have a live price
         if (knownCategory === 'stablecoin') {
-          const priceDev = Math.abs((priceData.price_usd || 1) - 1.0) * 100; // % deviation from $1
-          if (priceDev > 5) {
-            result.flags.push({ type: 'stablecoin_depeg', severity: 'critical',
-              msg: `Stablecoin trading at $${(priceData.price_usd || 0).toFixed(4)} — ${priceDev.toFixed(1)}% off peg` });
-            result.score = Math.max(0, result.score - 20);
-            result.signals.push({ id: 'peg_deviation', category: 'legitimacy', earned: -10, max: 0, ok: false,
-              label: `DEPEG: $${(priceData.price_usd || 0).toFixed(4)} (${priceDev.toFixed(1)}% off $1)`,
-              detail: 'Severe peg deviation — stablecoin may be failing' });
-          } else if (priceDev > 2) {
-            result.flags.push({ type: 'stablecoin_depeg', severity: 'high',
-              msg: `Stablecoin trading at $${(priceData.price_usd || 0).toFixed(4)} — slight depeg` });
-            result.score = Math.max(0, result.score - 8);
-            result.signals.push({ id: 'peg_deviation', category: 'legitimacy', earned: -3, max: 0, ok: false,
-              label: `Slight depeg: $${(priceData.price_usd || 0).toFixed(4)}`, detail: 'Minor peg deviation' });
-          } else {
-            result.signals.push({ id: 'peg_maintained', category: 'legitimacy', earned: 5, max: 5, ok: true,
-              label: `Peg maintained: $${(priceData.price_usd || 0).toFixed(4)}`,
-              detail: 'Trading within 2% of $1.00 — peg is healthy' });
+          const price    = priceData.price_usd != null ? priceData.price_usd : null;
+          if (price !== null) {
+            const priceDev = Math.abs(price - 1.0) * 100; // % deviation from $1
+            if (priceDev > 5) {
+              result.flags.push({ type: 'stablecoin_depeg', severity: 'critical',
+                msg: `Stablecoin trading at $${price.toFixed(4)} — ${priceDev.toFixed(1)}% off peg` });
+              result.score = Math.max(0, result.score - 20);
+              result.signals.push({ id: 'peg_deviation', category: 'legitimacy', earned: -10, max: 0, ok: false,
+                label: `DEPEG: $${price.toFixed(4)} (${priceDev.toFixed(1)}% off $1)`,
+                detail: 'Severe peg deviation — stablecoin may be failing' });
+            } else if (priceDev > 2) {
+              result.flags.push({ type: 'stablecoin_depeg', severity: 'high',
+                msg: `Stablecoin trading at $${price.toFixed(4)} — slight depeg` });
+              result.score = Math.max(0, result.score - 8);
+              result.signals.push({ id: 'peg_deviation', category: 'legitimacy', earned: -3, max: 0, ok: false,
+                label: `Slight depeg: $${price.toFixed(4)}`, detail: 'Minor peg deviation' });
+            } else {
+              result.signals.push({ id: 'peg_maintained', category: 'legitimacy', earned: 5, max: 5, ok: true,
+                label: `Peg maintained: $${price.toFixed(4)}`,
+                detail: 'Trading within 2% of $1.00 — peg is healthy' });
+            }
           }
         }
       }
@@ -1069,6 +1090,7 @@ module.exports = async (req, res) => {
 
       const rugRisk = computeRugRisk(result.flags || []);
       clearTimeout(_guard);
+      if (!isBadge) res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=600");
       return res.json({
         mint,
         chain: 'solana',
@@ -1172,32 +1194,29 @@ module.exports = async (req, res) => {
 
     // ── Badge fast-path: score from cache → return SVG without full compute ───
     if (isBadge && scoreData) {
-      const tokenName = scoreData.token?.name || scoreData.token?.symbol || null;
       clearTimeout(_guard);
-      res.setHeader("Content-Type", "image/svg+xml");
-      res.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
-      return res.send(buildBadge(scoreData.score, scoreData.trust_level, tokenName));
+      return sendBadgeResponse(res, scoreData);
     }
 
     // ── L3 Full on-chain computation ──────────────────────────────────────────
     if (!scoreData) {
-      let mintInfo = await fetchMintInfo(mint, MAINNET);
-      let ep       = MAINNET;
-      let network  = "mainnet-beta";
+      const [mainnetInfo, devnetInfo] = await Promise.all([
+        fetchMintInfo(mint, MAINNET).catch(() => null),
+        fetchMintInfo(mint, DEVNET).catch(() => null),
+      ]);
+      const mintInfo = mainnetInfo || devnetInfo;
+      const ep       = mainnetInfo ? MAINNET : DEVNET;
+      const network  = mainnetInfo ? "mainnet-beta" : devnetInfo ? "devnet" : "unknown";
 
-      if (!mintInfo) {
-        mintInfo = await fetchMintInfo(mint, DEVNET);
-        ep       = DEVNET;
-        network  = mintInfo ? "devnet" : "unknown";
-      }
       if (!mintInfo) {
         clearTimeout(_guard);
         return res.status(404).json({ error: "Mint account not found on mainnet or devnet", mint });
       }
 
-      const [platform, computed] = await Promise.all([
+      const [platform, computed, mktRaw] = await Promise.all([
         detectPlatform(mint, mintInfo.mintAuthority, ep),
         computeScore(mint, mintInfo, ep, db),
+        fetchMarketContext(mint).catch(() => null),
       ]);
 
       const { score, data_quality, categories, signals, flags, onchain, creator } = computed;
@@ -1223,13 +1242,12 @@ module.exports = async (req, res) => {
       onchain.decimals = mintInfo.decimals;
       onchain.platform = platform;
 
-      // ── Market context enrichment (non-blocking, best-effort) ─────────────
-      // Adds price_crash / low_liquidity flags using Birdeye free API.
+      // ── Market context enrichment (already fetched in parallel above) ────────
       let mktScore = score;
       let mktFlags = flags;
       let mktSignals = signals;
       try {
-        const mkt = await fetchMarketContext(mint);
+        const mkt = mktRaw;
         if (mkt) {
           onchain.market = mkt;
           // Price crash: ≤ -70% in 24h
@@ -1262,6 +1280,7 @@ module.exports = async (req, res) => {
         score: finalScore, trust_level: finalTrustLevel, data_quality,
         source:   "external",
         network,  platform,
+        category: categoryFromPlatform(platform) || null,
         token:    tokenInfo,
         categories, signals: mktSignals, flags: mktFlags, onchain,
         _computedAt: now.toISOString(),
@@ -1299,11 +1318,8 @@ module.exports = async (req, res) => {
 
     // ── Badge response (post L3 compute) ──────────────────────────────────────
     if (isBadge) {
-      const tokenName = scoreData.token?.name || scoreData.token?.symbol || null;
       clearTimeout(_guard);
-      res.setHeader("Content-Type", "image/svg+xml");
-      res.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
-      return res.send(buildBadge(scoreData.score, scoreData.trust_level, tokenName));
+      return sendBadgeResponse(res, scoreData);
     }
 
     // ── JSON response ──────────────────────────────────────────────────────────

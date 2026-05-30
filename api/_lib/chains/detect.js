@@ -2,7 +2,7 @@
 const BS58_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const EVM_RE  = /^0x[0-9a-fA-F]{40}$/;
 const TON_RE  = /^(EQ|UQ)[0-9A-Za-z_-]{46}$/;
-const BTC_RE  = /^(1|3)[1-9A-HJ-NP-Za-km-z]{25,34}$|^bc1[0-9a-zA-Z]{6,87}$/;
+const BTC_RE  = /^(1|3)[1-9A-HJ-NP-Za-km-z]{25,34}$|^bc1[0-9a-z]{6,87}$/;
 
 // Chain name aliases — all lowercase inputs
 const ALIASES = {
