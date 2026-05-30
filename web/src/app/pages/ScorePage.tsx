@@ -59,30 +59,82 @@ const ENDPOINTS = [
   },
 ];
 
-const CODE_JS = `// JavaScript / TypeScript
-const getScore = async (mint) => {
-  const r = await fetch(\`${BASE}/score/\${mint}\`);
-  const { score, trust_level, source, token } = await r.json();
-  console.log(\`Score: \${score}/100 [\${trust_level}] via \${source}\`);
+const CODE_JS = `// Fetch a TrustScore
+const r = await fetch(\`${BASE}/score/\${mint}\`);
+const d = await r.json();
+// d.score        — 0-100
+// d.trust_level  — "ELITE" | "STRONG" | "OK" | "WEAK" | "DANGER"
+// d.rug_risk     — "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+// d.token        — { name, symbol, logo_uri, description }
+// d.signals      — scored components array
+// d.flags        — active risk flags
+
+if (d.score < 50 || d.rug_risk === "HIGH") {
+  console.warn(\`⚠️ Risky token: \${d.trust_level} \${d.score}/100\`);
+}`;
+
+const CODE_REACT = `import { useState, useEffect } from "react";
+
+const COLORS = {
+  ELITE: "#00FF41", STRONG: "#14F195",
+  OK: "#FFDB2B", WEAK: "#FF7A2F", DANGER: "#FF4444",
 };
 
-const getWalletRisk = async (wallet) => {
-  const r = await fetch(\`${BASE}/wallets/\${wallet}\`);
-  const { reputation_score, risk_level, flags } = await r.json();
-  return { reputation_score, risk_level, flags };
-};`;
+// Drop-in badge — add to any token listing row
+export function TrustBadge({ mint }: { mint: string }) {
+  const [d, setD] = useState<any>(null);
+  useEffect(() => {
+    fetch(\`${BASE}/score/\${mint}\`)
+      .then(r => r.json()).then(setD);
+  }, [mint]);
 
-const CODE_PY = `# Python
-import requests
+  if (!d) return null;
+  return (
+    <a href="https://humbletrust.vercel.app" target="_blank"
+      style={{ display: "inline-flex", alignItems: "center", gap: 4,
+               fontSize: 11, fontWeight: 700, fontFamily: "monospace",
+               color: COLORS[d.trust_level], textDecoration: "none" }}>
+      <img src={\`${BASE}/score/\${mint}?format=badge\`}
+           alt={\`TrustScore: \${d.score}/100\`} height={20} />
+    </a>
+  );
+}`;
+
+const CODE_PY = `import requests
 
 def get_score(mint: str) -> dict:
     r = requests.get(f"${BASE}/score/{mint}", timeout=8)
-    d = r.json()
-    print(f"Score: {d['score']}/100 [{d['trust_level']}]")
-    return d
+    return r.json()
 
-def get_health(mint: str) -> dict:
-    return requests.get(f"${BASE}/tokens/{mint}?check=health", timeout=8).json()`;
+def is_safe(mint: str, min_score: int = 60) -> bool:
+    d = get_score(mint)
+    return (
+        d.get("score", 0) >= min_score and
+        d.get("rug_risk") not in ("HIGH", "CRITICAL")
+    )
+
+# Trading bot filter
+for mint in watchlist:
+    if not is_safe(mint):
+        print(f"SKIP {mint} — trust below threshold")
+    else:
+        place_buy_order(mint)`;
+
+const CODE_CURL = `# Token TrustScore (JSON)
+curl "${BASE}/score/JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN"
+
+# SVG badge — link directly in any HTML or README
+# <img src="${BASE}/score/{MINT}?format=badge" alt="TrustScore" />
+# ![TrustScore](${BASE}/score/{MINT}?format=badge)
+
+# Score history (trend over time)
+curl "${BASE}/score/{MINT}?view=history"
+
+# Wallet reputation score
+curl "${BASE}/wallets/{WALLET}"
+
+# Token health (volume, buy/sell ratio, anomalies)
+curl "${BASE}/tokens/{MINT}?check=health"`;
 
 // ── Radar chart (SVG, no external lib) ───────────────────────────────────────
 
@@ -300,7 +352,7 @@ export function ScorePage() {
   const [loadingRisk, setLoadingRisk]   = useState(false);
   const [scoreErr, setScoreErr] = useState<string | null>(null);
   const [riskErr, setRiskErr]   = useState<string | null>(null);
-  const [activeCode, setActiveCode] = useState<"js" | "py">("js");
+  const [activeCode, setActiveCode] = useState<"js" | "react" | "py" | "curl">("js");
 
   const fetchScore = async () => {
     if (!mintInput.trim()) return;
@@ -564,6 +616,65 @@ export function ScorePage() {
         </GlassPanel>
       </motion.div>
 
+      {/* Badge embed preview — shown after a score is fetched */}
+      {scoreResult && mintInput && (
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+          <GlassPanel className="p-6" glow="purple">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-[#B026FF]/15 border border-[#B026FF]/25 flex items-center justify-center">
+                <Code2 size={14} className="text-[#B026FF]" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-white">Embed This Badge</h2>
+                <p className="text-[11px] text-white/35">One line — works in any HTML, README, or token listing</p>
+              </div>
+              {/* Live badge rendered by the API */}
+              <div className="ml-auto shrink-0">
+                <img
+                  src={`${BASE}/score/${mintInput.trim()}?format=badge`}
+                  alt="TrustScore badge"
+                  height={20}
+                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {/* HTML snippet */}
+              <div>
+                <p className="text-[9px] font-mono text-white/25 uppercase tracking-widest mb-1">HTML</p>
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-black/40 border border-white/[0.07]">
+                  <code className="text-[10px] text-[#00FF41]/80 font-mono flex-1 truncate">
+                    {`<img src="${BASE}/score/${mintInput.trim()}?format=badge" alt="TrustScore" />`}
+                  </code>
+                  <CopyButton text={`<img src="${BASE}/score/${mintInput.trim()}?format=badge" alt="TrustScore" />`} />
+                </div>
+              </div>
+              {/* Markdown snippet */}
+              <div>
+                <p className="text-[9px] font-mono text-white/25 uppercase tracking-widest mb-1">Markdown (GitHub / README)</p>
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-black/40 border border-white/[0.07]">
+                  <code className="text-[10px] text-[#B026FF]/80 font-mono flex-1 truncate">
+                    {`![TrustScore](${BASE}/score/${mintInput.trim()}?format=badge)`}
+                  </code>
+                  <CopyButton text={`![TrustScore](${BASE}/score/${mintInput.trim()}?format=badge)`} />
+                </div>
+              </div>
+              {/* JSON endpoint */}
+              <div>
+                <p className="text-[9px] font-mono text-white/25 uppercase tracking-widest mb-1">API (JSON)</p>
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-black/40 border border-white/[0.07]">
+                  <code className="text-[10px] text-white/45 font-mono flex-1 truncate">
+                    {`curl "${BASE}/score/${mintInput.trim()}"`}
+                  </code>
+                  <CopyButton text={`curl "${BASE}/score/${mintInput.trim()}"`} />
+                </div>
+              </div>
+            </div>
+          </GlassPanel>
+        </motion.div>
+      )}
+
       {/* Live Try It — Wallet Risk */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
         <GlassPanel className="p-6">
@@ -699,52 +810,146 @@ export function ScorePage() {
       {/* Code Examples */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
         <GlassPanel className="p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <h2 className="text-base font-bold text-white">Code Examples</h2>
             <div className="flex gap-1 p-1 rounded-lg bg-white/5 border border-white/10">
-              {(["js", "py"] as const).map(lang => (
-                <button key={lang}
-                  onClick={() => setActiveCode(lang)}
+              {([
+                { id: "js",   label: "JS" },
+                { id: "react", label: "React" },
+                { id: "py",   label: "Python" },
+                { id: "curl", label: "cURL" },
+              ] as const).map(({ id, label }) => (
+                <button key={id}
+                  onClick={() => setActiveCode(id)}
                   className={`px-3 py-1 rounded-md text-xs font-mono transition-all ${
-                    activeCode === lang ? "bg-[#00FF41] text-black font-bold" : "text-white/40 hover:text-white/70"
+                    activeCode === id ? "bg-[#00FF41] text-black font-bold" : "text-white/40 hover:text-white/70"
                   }`}
                 >
-                  {lang === "js" ? "JavaScript" : "Python"}
+                  {label}
                 </button>
               ))}
             </div>
           </div>
           <div className="relative">
-            <pre className="p-4 rounded-xl bg-black/50 border border-white/[0.07] text-xs text-white/60 font-mono overflow-auto leading-relaxed">
-              {activeCode === "js" ? CODE_JS : CODE_PY}
+            <pre className="p-4 rounded-xl bg-black/50 border border-white/[0.07] text-xs text-white/60 font-mono overflow-auto leading-relaxed max-h-64">
+              {activeCode === "js" ? CODE_JS : activeCode === "react" ? CODE_REACT : activeCode === "py" ? CODE_PY : CODE_CURL}
             </pre>
-            <CopyButton text={activeCode === "js" ? CODE_JS : CODE_PY} />
+            <CopyButton text={activeCode === "js" ? CODE_JS : activeCode === "react" ? CODE_REACT : activeCode === "py" ? CODE_PY : CODE_CURL} />
           </div>
         </GlassPanel>
       </motion.div>
 
-      {/* Use cases */}
+      {/* Platform integration mockups */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
         <GlassPanel className="p-6">
-          <h2 className="text-base font-bold text-white mb-5">Integration Use Cases</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {[
-              { icon: TrendingUp, color: "#00FF41", title: "Trading Bots", desc: "Filter buy signals by TrustScore. Only trade tokens with STRONG+ rating." },
-              { icon: Shield,     color: "#B026FF", title: "Wallet UI",    desc: "Show TrustScore badge next to any token in a wallet app (Phantom, Backpack)." },
-              { icon: Search,     color: "#00D4FF", title: "Token Aggregators", desc: "Jupiter, DexScreener, Birdeye — embed HumbleTrust score in token listings." },
-              { icon: Activity,   color: "#FFD700", title: "Risk Dashboards", desc: "Monitor creator wallet reputation before investing in a new launch." },
-            ].map(({ icon: Icon, color, title, desc }) => (
-              <div key={title} className="flex gap-4 p-4 rounded-xl bg-white/[0.03] border border-white/[0.07]">
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-                  style={{ background: `${color}12`, border: `1px solid ${color}25` }}>
-                  <Icon className="w-4 h-4" style={{ color }} />
+          <div className="mb-5">
+            <h2 className="text-base font-bold text-white">Works Everywhere</h2>
+            <p className="text-xs text-white/35 mt-1">One API — any platform. Drop into your existing stack in minutes.</p>
+          </div>
+
+          <div className="space-y-4">
+            {/* DEX Aggregator mockup */}
+            <div className="rounded-xl border border-white/[0.08] bg-black/30 overflow-hidden">
+              <div className="px-3 py-1.5 bg-white/[0.03] border-b border-white/[0.06] flex items-center gap-2">
+                <Search size={10} className="text-white/25" />
+                <span className="text-[9px] font-mono text-white/25 uppercase tracking-widest">DEX Aggregator  ·  Jupiter / DexScreener style</span>
+              </div>
+              <div className="p-3 space-y-1">
+                {[
+                  { name: "JUP", full: "Jupiter", price: "$0.782", chg: "+3.4%", score: 91, level: "ELITE" },
+                  { name: "WIF", full: "dogwifhat", price: "$2.14", chg: "-1.2%", score: 72, level: "OK" },
+                  { name: "???", full: "New Token", price: "$0.00041", chg: "+218%", score: 27, level: "WEAK" },
+                ].map(({ name, full, price, chg, score, level }) => {
+                  const c = SCORE_COLORS[level] || "#888";
+                  const pos = chg.startsWith("+");
+                  return (
+                    <div key={name} className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-white/[0.03] transition-colors">
+                      <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-bold text-white/50">{name[0]}</div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[11px] font-semibold text-white">{name}</span>
+                        <span className="text-[10px] text-white/35 ml-1.5">{full}</span>
+                      </div>
+                      <span className="text-[11px] font-mono text-white/70">{price}</span>
+                      <span className={`text-[10px] font-mono w-12 text-right ${pos ? "text-[#00FF41]" : "text-[#FF7A2F]"}`}>{chg}</span>
+                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded"
+                        style={{ color: c, background: `${c}18`, border: `1px solid ${c}30` }}>
+                        {level} {score}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Wallet extension mockup */}
+            <div className="rounded-xl border border-white/[0.08] bg-black/30 overflow-hidden">
+              <div className="px-3 py-1.5 bg-white/[0.03] border-b border-white/[0.06] flex items-center gap-2">
+                <Shield size={10} className="text-white/25" />
+                <span className="text-[9px] font-mono text-white/25 uppercase tracking-widest">Wallet Extension  ·  Phantom / Backpack style</span>
+              </div>
+              <div className="p-3 space-y-1">
+                {[
+                  { sym: "SOL",  name: "Solana",    bal: "12.5",  usd: "$1,562", score: 97, level: "ELITE" },
+                  { sym: "USDC", name: "USD Coin",  bal: "420.0", usd: "$420",   score: 95, level: "ELITE" },
+                  { sym: "BONK", name: "Bonk",      bal: "2.4M",  usd: "$36",    score: 65, level: "OK"    },
+                ].map(({ sym, name, bal, usd, score, level }) => {
+                  const c = SCORE_COLORS[level] || "#888";
+                  return (
+                    <div key={sym} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/[0.03] transition-colors">
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-white/10 to-white/5 border border-white/10 flex items-center justify-center text-[10px] font-bold text-white/60">{sym[0]}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-semibold text-white">{sym}</span>
+                          <span className="text-[9px] font-mono px-1 py-0.5 rounded" style={{ color: c, background: `${c}15` }}>
+                            <Shield size={7} style={{ display: "inline", marginRight: 2 }} />{score}
+                          </span>
+                        </div>
+                        <span className="text-[9px] text-white/30">{name}</span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[11px] text-white/70 font-mono">{bal}</p>
+                        <p className="text-[9px] text-white/30 font-mono">{usd}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Trading bot / Discord alert mockup */}
+            <div className="rounded-xl border border-white/[0.08] bg-black/30 overflow-hidden">
+              <div className="px-3 py-1.5 bg-white/[0.03] border-b border-white/[0.06] flex items-center gap-2">
+                <TrendingUp size={10} className="text-white/25" />
+                <span className="text-[9px] font-mono text-white/25 uppercase tracking-widest">Trading Bot / Discord Alert</span>
+              </div>
+              <div className="p-3 font-mono text-[11px] space-y-1.5">
+                <div className="flex gap-2">
+                  <span className="text-white/20">$</span>
+                  <span className="text-[#00FF41]/70">GET /api/score/DezXAZ8z7Pnrn...</span>
                 </div>
-                <div>
-                  <p className="font-semibold text-white text-sm mb-1">{title}</p>
-                  <p className="text-xs text-white/40 leading-relaxed">{desc}</p>
+                <div className="flex gap-2 pl-3">
+                  <span className="text-white/20">→</span>
+                  <span className="text-white/50">score: <span className="text-[#00FF41] font-bold">65</span>  trust_level: <span className="text-[#FFDB2B]">"OK"</span>  rug_risk: <span className="text-[#00FF41]">"LOW"</span></span>
+                </div>
+                <div className="flex gap-2 pl-3">
+                  <span className="text-white/20">→</span>
+                  <span className="text-[#00FF41]/70">✓ Score ≥ 60 and rug_risk LOW — placing buy order…</span>
+                </div>
+                <div className="mt-2 h-px bg-white/[0.05]" />
+                <div className="flex gap-2">
+                  <span className="text-white/20">$</span>
+                  <span className="text-[#00FF41]/70">GET /api/score/FGQ16c5cmDkm...</span>
+                </div>
+                <div className="flex gap-2 pl-3">
+                  <span className="text-white/20">→</span>
+                  <span className="text-white/50">score: <span className="text-[#FF4444] font-bold">22</span>  trust_level: <span className="text-[#FF4444]">"DANGER"</span>  rug_risk: <span className="text-[#FF4444]">"CRITICAL"</span></span>
+                </div>
+                <div className="flex gap-2 pl-3">
+                  <span className="text-white/20">→</span>
+                  <span className="text-[#FF7A2F]/80">⚠ SKIP — score below threshold, high rug risk</span>
                 </div>
               </div>
-            ))}
+            </div>
           </div>
         </GlassPanel>
       </motion.div>
