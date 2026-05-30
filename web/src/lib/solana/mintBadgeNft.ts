@@ -73,7 +73,7 @@ export async function mintBadgeNft(
   const tx_signature = Buffer.from(signature).toString("base64");
 
   // 4. Confirm with backend — store badge_mint + tx_signature
-  const confirmRes = await fetch("/api/badges/confirm", {
+  const confirmRes = await fetch("/api/badges/prepare", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
