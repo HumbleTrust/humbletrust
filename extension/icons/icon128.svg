@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00FF41"/>
+      <stop offset="100%" stop-color="#B026FF"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <polygon points="64,8 120,36 120,92 64,120 8,92 8,36" fill="#0a0a0f" stroke="url(#g)" stroke-width="5" filter="url(#glow)"/>
+  <text x="64" y="54" text-anchor="middle" font-family="Arial Black,sans-serif" font-weight="900" font-size="22" fill="url(#g)">Humble</text>
+  <text x="64" y="80" text-anchor="middle" font-family="Arial Black,sans-serif" font-weight="900" font-size="22" fill="url(#g)">Trust</text>
+</svg>

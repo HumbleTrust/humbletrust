@@ -1,6 +1,6 @@
 import {
   Home, LayoutDashboard, Rocket, Compass, ArrowLeftRight,
-  Wallet, BarChart2, Award, Settings, Shield, MoreHorizontal, X, Info, Code2,
+  Wallet, BarChart2, Award, Settings, Shield, MoreHorizontal, X, Info, Code2, Zap,
 } from "lucide-react";
 import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -15,16 +15,17 @@ interface NavigationProps {
 
 const navItems = [
   { id: "home",       label: "Home",        icon: Home },
-  { id: "dashboard",  label: "Dashboard",  icon: LayoutDashboard },
-  { id: "launch",     label: "Launch",      icon: Rocket },
-  { id: "discover",   label: "Discover",    icon: Compass },
-  { id: "trade",      label: "Trade",       icon: ArrowLeftRight },
-  { id: "portfolio",  label: "Portfolio",   icon: Wallet },
-  { id: "market",     label: "Market",      icon: BarChart2 },
-  { id: "nft",        label: "NFT Badges",  icon: Award },
-  { id: "score",      label: "Score API",   icon: Code2 },
-  { id: "about",      label: "About",       icon: Info },
-  { id: "settings",   label: "Settings",    icon: Settings },
+  { id: "dashboard",  label: "Dashboard",   icon: LayoutDashboard },
+  { id: "launch",     label: "Launch",       icon: Rocket },
+  { id: "discover",   label: "Discover",     icon: Compass },
+  { id: "trade",      label: "Trade",        icon: ArrowLeftRight },
+  { id: "portfolio",  label: "Portfolio",    icon: Wallet },
+  { id: "market",     label: "Market",       icon: BarChart2 },
+  { id: "nft",        label: "NFT Badges",   icon: Award },
+  { id: "score",      label: "Score API",    icon: Code2 },
+  { id: "api",        label: "API Plans",    icon: Zap },
+  { id: "about",      label: "About",        icon: Info },
+  { id: "settings",   label: "Settings",     icon: Settings },
 ];
 
 const primaryNavItems = [
@@ -36,12 +37,13 @@ const primaryNavItems = [
 ];
 
 const moreNavItems = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "market",    label: "Market",    icon: BarChart2 },
-  { id: "nft",       label: "NFT Badges",icon: Award },
-  { id: "score",     label: "Score API", icon: Code2 },
-  { id: "about",     label: "About",     icon: Info },
-  { id: "settings",  label: "Settings",  icon: Settings },
+  { id: "dashboard", label: "Dashboard",  icon: LayoutDashboard },
+  { id: "market",    label: "Market",     icon: BarChart2 },
+  { id: "nft",       label: "NFT Badges", icon: Award },
+  { id: "score",     label: "Score API",  icon: Code2 },
+  { id: "api",       label: "API Plans",  icon: Zap },
+  { id: "about",     label: "About",      icon: Info },
+  { id: "settings",  label: "Settings",   icon: Settings },
 ];
 
 export function Navigation({ activeTab, onTabChange }: NavigationProps) {

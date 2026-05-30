@@ -1,0 +1,66 @@
+.ht-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px 2px 4px;
+  border-radius: 6px;
+  background: rgba(10, 10, 15, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 11px;
+  line-height: 1;
+  text-decoration: none !important;
+  vertical-align: middle;
+  margin-left: 6px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.ht-badge:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+.ht-hex {
+  width: 20px;
+  height: 20px;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 9px;
+  border: 1.5px solid transparent;
+}
+
+.ht-label {
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+}
+
+.ht-spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.ht-spin-inner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 255, 65, 0.2);
+  border-top-color: #00FF41;
+  animation: ht-spin 0.7s linear infinite;
+  display: block;
+}
+
+@keyframes ht-spin {
+  to { transform: rotate(360deg); }
+}

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00FF41"/>
+      <stop offset="100%" stop-color="#B026FF"/>
+    </linearGradient>
+  </defs>
+  <polygon points="24,3 45,13.5 45,34.5 24,45 3,34.5 3,13.5" fill="#0a0a0f" stroke="url(#g)" stroke-width="3"/>
+  <text x="24" y="31" text-anchor="middle" font-family="Arial Black,sans-serif" font-weight="900" font-size="18" fill="url(#g)">HT</text>
+</svg>
