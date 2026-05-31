@@ -10,6 +10,7 @@ import {
   PROGRAM_ID_V2_PK,
   getProgram,
   getProgramV2,
+  findCreatorReputationV2Pda,
   initCreatorReputation,
   initCreatorReputationV2,
   isProgramExecutable,
@@ -242,6 +243,17 @@ export function LaunchPage() {
 
     return () => { mounted = false; };
   }, [connection]);
+
+  // Check on-chain if reputation PDA already exists for this wallet
+  useEffect(() => {
+    if (!wallet.publicKey) { setRepDone(false); return; }
+    let mounted = true;
+    const [repPda] = findCreatorReputationV2Pda(wallet.publicKey);
+    connection.getAccountInfo(repPda)
+      .then(info => { if (mounted) setRepDone(!!info); })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, [wallet.publicKey, connection]);
 
   useEffect(() => {
     if (!wallet.publicKey) { setWalletSolBalance(null); return; }
@@ -1095,23 +1107,32 @@ export function LaunchPage() {
                 <div className="mb-3 p-4 rounded-lg bg-[#00FF41]/5 border border-[#00FF41]/15">
                   <div className="flex items-center gap-2 mb-2">
                     <UserCheck size={14} className="text-[#00FF41]" />
-                    <span className="text-sm font-semibold text-white">Phase 4.5 — Initialize Creator Reputation</span>
+                    <span className="text-sm font-semibold text-white">Phase 4.5 — Creator Reputation</span>
                   </div>
-                  <p className="text-xs text-white/40 mb-3 leading-relaxed">
-                    One-time setup. Tracks your launches, unlocks, and complaints. Clean record earns +5 on your next token's initial TrustScore.
+                  <p className="text-xs text-white/40 mb-1 leading-relaxed">
+                    One-time on-chain setup. Creates your creator profile PDA that tracks launches, unlocks, and complaints.
                   </p>
+                  <ul className="text-xs text-white/30 mb-3 space-y-0.5 pl-2">
+                    <li>• Each token launch is recorded on your profile</li>
+                    <li>• Successful unlocks build your track record</li>
+                    <li>• Clean history improves your trust standing</li>
+                    <li>• Visible to buyers in TrustScore signals</li>
+                  </ul>
                   {repDone ? (
-                    <p className="text-xs text-[#00FF41]">✓ Reputation account initialized</p>
+                    <div className="flex items-center gap-2 text-xs text-[#00FF41]">
+                      <UserCheck size={12} />
+                      Reputation account active — your launches are being tracked
+                    </div>
                   ) : (
                     <>
                       <button
                         onClick={handleInitReputation}
-                        disabled={repBusy}
+                        disabled={repBusy || !wallet.connected}
                         className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#00FF41]/10 border border-[#00FF41]/30 text-[#00FF41] text-xs hover:bg-[#00FF41]/20 disabled:opacity-50 transition-all"
                       >
                         {repBusy ? (
                           <><Loader size={11} className="animate-spin" />Initializing...</>
-                        ) : "Init Reputation Account"}
+                        ) : <><UserCheck size={11} />Init Reputation Account</>}
                       </button>
                       {repError && <p className="text-red-400 text-xs mt-2">{repError}</p>}
                     </>
