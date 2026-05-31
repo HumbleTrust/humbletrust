@@ -10,23 +10,51 @@ interface TickerItem {
 const CG_KEY = (import.meta.env.VITE_COINGECKO_API_KEY as string) || "CG-mGH1d5uGSUubaj8sKxxBbwZT";
 
 const COINS = [
-  { id: "solana",                    symbol: "SOL"  },
-  { id: "bitcoin",                   symbol: "BTC"  },
-  { id: "ethereum",                  symbol: "ETH"  },
-  { id: "jupiter-exchange-solana",   symbol: "JUP"  },
-  { id: "bonk",                      symbol: "BONK" },
-  { id: "dogwifcoin",                symbol: "WIF"  },
-  { id: "jito-governance-token",     symbol: "JTO"  },
+  // Market leaders
+  { id: "bitcoin",                      symbol: "BTC"    },
+  { id: "ethereum",                     symbol: "ETH"    },
+  { id: "solana",                       symbol: "SOL"    },
+  { id: "binancecoin",                  symbol: "BNB"    },
+  { id: "ripple",                       symbol: "XRP"    },
+  { id: "cardano",                      symbol: "ADA"    },
+  { id: "avalanche-2",                  symbol: "AVAX"   },
+  { id: "sui",                          symbol: "SUI"    },
+  { id: "aptos",                        symbol: "APT"    },
+  { id: "the-open-network",            symbol: "TON"    },
+  // Solana ecosystem
+  { id: "jupiter-exchange-solana",      symbol: "JUP"    },
+  { id: "jito-governance-token",        symbol: "JTO"    },
+  { id: "raydium",                      symbol: "RAY"    },
+  { id: "orca",                         symbol: "ORCA"   },
+  { id: "pyth-network",                 symbol: "PYTH"   },
+  { id: "wormhole",                     symbol: "W"      },
+  { id: "drift-protocol",              symbol: "DRIFT"  },
+  { id: "kamino",                       symbol: "KMNO"   },
+  { id: "tensor",                       symbol: "TNSR"   },
+  // Solana memecoins
+  { id: "bonk",                         symbol: "BONK"   },
+  { id: "dogwifcoin",                   symbol: "WIF"    },
+  { id: "popcat",                       symbol: "POPCAT" },
+  { id: "cat-in-a-dogs-world",         symbol: "MEW"    },
+  { id: "book-of-meme",                symbol: "BOME"   },
+  // DeFi blue chips
+  { id: "uniswap",                      symbol: "UNI"    },
+  { id: "aave",                         symbol: "AAVE"   },
+  { id: "chainlink",                    symbol: "LINK"   },
+  { id: "polkadot",                     symbol: "DOT"    },
+  { id: "dogecoin",                     symbol: "DOGE"   },
 ];
 
 const IDS = COINS.map(c => c.id).join(",");
 
 function fmt(price: number, sym: string): string {
-  if (sym === "BONK" || price < 0.0001) return price.toFixed(8);
-  if (price < 0.01)  return price.toFixed(6);
-  if (price < 1)     return price.toFixed(4);
-  if (price < 100)   return price.toFixed(3);
-  if (price < 10000) return price.toFixed(2);
+  if (price < 0.000001) return price.toExponential(2);
+  if (price < 0.0001 || sym === "BONK") return price.toFixed(8);
+  if (price < 0.001)  return price.toFixed(7);
+  if (price < 0.01)   return price.toFixed(6);
+  if (price < 1)      return price.toFixed(4);
+  if (price < 100)    return price.toFixed(3);
+  if (price < 10000)  return price.toFixed(2);
   return price.toLocaleString("en-US", { maximumFractionDigits: 0 });
 }
 
@@ -74,7 +102,7 @@ export function TickerBar() {
     <div className="overflow-hidden border-b border-white/[0.06] bg-black/60 backdrop-blur-sm h-8 flex items-center select-none">
       <div
         className="flex gap-10 items-center px-4 whitespace-nowrap"
-        style={{ animation: "ticker-scroll 40s linear infinite" }}
+        style={{ animation: "ticker-scroll 80s linear infinite" }}
       >
         {doubled.map(({ symbol, price, change24h }, i) => {
           const up = change24h >= 0;

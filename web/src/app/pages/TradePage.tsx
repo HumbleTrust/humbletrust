@@ -48,6 +48,7 @@ import {
   type MigrationState,
 } from "../../lib/solana/program";
 import { listTokens } from "../../lib/solana/image";
+import { swapOnRaydiumCpmm, estimateCpmmSwap } from "../../lib/solana/raydium-cpmm-swap";
 import { motion } from "motion/react";
 import { GlassPanel } from "../components/GlassPanel";
 import { cn } from "../components/ui/utils";
@@ -239,6 +240,9 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   const [jupiterQuoting, setJupiterQuoting] = useState(false);
   const tokenInfoRef = useRef<TokenInfo | null>(null);
 
+  // Raydium CPMM live estimate (after migration)
+  const [cpmmEstimate, setCpmmEstimate] = useState<{ out: number; impact: number } | null>(null);
+
   // Migration state (devnet curve tokens only)
   const [migrationState, setMigrationState] = useState<MigrationState | null>(null);
   const [lpLockState, setLpLockState]       = useState<LpLockState | null>(null);
@@ -340,6 +344,23 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
     }, 700);
     return () => clearTimeout(timer);
   }, [tokenInfo, side, solAmount, tokensAmount, mintInput, slippageBps, validMint]);
+
+  // Live Raydium CPMM estimate (debounced 500ms) — only after migration
+  useEffect(() => {
+    const isMigrated = !!(migrationState?.isMigrated) && tokenInfo?.network !== "mainnet-beta";
+    if (!isMigrated || !validMint) { setCpmmEstimate(null); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const mint = new PublicKey(mintInput.trim());
+        const isBuy = side === "buy";
+        const amt   = isBuy ? parsePositive(solAmount, 0) : parsePositive(tokensAmount, 0);
+        if (amt <= 0) { setCpmmEstimate(null); return; }
+        const { estimatedOut, priceImpactPct } = await estimateCpmmSwap(connection, mint, amt, isBuy);
+        setCpmmEstimate({ out: estimatedOut, impact: priceImpactPct });
+      } catch { setCpmmEstimate(null); }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [migrationState?.isMigrated, tokenInfo?.network, validMint, side, solAmount, tokensAmount, mintInput, connection]);
 
   const solIn = useMemo(() => parsePositive(solAmount, 0), [solAmount]);
   const tokensIn = useMemo(() => parsePositive(tokensAmount, 0), [tokensAmount]);
@@ -589,7 +610,27 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   };
 
   const runBuy = async () => {
-    if (raydiumTradingActive) { openRaydiumSwap(); return; }
+    if (raydiumTradingActive) {
+      // Direct Raydium CPMM swap — no redirect
+      if (!wallet.publicKey || !wallet.signTransaction) return;
+      setBusy("buy"); setTradeError(null); setTxSig(null);
+      try {
+        const mint = new PublicKey(mintInput.trim());
+        const solAmt = parsePositive(solAmount, 0);
+        if (solAmt <= 0) throw new Error("Enter a valid SOL amount");
+        const result = await swapOnRaydiumCpmm(
+          wallet, connection, mint, true, solAmt, slippageBps, selectedDecimals,
+        );
+        setTxSig(result.signature);
+        await Promise.all([refreshReserves(), loadWalletTokens()]);
+        setTimeout(() => fetchChartTrades(mintInput.trim(), true), 3000);
+      } catch (e: any) {
+        setTradeError(friendlyError(e.message || String(e)));
+      } finally {
+        setBusy(null);
+      }
+      return;
+    }
     if (!anchorWallet || !wallet.connected) return;
     if (isMainnet) { return runMainnetBuy(); }
     setBusy("buy"); setTradeError(null); setTxSig(null);
@@ -645,7 +686,27 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
   };
 
   const runSell = async () => {
-    if (raydiumTradingActive) { openRaydiumSwap(); return; }
+    if (raydiumTradingActive) {
+      // Direct Raydium CPMM swap — no redirect
+      if (!wallet.publicKey || !wallet.signTransaction) return;
+      setBusy("sell"); setTradeError(null); setTxSig(null);
+      try {
+        const mint = new PublicKey(mintInput.trim());
+        const tokAmt = parsePositive(tokensAmount, 0);
+        if (tokAmt <= 0) throw new Error("Enter a valid token amount");
+        const result = await swapOnRaydiumCpmm(
+          wallet, connection, mint, false, tokAmt, slippageBps, selectedDecimals,
+        );
+        setTxSig(result.signature);
+        await Promise.all([refreshReserves(), loadWalletTokens()]);
+        setTimeout(() => fetchChartTrades(mintInput.trim(), true), 3000);
+      } catch (e: any) {
+        setTradeError(friendlyError(e.message || String(e)));
+      } finally {
+        setBusy(null);
+      }
+      return;
+    }
     if (!anchorWallet || !wallet.connected) return;
     if (isMainnet) { return runMainnetSell(); }
     setBusy("sell"); setTradeError(null); setTxSig(null);
@@ -1110,7 +1171,11 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                         : formatCompact(Number(jupiterQuote.outAmount) / LAMPORTS_PER_SOL, 6)
                       : <span className="text-white/30 text-sm">Enter amount</span>
                 ) : raydiumTradingActive ? (
-                  <span className="text-white/30 text-sm">Live quote opens on Raydium</span>
+                  cpmmEstimate
+                    ? (side === "buy"
+                        ? formatCompact(cpmmEstimate.out, 4)
+                        : formatCompact(cpmmEstimate.out, 6))
+                    : <span className="text-white/30 text-sm">Enter amount</span>
                 ) : (
                   side === "buy" ? formatCompact(estimatedTokens, 4) : formatCompact(estimatedSol, 6)
                 )}
@@ -1118,6 +1183,11 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
               {isMainnet && jupiterQuote && (
                 <div className="text-white/30 text-[10px]">
                   impact {Number(jupiterQuote.priceImpactPct).toFixed(2)}% · via Jupiter
+                </div>
+              )}
+              {raydiumTradingActive && cpmmEstimate && (
+                <div className="text-white/30 text-[10px]">
+                  impact {cpmmEstimate.impact.toFixed(2)}% · via Raydium CPMM
                 </div>
               )}
             </div>
@@ -1224,7 +1294,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
 
             {/* Action button */}
             <button
-              onClick={raydiumTradingActive ? openRaydiumSwap : side === "buy" ? runBuy : runSell}
+              onClick={side === "buy" ? runBuy : runSell}
               disabled={!canSubmitTrade}
               className={cn(
                 "w-full py-3.5 rounded-lg font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed",
@@ -1237,7 +1307,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                 : isMainnet
                   ? side === "buy" ? `Buy ${selectedSymbol} via Jupiter` : `Sell ${selectedSymbol} via Jupiter`
                   : raydiumTradingActive
-                    ? side === "buy" ? "Buy on Raydium" : "Sell on Raydium"
+                    ? side === "buy" ? `Buy ${selectedSymbol}` : `Sell ${selectedSymbol}`
                   : migrationPreparedOnly
                     ? "Migration prepared"
                   : side === "buy" ? "Buy on Curve" : "Sell on Curve"}
