@@ -494,9 +494,10 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
       .then(trades => { setChartTrades(trades); setChartLoading(false); })
       .catch((err: Error) => {
         const msg = err.message || "";
-        // NOT_FOUND or 404 = token has no trades yet, not a real error
-        if (msg.includes("NOT_FOUND") || msg.includes("404") || msg.includes("not found")) {
-          setChartTrades([]);
+        // Treat as "no data" when: route not found, token not indexed, or invalid address
+        if (msg.includes("NOT_FOUND") || msg.includes("404") || msg.includes("not found") ||
+            msg.includes("invalid mint") || msg.includes("400") || msg.includes("Bad Request")) {
+          if (!silent) setChartTrades([]);
         } else if (!silent) {
           setChartError(msg);
         }
@@ -685,22 +686,21 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
       setTxSig(signature);
       const blockTime = await getConfirmedBlockTime(connection, signature);
       const chainTrade = await fetchCurveTradeFromTransaction(connection, signature, mint, "buy");
-      const indexedTrade = await recordTrade(mintInput.trim(), {
+      const tradePayload = {
         signature,
         trader: chainTrade?.trader ?? anchorWallet.publicKey.toBase58(),
-        side: chainTrade?.side ?? "buy",
-        source: chainTrade?.source ?? "curve",
+        side: (chainTrade?.side ?? "buy") as "buy" | "sell",
+        source: (chainTrade?.source ?? "curve") as "curve" | "raydium",
         token_amount: chainTrade?.token_amount ?? estimatedTokens,
         sol_amount: chainTrade?.sol_amount ?? solIn,
         price_sol: chainTrade?.price_sol ?? nextPrice,
         block_time: chainTrade?.block_time ?? blockTime,
-      });
-      if (indexedTrade?.error) {
-        console.error("[recordTrade:buy]", indexedTrade.error);
-        setChartError(`Trade saved on-chain, but chart history did not index: ${indexedTrade.error}`);
-      } else {
-        setChartError(null);
-      }
+      };
+      // Optimistic: show trade in chart immediately without waiting for backend
+      setChartError(null);
+      setChartTrades(prev => [tradePayload as ApiTrade, ...prev.slice(0, 499)]);
+      // Fire-and-forget: index to Supabase async — failure doesn't affect UX
+      recordTrade(mintInput.trim(), tradePayload).catch(e => console.warn("[recordTrade:buy]", e?.message));
       await Promise.all([
         refreshReserves(),
         loadWalletTokens(),
@@ -767,22 +767,19 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
       setTxSig(signature);
       const blockTime = await getConfirmedBlockTime(connection, signature);
       const chainTrade = await fetchCurveTradeFromTransaction(connection, signature, mint, "sell");
-      const indexedTrade = await recordTrade(mintInput.trim(), {
+      const tradePayload = {
         signature,
         trader: chainTrade?.trader ?? anchorWallet.publicKey.toBase58(),
-        side: chainTrade?.side ?? "sell",
-        source: chainTrade?.source ?? "curve",
+        side: (chainTrade?.side ?? "sell") as "buy" | "sell",
+        source: (chainTrade?.source ?? "curve") as "curve" | "raydium",
         token_amount: chainTrade?.token_amount ?? tokensIn,
         sol_amount: chainTrade?.sol_amount ?? estimatedSol,
         price_sol: chainTrade?.price_sol ?? priceAfterSell,
         block_time: chainTrade?.block_time ?? blockTime,
-      });
-      if (indexedTrade?.error) {
-        console.error("[recordTrade:sell]", indexedTrade.error);
-        setChartError(`Trade saved on-chain, but chart history did not index: ${indexedTrade.error}`);
-      } else {
-        setChartError(null);
-      }
+      };
+      setChartError(null);
+      setChartTrades(prev => [tradePayload as ApiTrade, ...prev.slice(0, 499)]);
+      recordTrade(mintInput.trim(), tradePayload).catch(e => console.warn("[recordTrade:sell]", e?.message));
       await Promise.all([
         refreshReserves(),
         loadWalletTokens(),
