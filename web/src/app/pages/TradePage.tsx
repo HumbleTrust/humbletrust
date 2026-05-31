@@ -550,11 +550,18 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
     if (!canUseCurve || mintValue.length < 32) return;
     try {
       const mint = new PublicKey(mintValue);
-      const [ms, ls] = await Promise.all([
+      const [ms, ls, cls] = await Promise.all([
         fetchMigrationState(connection, mint),
         fetchLpLockState(connection, mint),
+        fetchCreatorLockState(connection, mint),
       ]);
-      setMigrationState(ms);
+      // If migration state decode failed (isMigrated=false) but creator lock
+      // state says migrated, trust the creator lock state as a cross-check
+      if (ms && !ms.isMigrated && cls?.isMigrated) {
+        setMigrationState({ ...ms, isMigrated: true, progressPct: 100 });
+      } else {
+        setMigrationState(ms);
+      }
       setLpLockState(ls);
     } catch { /* silent */ }
   }, [mintInput, canUseCurve, connection]);
@@ -686,11 +693,12 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
         try {
           const mint = new PublicKey(mintInput.trim());
           const [ms, ls] = await Promise.all([fetchMigrationState(connection, mint), fetchLpLockState(connection, mint)]);
-          setMigrationState(ms ?? MIGRATED_FALLBACK);
+          setMigrationState(ms?.isMigrated ? ms : MIGRATED_FALLBACK);
           setLpLockState(ls);
         } catch {
           setMigrationState(MIGRATED_FALLBACK);
         }
+        return; // UI updates to "Bonding curve is closed" — no separate error message needed
       }
       setTradeError(friendlyError(errMsg));
     } finally {
@@ -767,11 +775,12 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
         try {
           const mint = new PublicKey(mintInput.trim());
           const [ms, ls] = await Promise.all([fetchMigrationState(connection, mint), fetchLpLockState(connection, mint)]);
-          setMigrationState(ms ?? MIGRATED_FALLBACK);
+          setMigrationState(ms?.isMigrated ? ms : MIGRATED_FALLBACK);
           setLpLockState(ls);
         } catch {
           setMigrationState(MIGRATED_FALLBACK);
         }
+        return; // UI updates to "Bonding curve is closed" — no separate error message needed
       }
       setTradeError(friendlyError(errMsg));
     } finally {
