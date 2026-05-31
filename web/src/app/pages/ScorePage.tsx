@@ -342,7 +342,7 @@ export function ScorePage() {
           <div className="flex flex-wrap gap-3">
             {[
               { icon: Zap,      label: "No API key" },
-              { icon: Globe,    label: "100 req/min per IP" },
+              { icon: Globe,    label: "50 req/day free" },
               { icon: Activity, label: "Live on-chain data" },
               { icon: Code2,    label: "JSON · REST" },
             ].map(({ icon: Icon, label }) => (
@@ -908,7 +908,7 @@ export function ScorePage() {
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }}>
         <div className="p-4 rounded-xl border border-white/[0.06] bg-white/[0.02] flex flex-wrap gap-6 items-center">
           <p className="text-xs text-white/30 font-mono">
-            <span className="text-white/50">Rate limit:</span> 100 req/min per IP
+            <span className="text-white/50">Rate limit:</span> 50 req/day (free) · 10,000/day (Pro)
           </p>
           <p className="text-xs text-white/30 font-mono">
             <span className="text-white/50">Auth:</span> None required

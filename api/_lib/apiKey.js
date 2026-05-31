@@ -11,7 +11,7 @@ function generateKey() {
 }
 
 const PLAN_LIMITS = {
-  free:       100,
+  free:       50,
   pro:        10000,
   enterprise: 999999,
   nft:        10000,
