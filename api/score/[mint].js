@@ -1209,6 +1209,26 @@ module.exports = async (req, res) => {
           _nativeToken: true,
         };
         l1set(mint, scoreData);
+
+        // Background: compute live on-chain score and sync tokens.trust_score
+        if (!nocache && mintInfo) {
+          Promise.resolve().then(async () => {
+            try {
+              const { score: liveScore } = await computeScore(mint, mintInfo, DEVNET, db);
+              const clamped = Math.max(0, Math.min(100, Math.round(liveScore)));
+              if (Math.abs(clamped - score) >= 2) {
+                const lvl = getTrustLevel(clamped);
+                await db.from("tokens").update({
+                  trust_score: clamped,
+                  trust_level: lvl,
+                  updated_at: new Date().toISOString(),
+                }).eq("mint", mint);
+                // Invalidate L1 so next request gets fresh score
+                L1.delete(mint);
+              }
+            } catch { /* non-fatal */ }
+          });
+        }
       }
     }
 

@@ -235,7 +235,10 @@ async function handleGetTrades(mint, req, res) {
     .eq("mint", mint).in("side", ["buy", "sell"])
     .gt("price_sol", 0).gt("token_amount", 0).gt("sol_amount", 0)
     .order("block_time", { ascending: false }).limit(limit);
-  if (error) throw error;
+  if (error) {
+    console.warn("[handleGetTrades] %s error: %s", mint.slice(0, 8), error.message);
+    return res.json({ trades: [] });
+  }
   return res.json({ trades: data || [] });
 }
 

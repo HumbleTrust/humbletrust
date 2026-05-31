@@ -19,7 +19,7 @@ import {
   Unlock,
   Zap,
 } from "lucide-react";
-import { getTokenTrades, recordTrade, syncTokenTrades, type ApiTrade } from "../../lib/solana/api";
+import { getTokenTrades, getToken, recordTrade, syncTokenTrades, type ApiTrade, type ApiToken } from "../../lib/solana/api";
 import { detectToken, fetchPumpFunTrades, type TokenInfo } from "../../lib/solana/external-trades";
 import { getJupiterQuote, executeJupiterSwap, SOL_MINT, type JupiterQuote } from "../../lib/solana/jupiter-swap";
 import { LightweightTradeChart } from "../components/LightweightTradeChart";
@@ -244,6 +244,9 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
     [chartTrades]
   );
 
+  // DB token info (social links, description)
+  const [dbTokenInfo, setDbTokenInfo] = useState<ApiToken | null>(null);
+
   // External token detection (pump.fun / mainnet)
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
   const [tokenDetecting, setTokenDetecting] = useState(false);
@@ -319,6 +322,14 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
 
   // Keep ref in sync for use inside fetchChartTrades closure
   useEffect(() => { tokenInfoRef.current = tokenInfo; }, [tokenInfo]);
+
+  // Fetch DB token info (social links) when mint changes
+  useEffect(() => {
+    if (!validMint) { setDbTokenInfo(null); return; }
+    getToken(mintInput.trim())
+      .then(r => setDbTokenInfo(r.token))
+      .catch(() => setDbTokenInfo(null));
+  }, [validMint, mintInput]);
 
   // Auto-detect token source when a valid mint is entered
   useEffect(() => {
@@ -481,7 +492,16 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
       : getTokenTrades(mint, 500).then(r => r.trades ?? []);
     fetcher
       .then(trades => { setChartTrades(trades); setChartLoading(false); })
-      .catch((err: Error) => { if (!silent) setChartError(err.message); setChartLoading(false); });
+      .catch((err: Error) => {
+        const msg = err.message || "";
+        // NOT_FOUND or 404 = token has no trades yet, not a real error
+        if (msg.includes("NOT_FOUND") || msg.includes("404") || msg.includes("not found")) {
+          setChartTrades([]);
+        } else if (!silent) {
+          setChartError(msg);
+        }
+        setChartLoading(false);
+      });
   }, []);
 
   const runSyncTrades = useCallback(async (mint: string) => {
@@ -1079,6 +1099,44 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
             )}
             {!tokenDetecting && validMint && !tokenInfo && !isMainnet && (
               <div className="text-[10px] text-white/30 px-1">HumbleTrust token (devnet)</div>
+            )}
+
+            {/* Social links + description from HumbleTrust DB */}
+            {dbTokenInfo && (dbTokenInfo.description || dbTokenInfo.website || dbTokenInfo.twitter || dbTokenInfo.telegram) && (
+              <div className="px-1 space-y-1.5">
+                {dbTokenInfo.description && (
+                  <p className="text-[11px] text-white/40 leading-relaxed line-clamp-2">{dbTokenInfo.description}</p>
+                )}
+                <div className="flex flex-wrap gap-x-3 gap-y-1">
+                  {dbTokenInfo.website && (
+                    <a
+                      href={dbTokenInfo.website.startsWith("http") ? dbTokenInfo.website : `https://${dbTokenInfo.website}`}
+                      target="_blank" rel="noreferrer"
+                      className="text-[10px] text-blue-400/60 hover:text-blue-400 transition-colors"
+                    >
+                      🌐 {dbTokenInfo.website.replace(/^https?:\/\//, "").split("/")[0]}
+                    </a>
+                  )}
+                  {dbTokenInfo.twitter && (
+                    <a
+                      href={`https://x.com/${dbTokenInfo.twitter.replace(/^@/, "")}`}
+                      target="_blank" rel="noreferrer"
+                      className="text-[10px] text-blue-400/60 hover:text-blue-400 transition-colors"
+                    >
+                      𝕏 @{dbTokenInfo.twitter.replace(/^@/, "")}
+                    </a>
+                  )}
+                  {dbTokenInfo.telegram && (
+                    <a
+                      href={dbTokenInfo.telegram.startsWith("http") ? dbTokenInfo.telegram : `https://t.me/${dbTokenInfo.telegram.replace(/^@/, "")}`}
+                      target="_blank" rel="noreferrer"
+                      className="text-[10px] text-blue-400/60 hover:text-blue-400 transition-colors"
+                    >
+                      ✈ {dbTokenInfo.telegram.replace(/^@/, "").replace(/^https?:\/\/t\.me\//, "")}
+                    </a>
+                  )}
+                </div>
+              </div>
             )}
 
             {/* Buy / Sell tabs */}
