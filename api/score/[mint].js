@@ -32,6 +32,10 @@ const { scoreEvm }         = require('../_lib/scorers/evm');
 const { scoreBitcoin }     = require('../_lib/scorers/bitcoin');
 const { scoreTon }         = require('../_lib/scorers/ton');
 const { fetchJupiterPrice, fetchMarketContext } = require('../_lib/enrichers/jupiterPrice');
+const { fetchGoPlusToken }  = require('../_lib/enrichers/goplus');
+const { fetchRugCheck }     = require('../_lib/enrichers/rugcheck');
+const { fetchDexScreener }  = require('../_lib/enrichers/dexscreener');
+const { fetchJupiterToken } = require('../_lib/enrichers/jupiterToken');
 const knownTokens          = require('../_lib/knownTokens.json');
 
 // ── Category system ──────────────────────────────────────────────────────────
@@ -1260,10 +1264,15 @@ module.exports = async (req, res) => {
         return res.status(404).json({ error: "Mint account not found on mainnet or devnet", mint });
       }
 
-      const [platform, computed, mktRaw] = await Promise.all([
+      const isMainnet = ep === MAINNET;
+      const [platform, computed, mktRaw, dexRaw, goplusRaw, rugcheckRaw, jupTokenRaw] = await Promise.all([
         detectPlatform(mint, mintInfo.mintAuthority, ep),
         computeScore(mint, mintInfo, ep, db),
         fetchMarketContext(mint).catch(() => null),
+        isMainnet ? fetchDexScreener(mint).catch(() => null)  : null,
+        isMainnet ? fetchGoPlusToken(mint).catch(() => null)  : null,
+        isMainnet ? fetchRugCheck(mint).catch(() => null)     : null,
+        isMainnet ? fetchJupiterToken(mint).catch(() => null) : null,
       ]);
 
       const { score, data_quality, categories, signals, flags, onchain, creator } = computed;
@@ -1320,6 +1329,176 @@ module.exports = async (req, res) => {
         }
       } catch { /* non-fatal */ }
 
+      // ── Helper: check if flag type already exists ───────────────────────────
+      const hasFlag = (type) => mktFlags.some(f => f.type === type);
+
+      // ── Jupiter Token metadata enrichment ───────────────────────────────────
+      if (jupTokenRaw) {
+        onchain.jupiter_token = jupTokenRaw;
+        // Enrich tokenInfo with Jupiter data (logo, social links)
+        if (!tokenInfo.logo_uri && jupTokenRaw.logo_uri) tokenInfo.logo_uri = jupTokenRaw.logo_uri;
+        if (!tokenInfo.name    && jupTokenRaw.name)     tokenInfo.name     = jupTokenRaw.name;
+        if (!tokenInfo.symbol  && jupTokenRaw.symbol)   tokenInfo.symbol   = jupTokenRaw.symbol;
+        if (jupTokenRaw.website) tokenInfo.website = jupTokenRaw.website;
+        if (jupTokenRaw.twitter) tokenInfo.twitter = jupTokenRaw.twitter;
+
+        if (jupTokenRaw.strict) {
+          mktSignals = [...mktSignals, { id: 'jup_verified', category: 'legitimacy',
+            earned: 8, max: 8, ok: true,
+            label: 'Jupiter Verified Token',
+            detail: 'Listed on Jupiter strict verified token list — community-approved' }];
+          mktScore = Math.min(mktScore + 5, 99);
+        } else if (jupTokenRaw.verified) {
+          mktSignals = [...mktSignals, { id: 'jup_verified', category: 'legitimacy',
+            earned: 4, max: 8, ok: true,
+            label: 'Jupiter Community Token',
+            detail: 'Listed on Jupiter community token list' }];
+          mktScore = Math.min(mktScore + 2, 99);
+        }
+      }
+
+      // ── DexScreener enrichment ───────────────────────────────────────────────
+      if (dexRaw) {
+        onchain.dexscreener = dexRaw;
+
+        // Pool age signal
+        if (dexRaw.pair_created_at) {
+          const ageMs   = Date.now() - dexRaw.pair_created_at;
+          const ageDays = ageMs / (1000 * 60 * 60 * 24);
+          if (ageDays < 1) {
+            mktFlags = [...mktFlags, { type: 'new_pool', severity: 'high',
+              msg: 'Pool created less than 24 hours ago — very early stage, high risk' }];
+            mktSignals = [...mktSignals, { id: 'pool_age', category: 'liquidity',
+              earned: -5, max: 0, ok: false,
+              label: 'Pool < 24h old (DexScreener)',
+              detail: 'Newly created trading pool — insufficient trading history' }];
+            mktScore = Math.max(0, mktScore - 5);
+          } else if (ageDays > 30) {
+            mktSignals = [...mktSignals, { id: 'pool_age', category: 'liquidity',
+              earned: 3, max: 3, ok: true,
+              label: `Pool ${Math.round(ageDays)}d old (DexScreener)`,
+              detail: 'Established pool with trading history' }];
+          }
+        }
+
+        // FDV sanity check
+        if (dexRaw.fdv && dexRaw.liquidity_usd && dexRaw.fdv > 0) {
+          const liqToFdvRatio = dexRaw.liquidity_usd / dexRaw.fdv;
+          if (liqToFdvRatio < 0.005 && dexRaw.fdv > 100_000) {
+            mktFlags = [...mktFlags, { type: 'low_liq_fdv_ratio', severity: 'medium',
+              msg: `Liquidity/FDV ratio ${(liqToFdvRatio * 100).toFixed(2)}% — very thin liquidity vs market cap` }];
+          }
+        }
+
+        // Price crash (supplement Birdeye if not already flagged)
+        if (!hasFlag('price_crash') && dexRaw.price_change_24h !== null) {
+          if (dexRaw.price_change_24h <= -70) {
+            mktFlags   = [...mktFlags, { type: 'price_crash', severity: 'critical',
+              msg: `DexScreener: Price dropped ${dexRaw.price_change_24h.toFixed(1)}% in 24h` }];
+            mktSignals = [...mktSignals, { id: 'dex_price_crash', category: 'liquidity',
+              earned: -15, max: 0, ok: false,
+              label: `Price crashed ${dexRaw.price_change_24h.toFixed(1)}% in 24h (DexScreener)`,
+              detail: 'Extreme price drop detected on DexScreener' }];
+            mktScore = Math.max(0, mktScore - 20);
+          } else if (dexRaw.price_change_24h <= -40) {
+            mktFlags = [...mktFlags, { type: 'price_crash', severity: 'high',
+              msg: `DexScreener: Price dropped ${dexRaw.price_change_24h.toFixed(1)}% in 24h` }];
+            mktScore = Math.max(0, mktScore - 8);
+          }
+        }
+
+        // Low liquidity (supplement Birdeye)
+        if (!hasFlag('low_liquidity') && dexRaw.liquidity_usd !== null && dexRaw.liquidity_usd < 10_000) {
+          mktFlags = [...mktFlags, { type: 'low_liquidity', severity: 'high',
+            msg: `DexScreener: Pool liquidity $${dexRaw.liquidity_usd.toLocaleString('en-US', { maximumFractionDigits: 0 })}` }];
+          mktScore = Math.max(0, mktScore - 5);
+        }
+      }
+
+      // ── GoPlus Security enrichment ───────────────────────────────────────────
+      if (goplusRaw) {
+        onchain.goplus = goplusRaw;
+
+        if (goplusRaw.is_honeypot) {
+          mktFlags   = [...mktFlags, { type: 'honeypot', severity: 'critical',
+            msg: 'GoPlus: Token flagged as honeypot — sell transactions blocked' }];
+          mktSignals = [...mktSignals, { id: 'goplus_honeypot', category: 'supply_control',
+            earned: -30, max: 0, ok: false,
+            label: 'HONEYPOT detected (GoPlus)',
+            detail: 'Buy transactions succeed but selling is blocked — total trap' }];
+          mktScore = Math.max(0, mktScore - 35);
+        }
+        if (goplusRaw.transfer_pausable) {
+          mktFlags   = [...mktFlags, { type: 'transfer_pausable', severity: 'high',
+            msg: 'GoPlus: Token transfers can be paused by owner' }];
+          mktSignals = [...mktSignals, { id: 'goplus_pausable', category: 'supply_control',
+            earned: -10, max: 0, ok: false,
+            label: 'Transfers pausable (GoPlus)',
+            detail: 'Owner can freeze all token transfers at any time' }];
+          mktScore = Math.max(0, mktScore - 10);
+        }
+        if (goplusRaw.can_take_back_ownership) {
+          mktFlags   = [...mktFlags, { type: 'ownership_reclaimable', severity: 'high',
+            msg: 'GoPlus: Ownership can be reclaimed by creator' }];
+          mktSignals = [...mktSignals, { id: 'goplus_ownership', category: 'supply_control',
+            earned: -8, max: 0, ok: false,
+            label: 'Ownership reclaimable (GoPlus)',
+            detail: 'Creator can reclaim contract ownership — re-enable privileges' }];
+          mktScore = Math.max(0, mktScore - 8);
+        }
+        if (!goplusRaw.is_honeypot && !goplusRaw.transfer_pausable && !goplusRaw.can_take_back_ownership) {
+          mktSignals = [...mktSignals, { id: 'goplus_clean', category: 'legitimacy',
+            earned: 5, max: 5, ok: true,
+            label: 'GoPlus: No security threats detected',
+            detail: 'Passed honeypot, transfer restriction, and ownership checks' }];
+        }
+      }
+
+      // ── RugCheck enrichment ──────────────────────────────────────────────────
+      if (rugcheckRaw) {
+        onchain.rugcheck = { score: rugcheckRaw.score, risks: rugcheckRaw.risks };
+        const rcScore    = rugcheckRaw.score;
+        const critRisks  = rugcheckRaw.risks.filter(r => r.level === 'danger' || r.level === 'critical');
+        const warnRisks  = rugcheckRaw.risks.filter(r => r.level === 'warn');
+
+        if (rcScore !== null) {
+          if (rcScore >= 500) {
+            mktFlags   = [...mktFlags, { type: 'rugcheck_danger', severity: 'critical',
+              msg: `RugCheck: Risk score ${rcScore} — DANGER` }];
+            mktSignals = [...mktSignals, { id: 'rugcheck_score', category: 'legitimacy',
+              earned: -15, max: 0, ok: false,
+              label: `RugCheck DANGER (score: ${rcScore})`,
+              detail: 'RugCheck detected critical rug risk indicators' }];
+            mktScore = Math.max(0, mktScore - 20);
+          } else if (rcScore >= 200) {
+            mktFlags   = [...mktFlags, { type: 'rugcheck_warn', severity: 'high',
+              msg: `RugCheck: Risk score ${rcScore} — HIGH RISK` }];
+            mktSignals = [...mktSignals, { id: 'rugcheck_score', category: 'legitimacy',
+              earned: -8, max: 0, ok: false,
+              label: `RugCheck HIGH RISK (score: ${rcScore})`,
+              detail: 'RugCheck flagged multiple risk indicators' }];
+            mktScore = Math.max(0, mktScore - 10);
+          } else if (rcScore < 100) {
+            mktSignals = [...mktSignals, { id: 'rugcheck_score', category: 'legitimacy',
+              earned: 5, max: 5, ok: true,
+              label: `RugCheck: GOOD (score: ${rcScore})`,
+              detail: 'RugCheck found no significant rug risk indicators' }];
+          }
+        }
+        for (const risk of critRisks.slice(0, 3)) {
+          if (!hasFlag('rugcheck_risk_' + risk.name)) {
+            mktFlags = [...mktFlags, { type: 'rugcheck_risk', severity: 'high',
+              msg: `RugCheck: ${risk.name}` }];
+          }
+        }
+        if (warnRisks.length > 0) {
+          for (const risk of warnRisks.slice(0, 2)) {
+            mktFlags = [...mktFlags, { type: 'rugcheck_warn_detail', severity: 'medium',
+              msg: `RugCheck warning: ${risk.name}` }];
+          }
+        }
+      }
+
       const finalScore      = Math.min(mktScore, score <= 40 ? score : mktScore); // never inflate
       const finalTrustLevel = getTrustLevel(finalScore);
 
@@ -1338,7 +1517,14 @@ module.exports = async (req, res) => {
       l1set(mint, scoreData);
       db.from("token_score_cache").upsert({
         mint, score: finalScore, trust_level: finalTrustLevel, source: "external",
-        score_components: { categories, signals: mktSignals, flags: mktFlags, onchain, token: tokenInfo, network, platform, data_quality },
+        score_components: { categories, signals: mktSignals, flags: mktFlags, onchain, token: tokenInfo, network, platform, data_quality,
+          enrichments: {
+            goplus:      goplusRaw    ? { is_honeypot: goplusRaw.is_honeypot, transfer_pausable: goplusRaw.transfer_pausable } : null,
+            rugcheck:    rugcheckRaw  ? { score: rugcheckRaw.score, risks_count: rugcheckRaw.risks.length } : null,
+            dexscreener: dexRaw       ? { liquidity_usd: dexRaw.liquidity_usd, fdv: dexRaw.fdv, total_pairs: dexRaw.total_pairs } : null,
+            jupiter:     jupTokenRaw  ? { verified: jupTokenRaw.verified, strict: jupTokenRaw.strict } : null,
+          },
+        },
         computed_at: now.toISOString(),
         expires_at:  scoreData._expiresAt,
       }, { onConflict: "mint" })
