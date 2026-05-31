@@ -794,13 +794,34 @@ export const fetchMigrationState = async (
       connection.getMinimumBalanceForRentExemption(165).catch(() => 2_039_280),
     ]);
     if (!metaInfo) return null;
-    const meta = coder.decode("TokenMetadataV2", metaInfo.data) as any;
 
     // CurveTreasurySol: 8 discriminator + 32 mint + 32 creator + 8 initial + 8 current
     let currentSolLamports = 0;
     if (treasuryInfo && treasuryInfo.data.length >= 88) {
       const view = new DataView(treasuryInfo.data.buffer, treasuryInfo.data.byteOffset);
       currentSolLamports = Number(view.getBigUint64(80, true));
+    }
+
+    const migrationWsolLamports = Math.max(0, (migrationWsolInfo?.lamports ?? 0) - wsolRent);
+
+    // Decode — old accounts (created before a program upgrade) may have fewer bytes than
+    // the current IDL expects. In that case fall back to a minimal partial state so the UI
+    // doesn't show "No v2 launch data" for tokens that are genuine HumbleTrust v2 tokens.
+    let meta: any;
+    try {
+      meta = coder.decode("TokenMetadataV2", metaInfo.data);
+    } catch {
+      return {
+        thresholdLamports: 0,
+        currentSolLamports,
+        isMigrated: false,
+        raydiumPool: PublicKey.default.toBase58(),
+        migratedAt: 0,
+        progressPct: 0,
+        isPrepared: migrationTokenBalance > 0 && migrationWsolLamports > 0,
+        migrationTokenAmount: migrationTokenBalance,
+        migrationWsolLamports,
+      };
     }
 
     const threshold = Number(meta.migrationThresholdLamports ?? meta.migration_threshold_lamports ?? 0);
@@ -813,7 +834,7 @@ export const fetchMigrationState = async (
       progressPct: threshold > 0 ? Math.min(100, (currentSolLamports / threshold) * 100) : 0,
       isPrepared: migrationTokenBalance > 0 && (migrationWsolInfo?.lamports ?? 0) > wsolRent,
       migrationTokenAmount: migrationTokenBalance,
-      migrationWsolLamports: Math.max(0, (migrationWsolInfo?.lamports ?? 0) - wsolRent),
+      migrationWsolLamports,
     };
   } catch {
     return null;

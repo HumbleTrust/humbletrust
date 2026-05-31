@@ -57,6 +57,13 @@ const PREVIEW_TOKEN_RESERVE = 350_000_000;
 const PREVIEW_SOL_RESERVE = 0.5;
 const CURVE_FEE_RATE = 0.01;
 
+// Used when on-chain account exists (AlreadyMigrated error) but full decode fails
+const MIGRATED_FALLBACK: import("../../lib/solana/program").MigrationState = {
+  isMigrated: true, thresholdLamports: 0, currentSolLamports: 0,
+  raydiumPool: "11111111111111111111111111111111", migratedAt: 0, progressPct: 100,
+  isPrepared: false, migrationTokenAmount: 0, migrationWsolLamports: 0,
+};
+
 type TradeSide = "buy" | "sell";
 type ChartMode = "candles" | "line" | "area";
 type Timeframe = "1s" | "5s" | "1m" | "5m" | "1h";
@@ -679,9 +686,11 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
         try {
           const mint = new PublicKey(mintInput.trim());
           const [ms, ls] = await Promise.all([fetchMigrationState(connection, mint), fetchLpLockState(connection, mint)]);
-          setMigrationState(ms);
+          setMigrationState(ms ?? MIGRATED_FALLBACK);
           setLpLockState(ls);
-        } catch {}
+        } catch {
+          setMigrationState(MIGRATED_FALLBACK);
+        }
       }
       setTradeError(friendlyError(errMsg));
     } finally {
@@ -758,9 +767,11 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
         try {
           const mint = new PublicKey(mintInput.trim());
           const [ms, ls] = await Promise.all([fetchMigrationState(connection, mint), fetchLpLockState(connection, mint)]);
-          setMigrationState(ms);
+          setMigrationState(ms ?? MIGRATED_FALLBACK);
           setLpLockState(ls);
-        } catch {}
+        } catch {
+          setMigrationState(MIGRATED_FALLBACK);
+        }
       }
       setTradeError(friendlyError(errMsg));
     } finally {
