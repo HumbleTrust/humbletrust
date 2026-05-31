@@ -1843,99 +1843,184 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
             </GlassPanel>
           )}
 
-          {/* ── Creator lock / vesting controls ── */}
+          {/* ── Creator Controls ── */}
           {!isMainnet && canUseCurve && validMint && creatorLockState &&
            wallet.publicKey?.toBase58() === creatorLockState.creator && (() => {
             const now = Math.floor(Date.now() / 1000);
-            const SECS_PER_DAY = 60; // test-mode: 1 day unit = 60s
-            const elapsed = now - creatorLockState.createdAt;
-            const elapsedDays = Math.floor(elapsed / SECS_PER_DAY);
-            const canUnlock = creatorLockState.isLocked && now >= creatorLockState.unlockTime;
-            const secsLeft = Math.max(0, creatorLockState.unlockTime - now);
+            const SECS_PER_DAY = 60; // devnet: 1 day = 60s
+            const elapsed      = now - creatorLockState.createdAt;
+            const elapsedDays  = Math.floor(elapsed / SECS_PER_DAY);
+            const canUnlock    = creatorLockState.isLocked && now >= creatorLockState.unlockTime;
+            const secsLeft     = Math.max(0, creatorLockState.unlockTime - now);
+            const totalVesting = creatorLockState.creatorAllocationAmount / 1e9;
+            const lockedAmt    = creatorLockState.lockedAmountAfterBurn / 1e9;
+            const burnedAmt    = creatorLockState.plannedBurnAmount / 1e9;
 
             const vestingStatus = (done: boolean, day: number) => {
-              if (done) return { label: "Claimed", color: "text-[#00FF41]", ready: false };
-              if (elapsedDays >= day) return { label: "Ready", color: "text-green-400", ready: true };
+              if (done) return { label: "Claimed ✓", color: "text-[#00FF41]", ready: false };
+              if (elapsedDays >= day) return { label: "Ready to claim", color: "text-green-400", ready: true };
               const s = Math.max(0, day * SECS_PER_DAY - elapsed);
               const m = Math.floor(s / 60), sec = s % 60;
-              return { label: `${m}m ${sec}s`, color: "text-white/40", ready: false };
+              return { label: `in ${m}m ${sec}s`, color: "text-white/35", ready: false };
             };
             const t1 = vestingStatus(creatorLockState.vestingT1Done, 30);
             const t2 = vestingStatus(creatorLockState.vestingT2Done, 60);
             const t3 = vestingStatus(creatorLockState.vestingT3Done, 90);
-            const totalVesting = creatorLockState.creatorAllocationAmount / 1e9;
 
             return (
               <GlassPanel className="p-4 border-purple-500/20 bg-purple-500/5">
-                <div className="flex items-center gap-2 mb-3">
+
+                {/* Header */}
+                <div className="flex items-center gap-2 mb-4">
                   <Lock size={14} className="text-purple-400" />
-                  <span className="text-sm font-semibold text-purple-300">Creator Controls</span>
-                  <button onClick={() => refreshCreatorLockState()} className="ml-auto text-white/30 hover:text-white/60 transition-colors">
+                  <span className="text-sm font-semibold text-purple-300">Creator Panel</span>
+                  <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono">only you see this</span>
+                  <button onClick={() => refreshCreatorLockState()} className="ml-auto text-white/30 hover:text-white/60 transition-colors" title="Refresh">
                     <RefreshCw size={12} />
                   </button>
                 </div>
 
-                {/* Locked tokens */}
-                <div className="mb-3 p-3 rounded-lg bg-white/5 border border-white/10">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-white/50">Locked tokens (30%)</span>
-                    <span className={cn("text-xs font-mono", creatorLockState.isLocked ? "text-yellow-400" : "text-[#00FF41]")}>
-                      {creatorLockState.isLocked ? "🔒 Locked" : "🔓 Unlocked"}
-                    </span>
+                {/* ── Guide ── */}
+                <div className="mb-4 p-3 rounded-xl bg-white/[0.03] border border-white/[0.07] space-y-2.5">
+                  <p className="text-[11px] font-semibold text-white/60 uppercase tracking-widest">How it works</p>
+                  <div className="flex gap-2 items-start">
+                    <span className="text-base leading-none mt-0.5">🔒</span>
+                    <div>
+                      <p className="text-xs text-white/80 font-medium">Locked Vault ({creatorLockState.lockPercent || "?"}% · {creatorLockState.lockDays || "?"} days)</p>
+                      <p className="text-[11px] text-white/40 leading-relaxed">
+                        {burnedAmt > 0 ? `${burnedAmt.toLocaleString()} tokens burned at launch. ` : ""}
+                        After lock expires — {lockedAmt.toLocaleString()} tokens released to <span className="text-white/60">market circulation</span>, not to your wallet.
+                        This protects buyers: supply unlocks gradually into the market.
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-xs text-white/40 mb-2">
-                    {creatorLockState.isLocked
-                      ? canUnlock
-                        ? "Ready to unlock"
-                        : `Unlocks in ${Math.floor(secsLeft / 60)}m ${secsLeft % 60}s`
-                      : `Released: ${(creatorLockState.lockedAmountAfterBurn / 1e9).toLocaleString()} tokens`
-                    }
+                  <div className="flex gap-2 items-start">
+                    <span className="text-base leading-none mt-0.5">💰</span>
+                    <div>
+                      <p className="text-xs text-white/80 font-medium">Creator Vesting (your allocation)</p>
+                      <p className="text-[11px] text-white/40 leading-relaxed">
+                        {totalVesting > 0 ? `${totalVesting.toLocaleString()} tokens total. ` : "No creator allocation set. "}
+                        Claimed in 3 tranches (T1/T2/T3) — goes <span className="text-white/60">directly to your wallet</span>.
+                        Each tranche = ~33% of your creator allocation.
+                      </p>
+                    </div>
                   </div>
-                  {creatorLockState.isLocked && (
-                    <button
-                      onClick={runUnlockTokens}
-                      disabled={!canUnlock || creatorLockBusy}
-                      className={cn(
-                        "w-full py-1.5 rounded-lg text-xs font-semibold transition-all",
-                        canUnlock && !creatorLockBusy
-                          ? "bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30"
-                          : "bg-white/5 text-white/20 cursor-not-allowed border border-white/5"
-                      )}
-                    >
-                      {creatorLockBusy ? "Unlocking…" : canUnlock ? "Unlock Locked Tokens" : "Not ready yet"}
-                    </button>
+                  {creatorLockState.isMigrated && (
+                    <div className="flex gap-2 items-start">
+                      <span className="text-base leading-none mt-0.5">🌊</span>
+                      <div>
+                        <p className="text-xs text-white/80 font-medium">Raydium LP (after migration)</p>
+                        <p className="text-[11px] text-white/40 leading-relaxed">
+                          Your token is live on Raydium. If LP is locked — claim trading fees anytime.
+                          LP unlock becomes available after the lock period expires.
+                        </p>
+                      </div>
+                    </div>
                   )}
                 </div>
 
-                {/* Vesting tranches */}
-                {creatorLockState.creatorAllocationAmount > 0 && (
-                  <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                    <div className="text-xs text-white/50 mb-2">Creator vesting ({(totalVesting).toLocaleString()} tokens total)</div>
-                    <div className="space-y-2">
-                      {([
-                        { n: 1, pct: "33%", status: t1 },
-                        { n: 2, pct: "33%", status: t2 },
-                        { n: 3, pct: "34%", status: t3 },
-                      ] as const).map(({ n, pct, status }) => (
-                        <div key={n} className="flex items-center gap-2">
-                          <span className="text-xs text-white/40 w-16">T{n} · {pct}</span>
-                          <span className={cn("text-xs font-mono flex-1", status.color)}>{status.label}</span>
-                          {status.ready && (
-                            <button
-                              onClick={() => runVestingTranche(n)}
-                              disabled={creatorLockBusy}
-                              className="px-2 py-0.5 rounded text-xs bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 transition-all disabled:opacity-40"
-                            >
-                              {creatorLockBusy ? "…" : "Claim"}
-                            </button>
-                          )}
+                {/* ── Section 1: Locked Vault ── */}
+                <div className="mb-3 rounded-xl border border-white/[0.08] overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 bg-white/[0.04]">
+                    <span className="text-xs font-semibold text-white/70">
+                      🔒 Locked Vault — {creatorLockState.lockPercent || "?"}% · {creatorLockState.lockDays || "?"} days
+                    </span>
+                    <span className={cn("text-[11px] font-mono px-2 py-0.5 rounded-full",
+                      creatorLockState.isLocked
+                        ? "bg-yellow-500/15 text-yellow-400"
+                        : "bg-[#00FF41]/15 text-[#00FF41]"
+                    )}>
+                      {creatorLockState.isLocked ? "Locked" : "Released"}
+                    </span>
+                  </div>
+                  <div className="px-3 py-2.5 space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/40">Available after unlock</span>
+                      <span className="font-mono text-white/70">{lockedAmt.toLocaleString()} tokens → market</span>
+                    </div>
+                    {burnedAmt > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-white/40">Burned at launch</span>
+                        <span className="font-mono text-red-400/70">{burnedAmt.toLocaleString()} tokens</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/40">Status</span>
+                      <span className="font-mono text-white/60">
+                        {creatorLockState.isLocked
+                          ? canUnlock ? "✅ Ready to unlock" : `⏳ ${Math.floor(secsLeft / 60)}m ${secsLeft % 60}s remaining`
+                          : "✅ Already released to market"}
+                      </span>
+                    </div>
+                    {creatorLockState.isLocked && (
+                      <>
+                        <div className="mt-2 p-2 rounded-lg bg-yellow-500/5 border border-yellow-500/15 text-[11px] text-yellow-300/60">
+                          ℹ️ Clicking unlock releases tokens to <strong>market circulation</strong> — not your wallet. This is by design to protect buyers.
                         </div>
-                      ))}
+                        <button
+                          onClick={runUnlockTokens}
+                          disabled={!canUnlock || creatorLockBusy}
+                          className={cn(
+                            "w-full mt-2 py-2 rounded-lg text-xs font-semibold transition-all",
+                            canUnlock && !creatorLockBusy
+                              ? "bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30"
+                              : "bg-white/5 text-white/20 cursor-not-allowed border border-white/5"
+                          )}
+                        >
+                          {creatorLockBusy ? "Processing…" : canUnlock ? "🔓 Release to Market" : "Not ready yet"}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── Section 2: Creator Vesting ── */}
+                {totalVesting > 0 && (
+                  <div className="mb-3 rounded-xl border border-white/[0.08] overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 bg-white/[0.04]">
+                      <span className="text-xs font-semibold text-white/70">💰 Creator Vesting — goes to your wallet</span>
+                      <span className="text-[11px] font-mono text-white/40">{totalVesting.toLocaleString()} total</span>
+                    </div>
+                    <div className="px-3 py-2.5">
+                      <div className="mb-2 p-2 rounded-lg bg-[#00FF41]/5 border border-[#00FF41]/10 text-[11px] text-[#00FF41]/60">
+                        ✅ These tokens go <strong>directly to your wallet</strong> when you claim each tranche.
+                      </div>
+                      <div className="space-y-2">
+                        {([
+                          { n: 1 as const, label: "Tranche 1 · Day 30 · 33%", status: t1 },
+                          { n: 2 as const, label: "Tranche 2 · Day 60 · 33%", status: t2 },
+                          { n: 3 as const, label: "Tranche 3 · Day 90 · 34%", status: t3 },
+                        ]).map(({ n, label, status }) => (
+                          <div key={n} className="flex items-center gap-2 py-1.5 px-2 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[11px] text-white/60">{label}</div>
+                              <div className={cn("text-[11px] font-mono", status.color)}>{status.label}</div>
+                            </div>
+                            {status.ready ? (
+                              <button
+                                onClick={() => runVestingTranche(n)}
+                                disabled={creatorLockBusy}
+                                className="px-3 py-1 rounded-lg text-xs font-bold bg-[#00FF41]/20 hover:bg-[#00FF41]/30 text-[#00FF41] border border-[#00FF41]/30 transition-all disabled:opacity-40 shrink-0"
+                              >
+                                {creatorLockBusy ? "…" : "Claim →"}
+                              </button>
+                            ) : status.color === "text-[#00FF41]" ? (
+                              <span className="text-[11px] text-[#00FF41] shrink-0">Claimed ✓</span>
+                            ) : (
+                              <span className="text-[11px] text-white/20 shrink-0">Locked</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
 
-                {creatorLockError && <div className="text-red-400 text-xs mt-2">{creatorLockError}</div>}
+                {creatorLockError && (
+                  <div className="mt-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+                    {creatorLockError}
+                  </div>
+                )}
               </GlassPanel>
             );
           })()}

@@ -1085,7 +1085,12 @@ export interface CreatorLockState {
   isLocked: boolean;
   unlockTime: number;
   lockedAmountAfterBurn: number;
+  plannedBurnAmount: number;
   createdAt: number;
+  lockDays: number;
+  lockPercent: number;
+  burnOption: number;
+  isMigrated: boolean;
   creatorAllocationAmount: number;
   vestingT1Done: boolean;
   vestingT2Done: boolean;
@@ -1110,7 +1115,12 @@ export const fetchCreatorLockState = async (
       isLocked:              !!(m.isLocked ?? m.is_locked),
       unlockTime:            Number(m.unlockTime ?? m.unlock_time ?? 0),
       lockedAmountAfterBurn: Number(m.lockedAmountAfterBurn ?? m.locked_amount_after_burn ?? 0),
+      plannedBurnAmount:     Number(m.plannedBurnAmount ?? m.planned_burn_amount ?? 0),
       createdAt:             Number(m.createdAt ?? m.created_at ?? 0),
+      lockDays:              Number(m.lockDays ?? m.lock_days ?? 0),
+      lockPercent:           Number(m.lockPercent ?? m.lock_percent ?? 0),
+      burnOption:            Number(m.burnOption ?? m.burn_option ?? 0),
+      isMigrated:            !!(m.isMigrated ?? m.is_migrated),
       creatorAllocationAmount: Number(m.creatorAllocationAmount ?? m.creator_allocation_amount ?? 0),
       vestingT1Done:         !!(m.vestingT1Done ?? m.vesting_t1_done),
       vestingT2Done:         !!(m.vestingT2Done ?? m.vesting_t2_done),
