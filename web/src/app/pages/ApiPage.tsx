@@ -1,13 +1,14 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { GlassPanel } from "../components/GlassPanel";
 import { HexScore } from "../components/HexAvatar";
 import {
   Zap, Shield, Code2, Copy, CheckCircle2, ExternalLink,
   Search, Check, X, Star, Crown, Key, Globe, Activity,
-  Chrome, Package, ArrowRight, Lock,
+  Chrome, Package, ArrowRight, Lock, LogIn,
 } from "lucide-react";
 import { cn } from "../components/ui/utils";
+import { useAuth } from "../../lib/useAuth";
 
 const BASE = "https://humbletrust.vercel.app/api";
 const DEMO_MINT = "FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr";
@@ -266,6 +267,11 @@ export const ApiPage = () => {
   const [keyError, setKeyError] = useState<string | null>(null);
 
   const keyFormRef = useRef<HTMLDivElement>(null);
+
+  const { email: googleEmail } = useAuth();
+  useEffect(() => {
+    if (googleEmail && !email) setEmail(googleEmail);
+  }, [googleEmail]);
 
   const runDemo = useCallback(async () => {
     const m = demoMint.trim();
