@@ -11,7 +11,8 @@
     "@coral-xyz/anchor": "^0.32.1",
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
-    "@supabase/supabase-js": "^2.106.2"
+    "@supabase/supabase-js": "^2.106.2",
+    "sharp": "^0.34.5"
   },
   "overrides": {
     "rpc-websockets": "9.2.0"
