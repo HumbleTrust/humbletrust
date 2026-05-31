@@ -25,6 +25,7 @@ test-ledger/
 !web/src/lib/solana/idl.json
 !web/src/lib/solana/idl_v2.json
 !api/_lib/knownTokens.json
+!extension/manifest.json
 id.json
 wallet.json
 keypair.json
