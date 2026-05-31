@@ -811,13 +811,15 @@ export const fetchMigrationState = async (
     try {
       meta = coder.decode("TokenMetadataV2", metaInfo.data);
     } catch {
+      // Old account format (pre-upgrade) — use devnet test-mode threshold (5 SOL)
+      const FALLBACK_THRESHOLD = 5_000_000_000;
       return {
-        thresholdLamports: 0,
+        thresholdLamports: FALLBACK_THRESHOLD,
         currentSolLamports,
         isMigrated: false,
         raydiumPool: PublicKey.default.toBase58(),
         migratedAt: 0,
-        progressPct: 0,
+        progressPct: Math.min(100, (currentSolLamports / FALLBACK_THRESHOLD) * 100),
         isPrepared: migrationTokenBalance > 0 && migrationWsolLamports > 0,
         migrationTokenAmount: migrationTokenBalance,
         migrationWsolLamports,

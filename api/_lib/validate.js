@@ -1,18 +1,11 @@
-const { PublicKey } = require("@solana/web3.js");
-
 // Shared validation helpers for API routes
 
-// Solana public key: base58, 32-44 chars
+// Solana public key: base58, 32-44 chars (no SDK needed for format validation)
 const SOLANA_ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 const isValidWallet = (w) => {
-  if (typeof w !== 'string' || !SOLANA_ADDR_RE.test(w)) return false;
-  try {
-    new PublicKey(w);
-    return true;
-  } catch {
-    return false;
-  }
+  if (typeof w !== 'string') return false;
+  return SOLANA_ADDR_RE.test(w);
 };
 
 const ALLOWED_ORIGINS = [
