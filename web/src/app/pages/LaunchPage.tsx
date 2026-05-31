@@ -621,7 +621,7 @@ export function LaunchPage() {
               <label className="block text-sm font-medium text-white/70 mb-1.5">
                 Logo (hex shape, max {MAX_LOGO_BYTES / 1000} KB)
               </label>
-              <div className="flex items-center gap-4 p-3 rounded-lg bg-white/5 border border-white/10">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10">
                 <HexLogo src={logoDataUrl || undefined} label={symbol || "TKN"} size={48} variant="gradient" />
                 <div className="flex-1 text-sm text-white/50">
                   {logoDataUrl ? "Logo ready — auto-cropped to hex" : "PNG/JPG/SVG · auto-cropped to square · max 100 KB"}
@@ -672,7 +672,7 @@ export function LaunchPage() {
                 <label className="block text-sm font-medium text-white/70 mb-2">
                   Social Links <span className="text-white/30 font-normal">(optional)</span>
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div className="relative">
                     <Globe size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
                     <input
@@ -829,7 +829,7 @@ export function LaunchPage() {
               ) : (
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-white/70 mb-2">Airdrop config</label>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {V1_AIRDROPS.map((value) => (
                       <button
                         key={value}
@@ -1202,7 +1202,7 @@ export function LaunchPage() {
         </div>
 
         {/* ── Right: preview pane ── */}
-        <div className="space-y-4">
+        <div className="space-y-4 hidden xl:block">
           {/* Token preview card */}
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
             <GlassPanel className="p-6" glow="purple">

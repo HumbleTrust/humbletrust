@@ -320,7 +320,7 @@ export const ApiPage = () => {
 
       {/* ── HERO ─────────────────────────────────────────────────────────────── */}
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-        <GlassPanel className="relative overflow-hidden p-10 md:p-14" glow="green">
+        <GlassPanel className="relative overflow-hidden p-6 md:p-10 lg:p-14" glow="green">
           {/* background glow blobs */}
           <div className="pointer-events-none absolute -top-20 -left-20 w-72 h-72 rounded-full bg-[#00FF41]/10 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-20 -right-20 w-72 h-72 rounded-full bg-[#B026FF]/10 blur-3xl" />

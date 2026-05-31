@@ -470,7 +470,7 @@ export function ScorePage() {
                     : <span className="text-white/20 text-xs font-mono">No category breakdown</span>
                   }
                 </div>
-                <div className="flex flex-col items-center justify-center gap-3 px-6 py-4 min-w-[180px]">
+                <div className="flex flex-col items-center justify-center gap-3 px-6 py-4 sm:min-w-[180px]">
                   <HexScore score={scoreResult.score} color={SCORE_COLORS[scoreResult.trust_level]} />
                   <span className="text-sm font-bold font-mono tracking-widest"
                     style={{ color: SCORE_COLORS[scoreResult.trust_level] }}>
@@ -683,7 +683,7 @@ export function ScorePage() {
                 <div className="flex items-center px-5 py-5 sm:border-r border-white/[0.06]">
                   <ReputationChart risk={riskResult} color={RISK_COLORS[riskResult.risk_level]} />
                 </div>
-                <div className="flex flex-col items-center justify-center gap-3 px-6 py-4 min-w-[180px]">
+                <div className="flex flex-col items-center justify-center gap-3 px-6 py-4 sm:min-w-[180px]">
                   <HexScore score={riskResult.reputation_score} color={RISK_COLORS[riskResult.risk_level]} />
                   <span className="text-sm font-bold font-mono tracking-widest"
                     style={{ color: RISK_COLORS[riskResult.risk_level] }}>

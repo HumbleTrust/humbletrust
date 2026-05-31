@@ -986,7 +986,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                       {tokenPickerBusy ? "Loading..." : "Refresh"}
                     </button>
                   </div>
-                  <div className="max-h-56 overflow-y-auto">
+                  <div className="max-h-44 md:max-h-56 overflow-y-auto">
                     {!wallet.connected && (
                       <div className="px-3 py-3 text-xs text-white/40">Connect wallet to list token balances.</div>
                     )}
@@ -1116,12 +1116,12 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
                 )}
               </div>
               {side === "buy" && (
-                <div className="flex gap-1">
+                <div className="grid grid-cols-4 gap-1">
                   {([0.25, 0.5, 0.75, 1] as const).map(f => (
                     <button
                       key={f}
                       type="button"
-                      className="flex-1 py-1 text-[10px] rounded bg-white/5 text-white/50 hover:bg-white/10 disabled:opacity-40"
+                      className="py-1.5 text-[11px] rounded bg-white/5 text-white/50 hover:bg-white/10 disabled:opacity-40"
                       disabled={!walletSolBalance}
                       onClick={() => setFractionSol(f)}
                     >
@@ -1352,7 +1352,7 @@ export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
           transition={{ delay: 0.15 }}
           className="space-y-4"
         >
-          <GlassPanel className={cn("overflow-hidden", fullChart && "fixed inset-4 z-50")}>
+          <GlassPanel className={cn("overflow-hidden", fullChart && "fixed inset-1 md:inset-4 z-50")}>
             {/* Chart topbar */}
             <div className="flex items-center gap-1 px-3 py-2 border-b border-white/10 bg-white/[0.02] flex-wrap">
               {!showDexChart && TIMEFRAMES.map((tf) => (
