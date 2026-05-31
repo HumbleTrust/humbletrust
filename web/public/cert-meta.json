@@ -1,0 +1,19 @@
+{
+  "name": "HumbleTrust Launch Certificate",
+  "symbol": "HTCERT",
+  "description": "A soulbound (non-transferable) NFT certificate issued on-chain by the HumbleTrust protocol upon a verified token launch. Proves the creator locked liquidity, set a burn policy, and passed TrustScore validation.",
+  "image": "https://humbletrust.vercel.app/cert-badge.png",
+  "external_url": "https://humbletrust.vercel.app",
+  "attributes": [
+    { "trait_type": "Protocol", "value": "HumbleTrust V2" },
+    { "trait_type": "Network",  "value": "Solana" },
+    { "trait_type": "Standard", "value": "Token-2022 NonTransferable" },
+    { "trait_type": "Type",     "value": "Launch Certificate" }
+  ],
+  "properties": {
+    "category": "certificate",
+    "creators": [
+      { "address": "FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr", "share": 100 }
+    ]
+  }
+}

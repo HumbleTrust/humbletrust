@@ -71,7 +71,7 @@ async function handleApiAuth(req, res) {
 
   if (keyData.error) {
     res.setHeader("WWW-Authenticate", "Bearer realm=\"HumbleTrust API\"");
-    res.status(401).json({ error: keyData.error, docs: "https://humbletrust.xyz/api" });
+    res.status(401).json({ error: keyData.error, docs: "https://humbletrust.vercel.app/api" });
     return null;
   }
 
@@ -88,7 +88,7 @@ async function handleApiAuth(req, res) {
       used: rl.used,
       limit: rl.limit,
       reset_in: "24h",
-      upgrade: "https://humbletrust.xyz/api#plans",
+      upgrade: "https://humbletrust.vercel.app/api#plans",
     });
     return null;
   }

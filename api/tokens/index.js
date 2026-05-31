@@ -27,6 +27,15 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === "POST") {
+      const internalSecret = process.env.INTERNAL_API_SECRET;
+      if (internalSecret) {
+        const authHeader = req.headers["authorization"] || "";
+        const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+        if (token !== internalSecret) {
+          return res.status(401).json({ error: "unauthorized" });
+        }
+      }
+
       const {
         mint, creator, name, symbol, signature, launchScore, lockPercent,
         burnOption, certificateMint, tier, logoUri, logo_uri, raydium_pool,

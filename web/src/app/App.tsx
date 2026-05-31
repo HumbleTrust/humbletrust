@@ -62,7 +62,6 @@ export default function App() {
       case "launch":    return <LaunchPage />;
       case "discover":  return <DiscoverPage onOpenToken={(m) => setOpenMint(m)} />;
       case "trade":     return <TradePage goDiscover={() => setActiveTab("discover")} />;
-      case "charts":    return <MarketPage />;
       case "portfolio": return <Portfolio />;
       case "market":    return <MarketPage />;
       case "nft":       return <NftPage goLaunch={() => setActiveTab("launch")} />;

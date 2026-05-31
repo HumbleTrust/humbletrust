@@ -41,7 +41,7 @@ module.exports = async function handler(req, res) {
         cached: rows.filter(r => r.cached).length,
         by_day: byDay,
       },
-      upgrade: keyData.plan === "free" ? "https://humbletrust.xyz/api#plans" : null,
+      upgrade: keyData.plan === "free" ? "https://humbletrust.vercel.app/api#plans" : null,
     });
   }
 
@@ -71,7 +71,7 @@ module.exports = async function handler(req, res) {
     return res.status(201).json({
       key, prefix, plan: "free", daily_limit: PLAN_LIMITS.free,
       message: "Store this key securely — it will not be shown again.",
-      docs: "https://humbletrust.xyz/api",
+      docs: "https://humbletrust.vercel.app/api",
     });
   }
 

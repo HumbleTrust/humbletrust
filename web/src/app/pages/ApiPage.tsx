@@ -10,7 +10,7 @@ import {
 import { cn } from "../components/ui/utils";
 import { useAuth } from "../../lib/useAuth";
 
-const BASE = "https://humbletrust.vercel.app/api";
+const BASE = "/api";
 const DEMO_MINT = "FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr";
 const NFT_EMAIL = "mailto:humble.trust@outlook.com?subject=OG%20Pass%20Waitlist&body=Please%20add%20me%20to%20the%20OG%20Pass%20waitlist.";
 

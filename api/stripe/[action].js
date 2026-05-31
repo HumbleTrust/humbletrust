@@ -3,7 +3,7 @@ const { getClient } = require("../_lib/db");
 const { generateKey, hashKey, PLAN_LIMITS } = require("../_lib/apiKey");
 
 // Disable body parser so webhook can receive raw body for signature verification
-export const config = { api: { bodyParser: false } };
+module.exports.config = { api: { bodyParser: false } };
 
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;

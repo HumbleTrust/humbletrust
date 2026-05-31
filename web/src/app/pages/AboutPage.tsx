@@ -44,6 +44,12 @@ const TIMELINE = [
     desc: "Full React + Vite + TypeScript frontend live at humbletrust.vercel.app. Launch, Trade, Discover, Charts, Market, NFT, Dashboard pages. Live TradingView charts connected to Supabase trade index. Social fields for tokens. Real-time price ticker. Announcement banner. LP policy selectors. Protected CPMM + Quadratic curve types.",
   },
   {
+    date: "May 2026",
+    label: "Chrome Extension — Live",
+    status: "done",
+    desc: "HumbleTrust Chrome Extension (Manifest V3) submitted to the Chrome Web Store. Detects token contract addresses on 9 trading platforms (DEXScreener, Birdeye, Jupiter, Raydium, Phantom, Solflare, Bullx, Trojan, Axiom) and shows TrustScore inline — without ever leaving the page.",
+  },
+  {
     date: "Q3 2026",
     label: "Mainnet Launch",
     status: "upcoming",
@@ -81,6 +87,7 @@ const TECH = [
   { icon: BarChart2, label: "Charts",          value: "TradingView Lightweight Charts · OHLCV API" },
   { icon: Activity,  label: "Price Ticker",    value: "CoinGecko public API · 30s refresh" },
   { icon: Shield,    label: "Wallet",          value: "Solana Wallet Adapter · Phantom · Backpack" },
+  { icon: Globe,     label: "Browser Extension", value: "Chrome MV3 · 9 trading platforms · TrustScore inline" },
 ];
 
 // ── Links ─────────────────────────────────────────────────────────────────────

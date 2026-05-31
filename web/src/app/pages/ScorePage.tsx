@@ -8,7 +8,7 @@ import {
 import { GlassPanel } from "../components/GlassPanel";
 import { getTrustScore, getWalletRisk, type TrustScore, type WalletRisk } from "../../lib/solana/api";
 
-const BASE = "https://humbletrust.vercel.app/api";
+const BASE = "/api";
 
 const SCORE_COLORS: Record<string, string> = {
   ELITE: "#00FF41", STRONG: "#14F195", OK: "#FFDB2B", WEAK: "#FF7A2F", DANGER: "#FF4444",
