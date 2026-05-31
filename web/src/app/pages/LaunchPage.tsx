@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useWallet, useAnchorWallet, useConnection } from "@solana/wallet-adapter-react";
 import { AnchorProvider } from "@coral-xyz/anchor";
 import { PublicKey } from "@solana/web3.js";
-import { Rocket, ExternalLink, Loader, Upload, X, Award, Lock, UserCheck, Globe, Twitter, Send } from "lucide-react";
+import { Rocket, ExternalLink, Loader, Upload, X, Award, Lock, Unlock, UserCheck, Globe, Twitter, Send } from "lucide-react";
 import { motion } from "motion/react";
 import { GlassPanel } from "../components/GlassPanel";
 import { cn } from "../components/ui/utils";
@@ -1163,6 +1163,32 @@ export function LaunchPage() {
                       </button>
                       {certError && <p className="text-red-400 text-xs mt-2">{certError}</p>}
                     </>
+                  )}
+                </div>
+
+                {/* Phase 5 — Vault Unlock */}
+                <div className="mb-3 p-4 rounded-lg bg-purple-500/5 border border-purple-500/15">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Unlock size={14} className="text-purple-400" />
+                    <span className="text-sm font-semibold text-white">Phase 5 — Unlock Vault (after lock expires)</span>
+                  </div>
+                  <p className="text-xs text-white/40 mb-1 leading-relaxed">
+                    After your lock period expires, go to the <strong className="text-white/60">Trade page</strong> to release the locked tokens to market circulation.
+                    The <strong className="text-white/60">Creator Panel</strong> will appear automatically for your wallet.
+                  </p>
+                  <ul className="text-xs text-white/30 mb-3 space-y-0.5 pl-2">
+                    <li>• Tokens release to <strong className="text-white/50">market circulation</strong> — not to your wallet</li>
+                    <li>• Creator vesting (your wallet allocation) is claimed separately via T1/T2/T3 buttons</li>
+                    <li>• In test mode: 1 lock day = 60 seconds</li>
+                  </ul>
+                  {result && (
+                    <button
+                      onClick={() => window.dispatchEvent(new CustomEvent("ht:open-trade", { detail: result.mint }))}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-300 text-xs hover:bg-purple-500/20 transition-all"
+                    >
+                      <Unlock size={11} />
+                      Open Trade Page → Creator Panel
+                    </button>
                   )}
                 </div>
 

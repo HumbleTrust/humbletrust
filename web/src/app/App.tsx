@@ -44,14 +44,23 @@ import { ApiPage } from "./pages/ApiPage";
 export default function App() {
   const [activeTab, setActiveTab] = useState("home");
   const [openMint, setOpenMint] = useState<string | null>(null);
+  const [tradeMint, setTradeMint] = useState<string | null>(null);
 
   useEffect(() => {
     const handler = (e: Event) => {
       const tab = (e as CustomEvent<string>).detail;
       if (tab) { setActiveTab(tab); setOpenMint(null); }
     };
+    const tradeHandler = (e: Event) => {
+      const mint = (e as CustomEvent<string>).detail;
+      if (mint) { setTradeMint(mint); setActiveTab("trade"); setOpenMint(null); }
+    };
     window.addEventListener("ht:navigate", handler);
-    return () => window.removeEventListener("ht:navigate", handler);
+    window.addEventListener("ht:open-trade", tradeHandler);
+    return () => {
+      window.removeEventListener("ht:navigate", handler);
+      window.removeEventListener("ht:open-trade", tradeHandler);
+    };
   }, []);
 
   const renderPage = () => {
@@ -61,7 +70,7 @@ export default function App() {
       case "dashboard": return <Dashboard onTabChange={setActiveTab} />;
       case "launch":    return <LaunchPage />;
       case "discover":  return <DiscoverPage onOpenToken={(m) => setOpenMint(m)} />;
-      case "trade":     return <TradePage goDiscover={() => setActiveTab("discover")} />;
+      case "trade":     return <TradePage goDiscover={() => setActiveTab("discover")} initialMint={tradeMint ?? undefined} />;
       case "portfolio": return <Portfolio />;
       case "market":    return <MarketPage />;
       case "nft":       return <NftPage goLaunch={() => setActiveTab("launch")} />;

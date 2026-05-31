@@ -184,13 +184,17 @@ const getConfirmedBlockTime = async (
   return new Date().toISOString();
 };
 
-export const TradePage = ({ goDiscover }: { goDiscover?: () => void }) => {
+export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void; initialMint?: string }) => {
   const wallet = useWallet();
   const anchorWallet = useAnchorWallet();
   const { connection } = useConnection();
   const walletAddress = wallet.publicKey?.toBase58() ?? "";
 
-  const [mintInput, setMintInput] = useState("");
+  const [mintInput, setMintInput] = useState(initialMint ?? "");
+
+  useEffect(() => {
+    if (initialMint) setMintInput(initialMint);
+  }, [initialMint]);
   const [side, setSide] = useState<TradeSide>("buy");
   const [solAmount, setSolAmount] = useState("0.1");
   const [tokensAmount, setTokensAmount] = useState("1000000");
