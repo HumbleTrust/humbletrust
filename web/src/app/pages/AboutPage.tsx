@@ -35,7 +35,7 @@ const TIMELINE = [
     date: "April 2026",
     label: "V2 Program — Devnet Launch",
     status: "done",
-    desc: "V2 Anchor program deployed: FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr. Full bonding-curve trading (buy/sell). Raydium CPMM migration skeleton. Creator reputation account. Launch Certificate NFT minting. Anti-bot delay.",
+    desc: "V2 Anchor program deployed: FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr. Full bonding-curve trading (buy/sell). Raydium CPMM graduation tested on devnet — tokens auto-migrate at 50 SOL threshold via CPI, LP locked in PDA or burned on-chain. Creator reputation account. Launch Certificate NFT minting. Anti-bot delay.",
   },
   {
     date: "May 2026",
@@ -57,9 +57,9 @@ const TIMELINE = [
   },
   {
     date: "Q4 2026",
-    label: "Raydium CPMM Migration",
+    label: "Raydium CPMM — Mainnet",
     status: "upcoming",
-    desc: "Graduated tokens (50 SOL raised) auto-migrate to Raydium CPMM pool. LP tokens locked in PDA or burned on-chain — no creator control. Full OHLCV history, volume bars, indicator overlays.",
+    desc: "Raydium CPMM graduation is already live on devnet. Mainnet activation requires a security audit and production RPC. LP lock/burn enforcement on-chain, OHLCV indexing, volume bars and indicator overlays in the chart.",
   },
   {
     date: "2027",
