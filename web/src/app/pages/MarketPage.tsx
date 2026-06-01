@@ -7,6 +7,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { GlassPanel } from "../components/GlassPanel";
 import { cn } from "../components/ui/utils";
+import { CHAINS, Chain, ChainIcon, TrustScoreBadge } from "../data/chains.tsx";
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
@@ -63,97 +64,7 @@ interface NewPairItem {
 
 type NewPairsSource = "cg" | "pump" | "pumpswap" | "dex" | "raydium" | "meteora" | "orca";
 
-interface Chain { name: string; category: string; logo?: string; }
-
-// ── chain logo CDN helpers ────────────────────────────────────────────────────
-const TW = (k: string) =>
-  `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${k}/info/logo.png`;
-const LL = (k: string) =>
-  `https://icons.llamao.fi/icons/chains/rsz_${k}.jpg`;
-
-// ── chain list ────────────────────────────────────────────────────────────────
-
-const CHAINS: Chain[] = [
-  { name: "Solana",        category: "solana-ecosystem",       logo: TW("solana") },
-  { name: "Base",          category: "base-ecosystem",         logo: TW("base") },
-  { name: "Ethereum",      category: "ethereum-ecosystem",     logo: TW("ethereum") },
-  { name: "BSC",           category: "binance-smart-chain",    logo: TW("smartchain") },
-  { name: "Polygon",       category: "polygon-ecosystem",      logo: TW("polygon") },
-  { name: "TON",           category: "ton-ecosystem",          logo: LL("ton") },
-  { name: "Avalanche",     category: "avalanche-ecosystem",    logo: TW("avalanchec") },
-  { name: "Arbitrum",      category: "arbitrum-ecosystem",     logo: TW("arbitrum") },
-  { name: "Optimism",      category: "optimism-ecosystem",     logo: TW("optimism") },
-  { name: "Near",          category: "near-protocol-ecosystem",logo: TW("near") },
-  { name: "Sui",           category: "sui-ecosystem",          logo: LL("sui") },
-  { name: "Aptos",         category: "aptos-ecosystem",        logo: LL("aptos") },
-  { name: "Tron",          category: "tron-ecosystem",         logo: TW("tron") },
-  { name: "Fantom",        category: "fantom-ecosystem",       logo: TW("fantom") },
-  { name: "zkSync",        category: "zksync-ecosystem",       logo: LL("zksync era") },
-  { name: "Starknet",      category: "starknet-ecosystem",     logo: LL("starknet") },
-  { name: "Injective",     category: "injective-ecosystem",    logo: LL("injective") },
-  { name: "ICP",           category: "internet-computer",      logo: LL("icp") },
-  { name: "Cardano",       category: "cardano-ecosystem",      logo: TW("cardano") },
-  { name: "Polkadot",      category: "polkadot-ecosystem",     logo: TW("polkadot") },
-  { name: "XRPL",          category: "xrp-ledger",             logo: TW("xrp") },
-  { name: "Hedera",        category: "hedera-ecosystem",       logo: TW("hedera") },
-  { name: "Algorand",      category: "algorand-ecosystem",     logo: TW("algorand") },
-  { name: "Blast",         category: "blast-l2-ecosystem",     logo: LL("blast") },
-  { name: "Mantle",        category: "mantle-ecosystem",       logo: LL("mantle") },
-  { name: "Linea",         category: "linea-ecosystem",        logo: LL("linea") },
-  { name: "Scroll",        category: "scroll-ecosystem",       logo: LL("scroll") },
-  { name: "Berachain",     category: "berachain-ecosystem",    logo: LL("berachain") },
-  { name: "Sei V2",        category: "sei-ecosystem",          logo: LL("sei") },
-  { name: "Osmosis",       category: "osmosis-ecosystem",      logo: TW("osmosis") },
-  { name: "Celo",          category: "celo-ecosystem",         logo: TW("celo") },
-  { name: "Harmony",       category: "harmony-ecosystem",      logo: TW("harmony") },
-  { name: "Moonbeam",      category: "moonbeam-ecosystem",     logo: TW("moonbeam") },
-  { name: "Moonriver",     category: "moonriver-ecosystem",    logo: TW("moonriver") },
-  { name: "Kava",          category: "kava",                   logo: TW("kava") },
-  { name: "Flow EVM",      category: "flow-ecosystem",         logo: TW("flow") },
-  { name: "Manta",         category: "manta-network",          logo: LL("manta") },
-  { name: "Taiko",         category: "taiko",                  logo: LL("taiko") },
-  { name: "Mode",          category: "mode-network",           logo: LL("mode") },
-  { name: "Movement",      category: "movement-ecosystem",     logo: LL("movement") },
-  { name: "Zora",          category: "zora-ecosystem",         logo: LL("zora") },
-  { name: "Metis",         category: "metis-ecosystem",        logo: TW("metis") },
-  { name: "Cronos",        category: "cronos-ecosystem",       logo: TW("cronos") },
-  { name: "Conflux",       category: "conflux-ecosystem",      logo: LL("conflux") },
-  { name: "Stacks",        category: "stacks-ecosystem",       logo: LL("stacks") },
-  { name: "Telos",         category: "telos-ecosystem",        logo: LL("telos") },
-  { name: "MultiversX",    category: "multiversx-ecosystem",   logo: LL("multiversx") },
-  { name: "opBNB",         category: "opbnb-ecosystem",        logo: LL("op bnb") },
-  { name: "Flare",         category: "flare-ecosystem",        logo: LL("flare") },
-  { name: "Sonic",         category: "sonic-ecosystem",        logo: LL("sonic") },
-  { name: "Hyperliquid",   category: "hyperliquid-ecosystem",  logo: LL("hyperliquid") },
-  { name: "Beam",          category: "beam",                   logo: LL("beam") },
-  { name: "PulseChain",    category: "",                       logo: LL("pulse") },
-  { name: "HyperEVM",      category: "",                       logo: LL("hyper evm") },
-  { name: "Monad",         category: "",                       logo: LL("monad") },
-  { name: "World Chain",   category: "",                       logo: LL("worldchain") },
-  { name: "Abstract",      category: "",                       logo: LL("abstract") },
-  { name: "MegaETH",       category: "",                       logo: LL("megaeth") },
-  { name: "Ink",           category: "",                       logo: LL("ink") },
-  { name: "Plasma",        category: "" },
-  { name: "Soneium",       category: "",                       logo: LL("soneium") },
-  { name: "ApeChain",      category: "",                       logo: LL("apechain") },
-  { name: "Dogechain",     category: "",                       logo: LL("dogechain") },
-  { name: "Unichain",      category: "",                       logo: LL("unichain") },
-  { name: "Story",         category: "",                       logo: LL("story") },
-  { name: "Katana",        category: "" },
-  { name: "EthereumPoW",   category: "",                       logo: LL("ethereumpow") },
-  { name: "Merlin Chain",  category: "",                       logo: LL("merlin") },
-  { name: "Vana",          category: "",                       logo: LL("vana") },
-  { name: "Fogo",          category: "" },
-  { name: "Venom",         category: "" },
-  { name: "Elastos",       category: "",                       logo: LL("elastos") },
-  { name: "Neon EVM",      category: "",                       logo: LL("neon evm") },
-  { name: "Oasis Sapphire",category: "",                       logo: LL("oasis sapphire") },
-  { name: "Fuse",          category: "",                       logo: LL("fuse") },
-  { name: "Zircuit",       category: "",                       logo: LL("zircuit") },
-  { name: "Oasis Emerald", category: "",                       logo: LL("oasis emerald") },
-  { name: "ZKFair",        category: "",                       logo: LL("zkfair") },
-  { name: "Step Network",  category: "",                       logo: LL("step") },
-];
+// Chain type and CHAINS array imported from ../data/chains
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -187,35 +98,6 @@ const TV_SYMBOL_MAP: Record<string, string> = {
 
 const getTvSymbol = (coin: { symbol: string }) =>
   TV_SYMBOL_MAP[coin.symbol.toLowerCase()] ?? `BINANCE:${coin.symbol.toUpperCase()}USDT`;
-
-const CHAIN_LETTER_COLORS = [
-  "#FF6B6B","#4ECDC4","#45B7D1","#96CEB4","#FFEAA7",
-  "#DDA0DD","#98D8C8","#F7B731","#A29BFE","#FD79A8",
-];
-const ChainIcon = ({ chain, size = 14 }: { chain: Chain; size?: number }) => {
-  const [err, setErr] = useState(false);
-  const s = size;
-  if (!chain.logo || err) {
-    const bg = CHAIN_LETTER_COLORS[chain.name.charCodeAt(0) % CHAIN_LETTER_COLORS.length];
-    return (
-      <span
-        style={{ width: s, height: s, backgroundColor: bg, fontSize: s * 0.55, flexShrink: 0 }}
-        className="rounded-full flex items-center justify-center font-bold text-black"
-      >
-        {chain.name[0]}
-      </span>
-    );
-  }
-  return (
-    <img
-      src={chain.logo}
-      alt={chain.name}
-      style={{ width: s, height: s, flexShrink: 0 }}
-      className="rounded-full object-cover"
-      onError={() => setErr(true)}
-    />
-  );
-};
 
 // ── TradingView widget ─────────────────────────────────────────────────────────
 
@@ -941,13 +823,15 @@ export const MarketPage = () => {
                         : "";
                   return (
                     <motion.div key={coin.address + i} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03, duration: 0.2 }}>
-                      <GlassPanel hover glow={isUp ? "green" : coin.complete ? "green" : "none"} className="p-4">
+                      <GlassPanel hover glow={isUp ? "green" : coin.complete ? "green" : "none"} className="p-4 cursor-pointer"
+                        onClick={() => window.dispatchEvent(new CustomEvent("ht:open-trade", { detail: { mint: coin.address } }))}>
                         <div className="flex items-center gap-2.5 mb-3">
                           <HexAvatar src={coin.image} label={coin.symbol || coin.name} size={40} />
                           <div className="flex-1 min-w-0">
                             <div className="text-white font-semibold text-sm truncate">{coin.symbol || coin.name || coin.address.slice(0,8)+"…"}</div>
                             <div className="text-white/40 text-xs truncate">{coin.name}</div>
                           </div>
+                          <TrustScoreBadge mint={coin.address} />
                           {coin.complete && <span className="px-1.5 py-0.5 rounded text-[9px] bg-[#00FF41]/10 text-[#00FF41] border border-[#00FF41]/20">bonded</span>}
                           {!coin.complete && coin.change_24h !== null && coin.change_24h !== undefined && (
                             <div className={cn("px-2 py-1 rounded-lg text-xs font-mono font-semibold",
