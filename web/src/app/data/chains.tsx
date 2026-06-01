@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "../components/ui/utils";
 
 export interface Chain { name: string; category: string; logo?: string; }
@@ -122,23 +122,19 @@ export const ChainIcon = ({ chain, size = 14 }: { chain: Chain; size?: number })
 export const TrustScoreBadge = ({ mint }: { mint: string }) => {
   const [score, setScore] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
-  const [tried, setTried] = useState(false);
 
-  const load = async () => {
-    if (tried || loading) return;
-    setLoading(true); setTried(true);
-    try {
-      const r = await fetch(`/api/score/${mint}`);
-      if (r.ok) {
-        const d = await r.json();
-        setScore(d.trust_score ?? d.score ?? null);
-      }
-    } catch { /* silent */ } finally {
-      setLoading(false);
-    }
-  };
-
-  if (!tried && !loading) load();
+  useEffect(() => {
+    if (!mint) return;
+    let cancelled = false;
+    setLoading(true);
+    setScore(null);
+    fetch(`/api/score/${mint}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!cancelled) setScore(d?.trust_score ?? d?.score ?? null); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [mint]);
 
   if (loading) return (
     <span className="px-1.5 py-0.5 rounded text-[9px] bg-white/5 text-white/30 border border-white/10 animate-pulse">

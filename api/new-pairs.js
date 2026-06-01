@@ -120,6 +120,7 @@ module.exports = async (req, res) => {
       const pools = json.data?.data ?? [];
       const items = pools.map((p) => norm({
         address:       p.id,
+        token_mint:    p.mintA?.address ?? undefined,
         name:          `${p.mintA?.symbol ?? "?"} / ${p.mintB?.symbol ?? "?"}`,
         symbol:        p.mintA?.symbol ?? "",
         image:         p.mintA?.logoURI ?? "",
@@ -141,6 +142,7 @@ module.exports = async (req, res) => {
       const pairs = json.data ?? json.pairs ?? (Array.isArray(json) ? json : []);
       const items = pairs.slice(0, 24).map((p) => norm({
         address:       p.address,
+        token_mint:    p.mint_x ?? undefined,
         name:          p.name ?? `${p.mint_x?.slice(0,4)}…/${p.mint_y?.slice(0,4)}…`,
         symbol:        "",
         image:         "",
@@ -160,6 +162,7 @@ module.exports = async (req, res) => {
       const pools = (json.whirlpools ?? json.data ?? []).slice(0, 24);
       const items = pools.map((p) => norm({
         address:       p.address,
+        token_mint:    p.tokenA?.mint ?? undefined,
         name:          `${p.tokenA?.symbol ?? "?"} / ${p.tokenB?.symbol ?? "?"}`,
         symbol:        p.tokenA?.symbol ?? "",
         image:         p.tokenA?.logoURI ?? "",

@@ -46,6 +46,7 @@ interface TrendingItem {
 
 interface NewPairItem {
   address:       string;
+  token_mint?:   string;
   name:          string;
   symbol:        string;
   image:         string;
@@ -98,6 +99,36 @@ const TV_SYMBOL_MAP: Record<string, string> = {
 
 const getTvSymbol = (coin: { symbol: string }) =>
   TV_SYMBOL_MAP[coin.symbol.toLowerCase()] ?? `BINANCE:${coin.symbol.toUpperCase()}USDT`;
+
+// CoinGecko ID → Solana mint address for well-known Solana tokens
+const CG_TO_SOLANA_MINT: Record<string, string> = {
+  "solana":                    "So11111111111111111111111111111111111111112",
+  "usd-coin":                  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "tether":                    "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+  "jupiter-exchange-solana":   "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+  "bonk":                      "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+  "dogwifcoin":                "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm",
+  "jito-governance-token":     "jtojtomepa8beP8AuQc6eXt5FriJwfFMwt2bFtBB9TQ",
+  "pyth-network":              "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3",
+  "render-token":              "rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof",
+  "raydium":                   "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+  "orca":                      "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE",
+  "helium":                    "hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux",
+  "msol":                      "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
+  "marinade":                  "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
+  "fartcoin":                  "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump",
+  "popcat":                    "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr",
+  "mew-the-cat":               "MEW1gQWJ3nEXg2qgERiKu7FAFj79PHvQVREQUzScPP5",
+  "book-of-meme":              "ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82",
+  "ponke":                     "5z3EqYQo9HiCEs3R84RCDMu2n7anpDMxRhdK31CR8Ada",
+  "samo":                      "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+  "pnut-the-squirrel":         "2qEHjDLDLbuBgRYvsxhc5D6uDWAivNFZGan56P1tpump",
+  "ai16z":                     "HeLp6NuQkmYB4pYWo2zYs22mESHXPQYzXbB8n4V98jwC",
+  "moo-deng":                  "ED5nyyWEzpPPiWimP8vYm7sD7TD3LAt3Q3gRTWHzc8yy",
+  "bome":                      "ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82",
+  "wif":                       "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm",
+  "jup":                       "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+};
 
 // ── TradingView widget ─────────────────────────────────────────────────────────
 
@@ -206,11 +237,14 @@ const CoinCard = memo(({
               </div>
             ))}
           </div>
-          {/* Rank */}
+          {/* Rank + TrustScore */}
           <div className="flex items-center justify-between">
             <span className="text-white/20 text-[10px] font-mono">#{coin.market_cap_rank}</span>
-            <div className="flex items-center gap-1 text-[#00FF41]/60 text-xs font-medium">
-              <BarChart2 size={11} /> TradingView chart
+            <div className="flex items-center gap-2">
+              {CG_TO_SOLANA_MINT[coin.id] && <TrustScoreBadge mint={CG_TO_SOLANA_MINT[coin.id]} />}
+              <div className="flex items-center gap-1 text-[#00FF41]/60 text-xs font-medium">
+                <BarChart2 size={11} /> chart
+              </div>
             </div>
           </div>
         </div>
@@ -419,7 +453,10 @@ export const MarketPage = () => {
 
   const handleRefresh = () => {
     if (category === "all")                   void fetchAll();
-    else if (category === "new")              void fetchTrending();
+    else if (category === "new") {
+      if (newSource === "cg") void fetchTrending();
+      else void fetchNewPairs(newSource);
+    }
     else if (category === "gainers_losers")   void fetchGainersLosers();
     else if (category === "blockchains" && selectedChain) void fetchChainCoins(selectedChain);
   };
@@ -786,7 +823,10 @@ export const MarketPage = () => {
                         <div className="text-white font-mono font-bold text-lg mb-2">{fmtPrice(price)}</div>
                         <div className="flex items-center justify-between">
                           {item.market_cap_rank && <span className="text-white/20 text-[10px] font-mono">#{item.market_cap_rank}</span>}
-                          <div className="flex items-center gap-1 text-[#00FF41]/50 text-[10px]"><Zap size={9} /> Trending</div>
+                          <div className="flex items-center gap-2">
+                            {CG_TO_SOLANA_MINT[item.id] && <TrustScoreBadge mint={CG_TO_SOLANA_MINT[item.id]} />}
+                            <div className="flex items-center gap-1 text-[#00FF41]/50 text-[10px]"><Zap size={9} /> Trending</div>
+                          </div>
                         </div>
                       </GlassPanel>
                     </motion.div>
@@ -831,7 +871,7 @@ export const MarketPage = () => {
                             <div className="text-white font-semibold text-sm truncate">{coin.symbol || coin.name || coin.address.slice(0,8)+"…"}</div>
                             <div className="text-white/40 text-xs truncate">{coin.name}</div>
                           </div>
-                          <TrustScoreBadge mint={coin.address} />
+                          <TrustScoreBadge mint={coin.token_mint ?? coin.address} />
                           {coin.complete && <span className="px-1.5 py-0.5 rounded text-[9px] bg-[#00FF41]/10 text-[#00FF41] border border-[#00FF41]/20">bonded</span>}
                           {!coin.complete && coin.change_24h !== null && coin.change_24h !== undefined && (
                             <div className={cn("px-2 py-1 rounded-lg text-xs font-mono font-semibold",
@@ -893,6 +933,7 @@ export const MarketPage = () => {
                             <div className="text-white text-sm font-semibold">{coin.symbol.toUpperCase()}</div>
                             <div className="text-white/40 text-xs truncate">{coin.name}</div>
                           </div>
+                          {CG_TO_SOLANA_MINT[coin.id] && <TrustScoreBadge mint={CG_TO_SOLANA_MINT[coin.id]} />}
                           <div className="text-right shrink-0">
                             <div className="text-white font-mono text-sm">{fmtPrice(coin.current_price)}</div>
                             <div className="text-[#00FF41] text-xs font-mono font-bold">
@@ -938,6 +979,7 @@ export const MarketPage = () => {
                             <div className="text-white text-sm font-semibold">{coin.symbol.toUpperCase()}</div>
                             <div className="text-white/40 text-xs truncate">{coin.name}</div>
                           </div>
+                          {CG_TO_SOLANA_MINT[coin.id] && <TrustScoreBadge mint={CG_TO_SOLANA_MINT[coin.id]} />}
                           <div className="text-right shrink-0">
                             <div className="text-white font-mono text-sm">{fmtPrice(coin.current_price)}</div>
                             <div className="text-red-400 text-xs font-mono font-bold">
