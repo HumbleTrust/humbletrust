@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "HumbleTrust — Token TrustScore",
   "version": "1.0.0",
-  "description": "Instantly see TrustScore badges for any Solana token on DEXScreener, Birdeye, Jupiter, and more.",
+  "description": "See trust and safety scores for Solana tokens while browsing Solana DeFi — no tab switching needed.",
   "icons": {
     "16":  "icons/icon16.png",
     "48":  "icons/icon48.png",
