@@ -782,6 +782,31 @@ export interface MigrationState {
   curveType: 0 | 1;
 }
 
+// Manually parse migration_threshold_lamports from raw TokenMetadataV2 account
+// bytes when the full IDL decode fails (old account with missing late fields).
+// Layout (Borsh, after 8-byte Anchor discriminator):
+//   creator(32) + mint(32) + metrics_authority(32)
+//   name(4+n) + symbol(4+m)
+//   total_supply(8) + mint_supply_after_burn(8)
+//   5×u8 percents  +  8×u64 allocation amounts  +  initial_sol_lamports(8)
+//   → migration_threshold_lamports(8)
+function readMigrationThresholdRaw(data: Uint8Array): number {
+  try {
+    const buf = Buffer.from(data);
+    let o = 8; // skip 8-byte discriminator
+    o += 32 + 32 + 32; // creator, mint, metrics_authority
+    o += 4 + buf.readUInt32LE(o); // name string
+    o += 4 + buf.readUInt32LE(o); // symbol string
+    o += 8 + 8; // total_supply, mint_supply_after_burn
+    o += 5; // 5 × u8 percent fields
+    o += 8 * 8; // 8 × u64 allocation amounts
+    o += 8; // initial_sol_lamports
+    return Number(buf.readBigUInt64LE(o)); // migration_threshold_lamports
+  } catch {
+    return 50_000_000_000; // conservative: assume 50 SOL if parse fails
+  }
+}
+
 export const fetchMigrationState = async (
   connection: Connection,
   mint: PublicKey
@@ -819,16 +844,18 @@ export const fetchMigrationState = async (
     try {
       meta = coder.decode("TokenMetadataV2", metaInfo.data);
     } catch {
-      // Old account format (pre-upgrade) — use devnet test-mode threshold (5 SOL)
-      const FALLBACK_THRESHOLD = 5_000_000_000;
+      // Old account format (missing late fields added after a program upgrade).
+      // Manually parse migration_threshold_lamports from raw bytes so the UI
+      // shows the real threshold instead of a hardcoded guess.
+      const rawThreshold = readMigrationThresholdRaw(metaInfo.data);
       return {
-        thresholdLamports: FALLBACK_THRESHOLD,
+        thresholdLamports: rawThreshold,
         currentSolLamports,
         isMigrated: false,
         curveType: 0 as const,
         raydiumPool: PublicKey.default.toBase58(),
         migratedAt: 0,
-        progressPct: Math.min(100, (currentSolLamports / FALLBACK_THRESHOLD) * 100),
+        progressPct: rawThreshold > 0 ? Math.min(100, (currentSolLamports / rawThreshold) * 100) : 0,
         isPrepared: migrationTokenBalance > 0 && migrationWsolLamports > 0,
         migrationTokenAmount: migrationTokenBalance,
         migrationWsolLamports,
