@@ -1,11 +1,25 @@
 // Shared validation helpers for API routes
 
-// Solana public key: base58, 32-44 chars (no SDK needed for format validation)
+// Fallback regex when @solana/web3.js is unavailable
 const SOLANA_ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
+// Lazy-loaded web3 to avoid module-load failure if package is missing
+let _web3;
+const _getWeb3 = () => {
+  if (!_web3) _web3 = require("@solana/web3.js");
+  return _web3;
+};
+
 const isValidWallet = (w) => {
-  if (typeof w !== 'string') return false;
-  return SOLANA_ADDR_RE.test(w);
+  if (typeof w !== 'string' || w.length < 32 || w.length > 44) return false;
+  try {
+    const { PublicKey } = _getWeb3();
+    new PublicKey(w);
+    return true;
+  } catch {
+    // web3.js unavailable or invalid key — fall back to regex
+    return SOLANA_ADDR_RE.test(w);
+  }
 };
 
 const ALLOWED_ORIGINS = [

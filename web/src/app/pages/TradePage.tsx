@@ -699,13 +699,21 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
       // Optimistic: show trade in chart immediately without waiting for backend
       setChartError(null);
       setChartTrades(prev => [tradePayload as ApiTrade, ...prev.slice(0, 499)]);
-      // Fire-and-forget: index to Supabase async — failure doesn't affect UX
-      recordTrade(mintInput.trim(), tradePayload).catch(e => console.warn("[recordTrade:buy]", e?.message));
+      // Try direct record first; if it fails, fall back to full chain sync
+      const _mint = mintInput.trim();
+      recordTrade(_mint, tradePayload).then(r => {
+        if (r?.error) {
+          console.warn("[recordTrade:buy] failed:", r.error, "— syncing from chain");
+          syncTokenTrades(_mint, 10).then(s => {
+            if (!s?.error) setTimeout(() => fetchChartTrades(_mint, true), 1000);
+          }).catch(() => {});
+        }
+      }).catch(() => {});
       await Promise.all([
         refreshReserves(),
         loadWalletTokens(),
       ]);
-      fetchChartTrades(mintInput.trim(), true);
+      fetchChartTrades(_mint, true);
     } catch (e: any) {
       const errMsg = e.message || String(e);
       if (errMsg.includes("AlreadyMigrated") || errMsg.includes("6037")) {
@@ -779,12 +787,20 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
       };
       setChartError(null);
       setChartTrades(prev => [tradePayload as ApiTrade, ...prev.slice(0, 499)]);
-      recordTrade(mintInput.trim(), tradePayload).catch(e => console.warn("[recordTrade:sell]", e?.message));
+      const _mint = mintInput.trim();
+      recordTrade(_mint, tradePayload).then(r => {
+        if (r?.error) {
+          console.warn("[recordTrade:sell] failed:", r.error, "— syncing from chain");
+          syncTokenTrades(_mint, 10).then(s => {
+            if (!s?.error) setTimeout(() => fetchChartTrades(_mint, true), 1000);
+          }).catch(() => {});
+        }
+      }).catch(() => {});
       await Promise.all([
         refreshReserves(),
         loadWalletTokens(),
       ]);
-      fetchChartTrades(mintInput.trim(), true);
+      fetchChartTrades(_mint, true);
     } catch (e: any) {
       const errMsg = e.message || String(e);
       if (errMsg.includes("AlreadyMigrated") || errMsg.includes("6037")) {
