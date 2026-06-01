@@ -9,7 +9,7 @@ crate-type = ["cdylib", "lib"]
 name = "humbletrust_v2"
 
 [features]
-default = ["devnet"]
+default = ["devnet", "test-mode"]
 cpi = ["no-entrypoint"]
 devnet = []
 mainnet = []
