@@ -891,6 +891,7 @@ export interface LpLockState {
   lockedAt: number;
   lastClaimTime: number;
   totalFeesClaimed: number;
+  isAutoLock: boolean; // true = migration auto-lock (LpLockVault), no unlock/claim available
 }
 
 export const fetchLpLockState = async (
@@ -911,6 +912,7 @@ export const fetchLpLockState = async (
         lockedAt: Number(lock.lockedAt ?? lock.locked_at ?? 0),
         lastClaimTime: Number(lock.lastClaimTime ?? lock.last_claim_time ?? 0),
         totalFeesClaimed: Number(lock.totalFeesClaimed ?? lock.total_fees_claimed_lamports ?? 0),
+        isAutoLock: false,
       };
     }
   } catch { /* fall through to vault fallback */ }
@@ -931,6 +933,7 @@ export const fetchLpLockState = async (
       lockedAt: 0,
       lastClaimTime: 0,
       totalFeesClaimed: 0,
+      isAutoLock: true,
     };
   } catch {
     return null;

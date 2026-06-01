@@ -1900,16 +1900,22 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
               ) : (
                 <>
                   {/* Migrated state */}
-                  <div className="text-xs font-mono text-white/50 mb-3 break-all">
-                    Pool: {migrationState.raydiumPool.slice(0, 8)}…{migrationState.raydiumPool.slice(-6)}
-                  </div>
-                  <a
-                    href={`https://raydium.io/liquidity/increase/?mode=add&pool_id=${migrationState.raydiumPool}`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 mb-4"
-                  >
-                    View pool on Raydium <ExternalLink size={10} />
-                  </a>
+                  {migrationState.raydiumPool !== "11111111111111111111111111111111" && (
+                    <div className="text-xs font-mono text-white/50 mb-3 break-all">
+                      Pool: {migrationState.raydiumPool.slice(0, 8)}…{migrationState.raydiumPool.slice(-6)}
+                    </div>
+                  )}
+                  {migrationState.raydiumPool !== "11111111111111111111111111111111" ? (
+                    <a
+                      href={`https://raydium.io/liquidity/increase/?mode=add&pool_id=${migrationState.raydiumPool}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 mb-4"
+                    >
+                      View pool on Raydium <ExternalLink size={10} />
+                    </a>
+                  ) : (
+                    <p className="text-xs text-white/30 mb-4">Pool address not yet indexed — use Raydium swap link below</p>
+                  )}
 
                   {/* LP Lock section */}
                   {lpLockState ? (
@@ -1920,28 +1926,36 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div><span className="text-white/40">Amount</span><br /><span className="font-mono">{(lpLockState.lpAmount / 1e9).toFixed(4)}</span></div>
-                        <div><span className="text-white/40">Lock days</span><br /><span className="font-mono">{lpLockState.lockDays}</span></div>
-                        <div><span className="text-white/40">Unlocks</span><br /><span className="font-mono">{new Date(lpLockState.unlockTime * 1000).toLocaleDateString()}</span></div>
+                        <div>
+                          <span className="text-white/40">Lock days</span><br />
+                          <span className="font-mono">{lpLockState.isAutoLock ? "Permanent" : lpLockState.lockDays}</span>
+                        </div>
+                        <div>
+                          <span className="text-white/40">Unlocks</span><br />
+                          <span className="font-mono">{lpLockState.isAutoLock ? "Never" : new Date(lpLockState.unlockTime * 1000).toLocaleDateString()}</span>
+                        </div>
                         <div><span className="text-white/40">Fees claimed</span><br /><span className="font-mono">{(lpLockState.totalFeesClaimed / LAMPORTS_PER_SOL).toFixed(4)} SOL</span></div>
                       </div>
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          onClick={runClaimLpFees}
-                          disabled={lpLockBusy || !wallet.connected}
-                          className="flex-1 py-2 rounded-lg bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 text-xs font-semibold hover:bg-yellow-500/25 disabled:opacity-40 transition-all"
-                        >
-                          {lpLockBusy ? "…" : "Claim Fees"}
-                        </button>
-                        {Date.now() / 1000 >= lpLockState.unlockTime && (
+                      {!lpLockState.isAutoLock && (
+                        <div className="flex gap-2 pt-1">
                           <button
-                            onClick={runUnlockLp}
+                            onClick={runClaimLpFees}
                             disabled={lpLockBusy || !wallet.connected}
-                            className="flex-1 py-2 rounded-lg bg-[#00FF41]/15 border border-[#00FF41]/30 text-[#00FF41] text-xs font-semibold hover:bg-[#00FF41]/25 disabled:opacity-40 transition-all"
+                            className="flex-1 py-2 rounded-lg bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 text-xs font-semibold hover:bg-yellow-500/25 disabled:opacity-40 transition-all"
                           >
-                            <Unlock size={10} className="inline mr-1" />Unlock LP
+                            {lpLockBusy ? "…" : "Claim Fees"}
                           </button>
-                        )}
-                      </div>
+                          {Date.now() / 1000 >= lpLockState.unlockTime && (
+                            <button
+                              onClick={runUnlockLp}
+                              disabled={lpLockBusy || !wallet.connected}
+                              className="flex-1 py-2 rounded-lg bg-[#00FF41]/15 border border-[#00FF41]/30 text-[#00FF41] text-xs font-semibold hover:bg-[#00FF41]/25 disabled:opacity-40 transition-all"
+                            >
+                              <Unlock size={10} className="inline mr-1" />Unlock LP
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : wallet.connected && (
                     <div className="space-y-2">
