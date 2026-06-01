@@ -581,7 +581,25 @@ export function LaunchPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="relative min-h-screen">
+      {/* ── Video background ── */}
+      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+        <video
+          src="/HTVid.mp4"
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ filter: "brightness(0.22) saturate(1.4)" }}
+        />
+        {/* radial vignette so edges stay dark */}
+        <div className="absolute inset-0" style={{
+          background: "radial-gradient(ellipse at 50% 40%, rgba(10,10,20,0.4) 0%, rgba(10,10,20,0.85) 70%, #0a0a14 100%)"
+        }} />
+      </div>
+
+    <div className="relative z-10 space-y-6">
       {/* Page header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
@@ -1431,6 +1449,7 @@ export function LaunchPage() {
           </motion.div>
         </div>
       </div>
+    </div>
     </div>
   );
 }
