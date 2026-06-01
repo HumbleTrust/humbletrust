@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
+    "bs58": "^4.0.1",
     "@emotion/react": "11.14.0",
     "@emotion/styled": "11.14.1",
     "@metaplex-foundation/mpl-token-metadata": "^3.4.0",
