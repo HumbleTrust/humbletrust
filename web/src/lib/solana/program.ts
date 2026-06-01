@@ -709,6 +709,12 @@ export const findLpLockV2Pda = (tokenMint: PublicKey) =>
     PROGRAM_ID_V2_PK
   );
 
+export const findLpLockVaultV2Pda = (tokenMint: PublicKey) =>
+  PublicKey.findProgramAddressSync(
+    [Buffer.from("lp_lock_vault_v2"), tokenMint.toBuffer()],
+    PROGRAM_ID_V2_PK
+  );
+
 export const findLpVaultV2Pda = (tokenMint: PublicKey) =>
   PublicKey.findProgramAddressSync(
     [Buffer.from("lp_vault_v2"), tokenMint.toBuffer()],
@@ -859,20 +865,40 @@ export const fetchLpLockState = async (
   connection: Connection,
   tokenMint: PublicKey
 ): Promise<LpLockState | null> => {
+  const coder = new BorshAccountsCoder(idlV2Json as Idl);
   try {
     const [lpLockPda] = findLpLockV2Pda(tokenMint);
-    const coder = new BorshAccountsCoder(idlV2Json as Idl);
     const info = await connection.getAccountInfo(lpLockPda);
-    if (!info) return null;
-    const lock = coder.decode("LpLockV2", info.data) as any;
+    if (info) {
+      const lock = coder.decode("LpLockV2", info.data) as any;
+      return {
+        lpMint: (lock.lpMint ?? lock.lp_mint).toBase58(),
+        lpAmount: Number(lock.lpAmount ?? lock.lp_amount ?? 0),
+        lockDays: Number(lock.lockDays ?? lock.lock_days ?? 0),
+        unlockTime: Number(lock.unlockTime ?? lock.unlock_time ?? 0),
+        lockedAt: Number(lock.lockedAt ?? lock.locked_at ?? 0),
+        lastClaimTime: Number(lock.lastClaimTime ?? lock.last_claim_time ?? 0),
+        totalFeesClaimed: Number(lock.totalFeesClaimed ?? lock.total_fees_claimed_lamports ?? 0),
+      };
+    }
+  } catch { /* fall through to vault fallback */ }
+
+  // Fallback: migration auto-lock writes to lp_lock_vault_v2 (LpLockVault), not lp_lock_v2
+  try {
+    const [vaultPda] = findLpLockVaultV2Pda(tokenMint);
+    const vaultInfo = await connection.getAccountInfo(vaultPda);
+    if (!vaultInfo) return null;
+    const vault = coder.decode("LpLockVault", vaultInfo.data) as any;
+    const lpAmount = Number(vault.lpAmount ?? vault.lp_amount ?? 0);
+    if (lpAmount === 0) return null;
     return {
-      lpMint: (lock.lpMint ?? lock.lp_mint).toBase58(),
-      lpAmount: Number(lock.lpAmount ?? lock.lp_amount ?? 0),
-      lockDays: Number(lock.lockDays ?? lock.lock_days ?? 0),
-      unlockTime: Number(lock.unlockTime ?? lock.unlock_time ?? 0),
-      lockedAt: Number(lock.lockedAt ?? lock.locked_at ?? 0),
-      lastClaimTime: Number(lock.lastClaimTime ?? lock.last_claim_time ?? 0),
-      totalFeesClaimed: Number(lock.totalFeesClaimed ?? lock.total_fees_claimed_lamports ?? 0),
+      lpMint: (vault.lpMint ?? vault.lp_mint).toBase58(),
+      lpAmount,
+      lockDays: 0,
+      unlockTime: 0,
+      lockedAt: 0,
+      lastClaimTime: 0,
+      totalFeesClaimed: 0,
     };
   } catch {
     return null;
@@ -892,6 +918,19 @@ export const migrateToRaydiumV2 = async (
   const [migrationAuthority] = findRaydiumMigrationAuthorityV2Pda(mint);
   const provider = program.provider as AnchorProvider;
 
+  // Read token metadata to determine lp_policy and creator for remainingAccounts
+  const coder = new BorshAccountsCoder(idlV2Json as Idl);
+  const metaInfo = await provider.connection.getAccountInfo(pdas.tokenMetadata);
+  let lpPolicy = 0;
+  let creator = triggerer;
+  if (metaInfo) {
+    try {
+      const meta = coder.decode("TokenMetadataV2", metaInfo.data) as any;
+      lpPolicy = Number(meta.lpPolicy ?? meta.lp_policy ?? 0);
+      creator = new PublicKey((meta.creator ?? meta.creator).toBuffer());
+    } catch { /* use defaults */ }
+  }
+
   const migrationTokenAccount = getAssociatedTokenAddressSync(mint, migrationAuthority, true);
   const migrationWsolAccount  = getAssociatedTokenAddressSync(WSOL_MINT, migrationAuthority, true);
   const triggererTokenAccount = getAssociatedTokenAddressSync(mint, triggerer, false);
@@ -900,16 +939,23 @@ export const migrateToRaydiumV2 = async (
   const [raydiumLpVault]      = findRaydiumLpCustodyV2Pda(mint);
 
   const preInstructions = [];
-  const [tokInfo, wsolInfo, triggererTokInfo, triggererWsolInfo] = await Promise.all([
-    provider.connection.getAccountInfo(migrationTokenAccount),
-    provider.connection.getAccountInfo(migrationWsolAccount),
-    provider.connection.getAccountInfo(triggererTokenAccount),
-    provider.connection.getAccountInfo(triggererWsolAccount),
-  ]);
+  const accountsToCheck: [PublicKey][] = [
+    [migrationTokenAccount], [migrationWsolAccount],
+    [triggererTokenAccount], [triggererWsolAccount],
+  ];
+  const infos = await Promise.all(
+    accountsToCheck.map(([pk]) => provider.connection.getAccountInfo(pk))
+  );
+  const [tokInfo, wsolInfo, triggererTokInfo, triggererWsolInfo] = infos;
   if (!tokInfo)  preInstructions.push(createAssociatedTokenAccountInstruction(triggerer, migrationTokenAccount, migrationAuthority, mint));
   if (!wsolInfo) preInstructions.push(createAssociatedTokenAccountInstruction(triggerer, migrationWsolAccount,  migrationAuthority, WSOL_MINT));
   if (!triggererTokInfo) preInstructions.push(createAssociatedTokenAccountInstruction(triggerer, triggererTokenAccount, triggerer, mint));
   if (!triggererWsolInfo) preInstructions.push(createAssociatedTokenAccountInstruction(triggerer, triggererWsolAccount, triggerer, WSOL_MINT));
+
+  // For lp_policy=2 (ToCreator): pass creator LP ATA as remaining_accounts[0]
+  const remainingAccounts = lpPolicy === 2
+    ? [{ pubkey: getAssociatedTokenAddressSync(ray.lpMint, creator, false), isSigner: false, isWritable: true }]
+    : [];
 
   const tx = await program.methods
     .migrateToRaydiumV2(
@@ -948,6 +994,7 @@ export const migrateToRaydiumV2 = async (
       systemProgram:           SystemProgram.programId,
       rent:                    SYSVAR_RENT_PUBKEY,
     })
+    .remainingAccounts(remainingAccounts)
     .preInstructions(preInstructions)
     .rpc();
 

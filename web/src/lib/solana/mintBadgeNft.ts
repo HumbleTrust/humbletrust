@@ -7,9 +7,12 @@ import {
 import {
   generateSigner,
   percentAmount,
-  PublicKey as UmiPublicKey,
+  publicKey as umiPublicKey,
+  transactionBuilder,
 } from "@metaplex-foundation/umi";
-import { RPC_DEVNET } from "./constants";
+import { RPC_DEVNET, FEE_WALLET } from "./constants";
+
+const BADGE_PRICE_LAMPORTS = 200_000_000; // 0.2 SOL
 
 export type MintBadgeResult = {
   badge_mint: string;
@@ -56,18 +59,38 @@ export async function mintBadgeNft(
   const umi = createUmi(RPC_DEVNET).use(mplTokenMetadata());
   umi.use(walletAdapterIdentity(walletAdapter));
 
-  // 3. Create the NFT — user signs in Phantom
+  // 3. Create the NFT + SOL payment in one transaction — user signs once
   const mintSigner = generateSigner(umi);
   const editionStr = String(edition).padStart(3, "0");
 
-  const { signature } = await createNft(umi, {
-    mint: mintSigner,
-    name: `HumbleTrust ${zodiac} Badge #${editionStr}`,
-    symbol: "HTBADGE",
-    uri: metadata_uri,
-    sellerFeeBasisPoints: percentAmount(0),
-    isMutable: false,
-  }).sendAndConfirm(umi);
+  // Encode SystemProgram.transfer (instruction index 2, little-endian u64 lamports)
+  const transferData = new Uint8Array(12);
+  const dv = new DataView(transferData.buffer);
+  dv.setUint32(0, 2, true);
+  dv.setBigUint64(4, BigInt(BADGE_PRICE_LAMPORTS), true);
+
+  const { signature } = await transactionBuilder()
+    .add({
+      instruction: {
+        programId: umiPublicKey("11111111111111111111111111111111"),
+        keys: [
+          { pubkey: umi.identity.publicKey, isSigner: true, isWritable: true },
+          { pubkey: umiPublicKey(FEE_WALLET), isSigner: false, isWritable: true },
+        ],
+        data: transferData,
+      },
+      signers: [umi.identity],
+      bytesCreatedOnChain: 0,
+    })
+    .add(createNft(umi, {
+      mint: mintSigner,
+      name: `HumbleTrust ${zodiac} Badge #${editionStr}`,
+      symbol: "HTBADGE",
+      uri: metadata_uri,
+      sellerFeeBasisPoints: percentAmount(0),
+      isMutable: false,
+    }))
+    .sendAndConfirm(umi);
 
   const badge_mint = mintSigner.publicKey.toString();
   const tx_signature = Buffer.from(signature).toString("base64");
