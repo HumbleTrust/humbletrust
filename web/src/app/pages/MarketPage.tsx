@@ -43,90 +43,116 @@ interface TrendingItem {
   };
 }
 
-interface Chain { name: string; category: string; }
+interface NewPairItem {
+  address:       string;
+  name:          string;
+  symbol:        string;
+  image:         string;
+  price_usd?:    number;
+  change_24h?:   number | null;
+  market_cap?:   number;
+  volume_24h?:   number;
+  liquidity_usd?: number;
+  created_at?:   number;
+  complete?:     boolean;
+  dex_url?:      string;
+  description?:  string;
+  links?:        Array<{ type: string; label: string; url: string }>;
+  source:        "pump" | "dex";
+}
+
+type NewPairsSource = "cg" | "pump" | "dex";
+
+interface Chain { name: string; category: string; logo?: string; }
+
+// ── chain logo CDN helpers ────────────────────────────────────────────────────
+const TW = (k: string) =>
+  `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${k}/info/logo.png`;
+const LL = (k: string) =>
+  `https://icons.llamao.fi/icons/chains/rsz_${k}.jpg`;
 
 // ── chain list ────────────────────────────────────────────────────────────────
 
 const CHAINS: Chain[] = [
-  { name: "Solana",        category: "solana-ecosystem" },
-  { name: "Base",          category: "base-ecosystem" },
-  { name: "Ethereum",      category: "ethereum-ecosystem" },
-  { name: "BSC",           category: "binance-smart-chain" },
-  { name: "Polygon",       category: "polygon-ecosystem" },
-  { name: "TON",           category: "ton-ecosystem" },
-  { name: "Avalanche",     category: "avalanche-ecosystem" },
-  { name: "Arbitrum",      category: "arbitrum-ecosystem" },
-  { name: "Optimism",      category: "optimism-ecosystem" },
-  { name: "Near",          category: "near-protocol-ecosystem" },
-  { name: "Sui",           category: "sui-ecosystem" },
-  { name: "Aptos",         category: "aptos-ecosystem" },
-  { name: "Tron",          category: "tron-ecosystem" },
-  { name: "Fantom",        category: "fantom-ecosystem" },
-  { name: "zkSync",        category: "zksync-ecosystem" },
-  { name: "Starknet",      category: "starknet-ecosystem" },
-  { name: "Injective",     category: "injective-ecosystem" },
-  { name: "ICP",           category: "internet-computer" },
-  { name: "Cardano",       category: "cardano-ecosystem" },
-  { name: "Polkadot",      category: "polkadot-ecosystem" },
-  { name: "XRPL",          category: "xrp-ledger" },
-  { name: "Hedera",        category: "hedera-ecosystem" },
-  { name: "Algorand",      category: "algorand-ecosystem" },
-  { name: "Blast",         category: "blast-l2-ecosystem" },
-  { name: "Mantle",        category: "mantle-ecosystem" },
-  { name: "Linea",         category: "linea-ecosystem" },
-  { name: "Scroll",        category: "scroll-ecosystem" },
-  { name: "Berachain",     category: "berachain-ecosystem" },
-  { name: "Sei V2",        category: "sei-ecosystem" },
-  { name: "Osmosis",       category: "osmosis-ecosystem" },
-  { name: "Celo",          category: "celo-ecosystem" },
-  { name: "Harmony",       category: "harmony-ecosystem" },
-  { name: "Moonbeam",      category: "moonbeam-ecosystem" },
-  { name: "Moonriver",     category: "moonriver-ecosystem" },
-  { name: "Kava",          category: "kava" },
-  { name: "Flow EVM",      category: "flow-ecosystem" },
-  { name: "Manta",         category: "manta-network" },
-  { name: "Taiko",         category: "taiko" },
-  { name: "Mode",          category: "mode-network" },
-  { name: "Movement",      category: "movement-ecosystem" },
-  { name: "Zora",          category: "zora-ecosystem" },
-  { name: "Metis",         category: "metis-ecosystem" },
-  { name: "Cronos",        category: "cronos-ecosystem" },
-  { name: "Conflux",       category: "conflux-ecosystem" },
-  { name: "Stacks",        category: "stacks-ecosystem" },
-  { name: "Telos",         category: "telos-ecosystem" },
-  { name: "MultiversX",    category: "multiversx-ecosystem" },
-  { name: "opBNB",         category: "opbnb-ecosystem" },
-  { name: "Flare",         category: "flare-ecosystem" },
-  { name: "Sonic",         category: "sonic-ecosystem" },
-  { name: "Hyperliquid",   category: "hyperliquid-ecosystem" },
-  { name: "Beam",          category: "beam" },
-  { name: "PulseChain",    category: "" },
-  { name: "HyperEVM",      category: "" },
-  { name: "Monad",         category: "" },
-  { name: "World Chain",   category: "" },
-  { name: "Abstract",      category: "" },
-  { name: "MegaETH",       category: "" },
-  { name: "Ink",           category: "" },
+  { name: "Solana",        category: "solana-ecosystem",       logo: TW("solana") },
+  { name: "Base",          category: "base-ecosystem",         logo: TW("base") },
+  { name: "Ethereum",      category: "ethereum-ecosystem",     logo: TW("ethereum") },
+  { name: "BSC",           category: "binance-smart-chain",    logo: TW("smartchain") },
+  { name: "Polygon",       category: "polygon-ecosystem",      logo: TW("polygon") },
+  { name: "TON",           category: "ton-ecosystem",          logo: LL("ton") },
+  { name: "Avalanche",     category: "avalanche-ecosystem",    logo: TW("avalanchec") },
+  { name: "Arbitrum",      category: "arbitrum-ecosystem",     logo: TW("arbitrum") },
+  { name: "Optimism",      category: "optimism-ecosystem",     logo: TW("optimism") },
+  { name: "Near",          category: "near-protocol-ecosystem",logo: TW("near") },
+  { name: "Sui",           category: "sui-ecosystem",          logo: LL("sui") },
+  { name: "Aptos",         category: "aptos-ecosystem",        logo: LL("aptos") },
+  { name: "Tron",          category: "tron-ecosystem",         logo: TW("tron") },
+  { name: "Fantom",        category: "fantom-ecosystem",       logo: TW("fantom") },
+  { name: "zkSync",        category: "zksync-ecosystem",       logo: LL("zksync era") },
+  { name: "Starknet",      category: "starknet-ecosystem",     logo: LL("starknet") },
+  { name: "Injective",     category: "injective-ecosystem",    logo: LL("injective") },
+  { name: "ICP",           category: "internet-computer",      logo: LL("icp") },
+  { name: "Cardano",       category: "cardano-ecosystem",      logo: TW("cardano") },
+  { name: "Polkadot",      category: "polkadot-ecosystem",     logo: TW("polkadot") },
+  { name: "XRPL",          category: "xrp-ledger",             logo: TW("xrp") },
+  { name: "Hedera",        category: "hedera-ecosystem",       logo: TW("hedera") },
+  { name: "Algorand",      category: "algorand-ecosystem",     logo: TW("algorand") },
+  { name: "Blast",         category: "blast-l2-ecosystem",     logo: LL("blast") },
+  { name: "Mantle",        category: "mantle-ecosystem",       logo: LL("mantle") },
+  { name: "Linea",         category: "linea-ecosystem",        logo: LL("linea") },
+  { name: "Scroll",        category: "scroll-ecosystem",       logo: LL("scroll") },
+  { name: "Berachain",     category: "berachain-ecosystem",    logo: LL("berachain") },
+  { name: "Sei V2",        category: "sei-ecosystem",          logo: LL("sei") },
+  { name: "Osmosis",       category: "osmosis-ecosystem",      logo: TW("osmosis") },
+  { name: "Celo",          category: "celo-ecosystem",         logo: TW("celo") },
+  { name: "Harmony",       category: "harmony-ecosystem",      logo: TW("harmony") },
+  { name: "Moonbeam",      category: "moonbeam-ecosystem",     logo: TW("moonbeam") },
+  { name: "Moonriver",     category: "moonriver-ecosystem",    logo: TW("moonriver") },
+  { name: "Kava",          category: "kava",                   logo: TW("kava") },
+  { name: "Flow EVM",      category: "flow-ecosystem",         logo: TW("flow") },
+  { name: "Manta",         category: "manta-network",          logo: LL("manta") },
+  { name: "Taiko",         category: "taiko",                  logo: LL("taiko") },
+  { name: "Mode",          category: "mode-network",           logo: LL("mode") },
+  { name: "Movement",      category: "movement-ecosystem",     logo: LL("movement") },
+  { name: "Zora",          category: "zora-ecosystem",         logo: LL("zora") },
+  { name: "Metis",         category: "metis-ecosystem",        logo: TW("metis") },
+  { name: "Cronos",        category: "cronos-ecosystem",       logo: TW("cronos") },
+  { name: "Conflux",       category: "conflux-ecosystem",      logo: LL("conflux") },
+  { name: "Stacks",        category: "stacks-ecosystem",       logo: LL("stacks") },
+  { name: "Telos",         category: "telos-ecosystem",        logo: LL("telos") },
+  { name: "MultiversX",    category: "multiversx-ecosystem",   logo: LL("multiversx") },
+  { name: "opBNB",         category: "opbnb-ecosystem",        logo: LL("op bnb") },
+  { name: "Flare",         category: "flare-ecosystem",        logo: LL("flare") },
+  { name: "Sonic",         category: "sonic-ecosystem",        logo: LL("sonic") },
+  { name: "Hyperliquid",   category: "hyperliquid-ecosystem",  logo: LL("hyperliquid") },
+  { name: "Beam",          category: "beam",                   logo: LL("beam") },
+  { name: "PulseChain",    category: "",                       logo: LL("pulse") },
+  { name: "HyperEVM",      category: "",                       logo: LL("hyper evm") },
+  { name: "Monad",         category: "",                       logo: LL("monad") },
+  { name: "World Chain",   category: "",                       logo: LL("worldchain") },
+  { name: "Abstract",      category: "",                       logo: LL("abstract") },
+  { name: "MegaETH",       category: "",                       logo: LL("megaeth") },
+  { name: "Ink",           category: "",                       logo: LL("ink") },
   { name: "Plasma",        category: "" },
-  { name: "Soneium",       category: "" },
-  { name: "ApeChain",      category: "" },
-  { name: "Dogechain",     category: "" },
-  { name: "Unichain",      category: "" },
-  { name: "Story",         category: "" },
+  { name: "Soneium",       category: "",                       logo: LL("soneium") },
+  { name: "ApeChain",      category: "",                       logo: LL("apechain") },
+  { name: "Dogechain",     category: "",                       logo: LL("dogechain") },
+  { name: "Unichain",      category: "",                       logo: LL("unichain") },
+  { name: "Story",         category: "",                       logo: LL("story") },
   { name: "Katana",        category: "" },
-  { name: "EthereumPoW",   category: "" },
-  { name: "Merlin Chain",  category: "" },
-  { name: "Vana",          category: "" },
+  { name: "EthereumPoW",   category: "",                       logo: LL("ethereumpow") },
+  { name: "Merlin Chain",  category: "",                       logo: LL("merlin") },
+  { name: "Vana",          category: "",                       logo: LL("vana") },
   { name: "Fogo",          category: "" },
   { name: "Venom",         category: "" },
-  { name: "Elastos",       category: "" },
-  { name: "Neon EVM",      category: "" },
-  { name: "Oasis Sapphire",category: "" },
-  { name: "Fuse",          category: "" },
-  { name: "Zircuit",       category: "" },
-  { name: "Oasis Emerald", category: "" },
-  { name: "ZKFair",        category: "" },
-  { name: "Step Network",  category: "" },
+  { name: "Elastos",       category: "",                       logo: LL("elastos") },
+  { name: "Neon EVM",      category: "",                       logo: LL("neon evm") },
+  { name: "Oasis Sapphire",category: "",                       logo: LL("oasis sapphire") },
+  { name: "Fuse",          category: "",                       logo: LL("fuse") },
+  { name: "Zircuit",       category: "",                       logo: LL("zircuit") },
+  { name: "Oasis Emerald", category: "",                       logo: LL("oasis emerald") },
+  { name: "ZKFair",        category: "",                       logo: LL("zkfair") },
+  { name: "Step Network",  category: "",                       logo: LL("step") },
 ];
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -161,6 +187,35 @@ const TV_SYMBOL_MAP: Record<string, string> = {
 
 const getTvSymbol = (coin: { symbol: string }) =>
   TV_SYMBOL_MAP[coin.symbol.toLowerCase()] ?? `BINANCE:${coin.symbol.toUpperCase()}USDT`;
+
+const CHAIN_LETTER_COLORS = [
+  "#FF6B6B","#4ECDC4","#45B7D1","#96CEB4","#FFEAA7",
+  "#DDA0DD","#98D8C8","#F7B731","#A29BFE","#FD79A8",
+];
+const ChainIcon = ({ chain, size = 14 }: { chain: Chain; size?: number }) => {
+  const [err, setErr] = useState(false);
+  const s = size;
+  if (!chain.logo || err) {
+    const bg = CHAIN_LETTER_COLORS[chain.name.charCodeAt(0) % CHAIN_LETTER_COLORS.length];
+    return (
+      <span
+        style={{ width: s, height: s, backgroundColor: bg, fontSize: s * 0.55, flexShrink: 0 }}
+        className="rounded-full flex items-center justify-center font-bold text-black"
+      >
+        {chain.name[0]}
+      </span>
+    );
+  }
+  return (
+    <img
+      src={chain.logo}
+      alt={chain.name}
+      style={{ width: s, height: s, flexShrink: 0 }}
+      className="rounded-full object-cover"
+      onError={() => setErr(true)}
+    />
+  );
+};
 
 // ── TradingView widget ─────────────────────────────────────────────────────────
 
@@ -300,8 +355,12 @@ export const MarketPage = () => {
   const [chainCoins, setChainCoins]       = useState<CoinGeckoCoin[]>([]);
   const [chainBusy, setChainBusy]         = useState(false);
 
-  // Trending (New Pairs)
-  const [trending, setTrending] = useState<TrendingItem[]>([]);
+  // Trending / New Pairs
+  const [trending,       setTrending]       = useState<TrendingItem[]>([]);
+  const [newSource,      setNewSource]      = useState<NewPairsSource>("cg");
+  const [pumpCoins,      setPumpCoins]      = useState<NewPairItem[]>([]);
+  const [dexProfiles,    setDexProfiles]    = useState<NewPairItem[]>([]);
+  const [newPairsBusy,   setNewPairsBusy]   = useState(false);
 
   // Gainers/Losers
   const [glCoins, setGlCoins] = useState<CoinGeckoCoin[]>([]);
@@ -381,6 +440,21 @@ export const MarketPage = () => {
     }
   }, []);
 
+  const fetchNewPairs = useCallback(async (src: "pump" | "dex") => {
+    setNewPairsBusy(true);
+    try {
+      const r = await fetch(`/api/new-pairs?source=${src}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      if (src === "pump") setPumpCoins(data.items ?? []);
+      else setDexProfiles(data.items ?? []);
+    } catch (e: any) {
+      console.warn("[fetchNewPairs]", src, e.message);
+    } finally {
+      setNewPairsBusy(false);
+    }
+  }, []);
+
   const fetchGainersLosers = useCallback(async () => {
     abortRef.current?.abort();
     const ctrl = new AbortController();
@@ -404,11 +478,14 @@ export const MarketPage = () => {
   useEffect(() => {
     setError(null); setQuery("");
     if (category === "all")           void fetchAll();
-    else if (category === "new")      void fetchTrending();
+    else if (category === "new") {
+      if (newSource === "cg")          void fetchTrending();
+      else                             void fetchNewPairs(newSource);
+    }
     else if (category === "gainers_losers") void fetchGainersLosers();
     else if (category === "blockchains" && selectedChain) void fetchChainCoins(selectedChain);
     return () => abortRef.current?.abort();
-  }, [category, selectedChain]);
+  }, [category, selectedChain, newSource]);
 
   useEffect(() => {
     void fetchAll();
@@ -531,7 +608,7 @@ export const MarketPage = () => {
                   : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white"
               )}
             >
-              <Layers size={13} />
+              {selectedChain ? <ChainIcon chain={selectedChain} size={14} /> : <Layers size={13} />}
               {selectedChain ? selectedChain.name : "Blockchains"}
               <ChevronDown size={12} className={cn("transition-transform", chainOpen && "rotate-180")} />
             </button>
@@ -629,7 +706,7 @@ export const MarketPage = () => {
                     key={chain.name}
                     onClick={() => handleSelectChain(chain)}
                     className={cn(
-                      "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
                       selectedChain?.name === chain.name
                         ? "bg-[#00FF41]/15 border-[#00FF41]/50 text-[#00FF41]"
                         : chain.category
@@ -637,6 +714,7 @@ export const MarketPage = () => {
                           : "bg-white/3 border-white/6 text-white/30 hover:bg-white/8 hover:text-white/50"
                     )}
                   >
+                    <ChainIcon chain={chain} size={14} />
                     {chain.name}
                     {!chain.category && <span className="ml-1 text-[9px] text-white/20">·</span>}
                   </button>
@@ -761,64 +839,170 @@ export const MarketPage = () => {
           )
       )}
 
-      {/* ── NEW PAIRS (Trending) ── */}
+      {/* ── NEW PAIRS ── */}
       {!isBusy && category === "new" && (
         <div>
-          <div className="flex items-center gap-2 mb-3">
-            <Zap size={12} className="text-[#00FF41]" />
-            <span className="text-xs text-white/40">Trending searches on CoinGecko right now</span>
+          {/* Source sub-tabs */}
+          <div className="flex items-center gap-2 mb-4">
+            {(["cg", "pump", "dex"] as const).map(src => {
+              const labels: Record<NewPairsSource, string> = {
+                cg:   "CoinGecko Trending",
+                pump: "Pump.fun",
+                dex:  "DexScreener",
+              };
+              return (
+                <button
+                  key={src}
+                  onClick={() => setNewSource(src)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                    newSource === src
+                      ? "bg-[#00FF41]/15 border-[#00FF41]/50 text-[#00FF41]"
+                      : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  {labels[src]}
+                </button>
+              );
+            })}
+            {newPairsBusy && <RefreshCw size={12} className="text-[#00FF41]/50 animate-spin ml-1" />}
           </div>
-          {trending.length === 0 ? (
-            <GlassPanel className="py-12 text-center">
-              <div className="text-white/30 text-sm">No trending data available.</div>
-            </GlassPanel>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {trending.map((t, i) => {
-                const item   = t.item;
-                const price  = item.data?.price ?? 0;
-                const change = item.data?.price_change_percentage_24h?.usd ?? null;
-                const isUp   = change !== null && change > 0;
-                const isDown = change !== null && change < 0;
-                return (
-                  <motion.div
-                    key={item.id}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.04, duration: 0.2 }}
-                  >
-                    <GlassPanel hover glow={isUp ? "green" : "none"} className="p-4">
-                      <div className="flex items-center gap-2.5 mb-3">
-                        <HexAvatar src={item.thumb} label={item.symbol} size={40} />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-white font-semibold text-sm">{item.symbol.toUpperCase()}</div>
-                          <div className="text-white/40 text-xs truncate">{item.name}</div>
-                        </div>
-                        {change !== null && (
-                          <div className={cn(
-                            "px-2 py-1 rounded-lg text-xs font-mono font-semibold",
-                            isUp   ? "bg-[#00FF41]/10 text-[#00FF41]" :
-                            isDown ? "bg-red-500/10 text-red-400" : "bg-white/5 text-white/40"
-                          )}>
-                            {isUp ? <TrendingUp size={10} className="inline mr-0.5" /> : isDown ? <TrendingDown size={10} className="inline mr-0.5" /> : null}
-                            {Math.abs(change).toFixed(2)}%
+
+          {/* CoinGecko Trending */}
+          {newSource === "cg" && (
+            trending.length === 0 ? (
+              <GlassPanel className="py-12 text-center">
+                <div className="text-white/30 text-sm">No trending data available.</div>
+              </GlassPanel>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {trending.map((t, i) => {
+                  const item   = t.item;
+                  const price  = item.data?.price ?? 0;
+                  const change = item.data?.price_change_percentage_24h?.usd ?? null;
+                  const isUp   = change !== null && change > 0;
+                  const isDown = change !== null && change < 0;
+                  return (
+                    <motion.div key={item.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04, duration: 0.2 }}>
+                      <GlassPanel hover glow={isUp ? "green" : "none"} className="p-4">
+                        <div className="flex items-center gap-2.5 mb-3">
+                          <HexAvatar src={item.thumb} label={item.symbol} size={40} />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white font-semibold text-sm">{item.symbol.toUpperCase()}</div>
+                            <div className="text-white/40 text-xs truncate">{item.name}</div>
                           </div>
-                        )}
-                      </div>
-                      <div className="text-white font-mono font-bold text-lg mb-2">{fmtPrice(price)}</div>
-                      <div className="flex items-center justify-between">
-                        {item.market_cap_rank && (
-                          <span className="text-white/20 text-[10px] font-mono">#{item.market_cap_rank}</span>
-                        )}
-                        <div className="flex items-center gap-1 text-[#00FF41]/50 text-[10px]">
-                          <Zap size={9} /> Trending
+                          {change !== null && (
+                            <div className={cn("px-2 py-1 rounded-lg text-xs font-mono font-semibold",
+                              isUp ? "bg-[#00FF41]/10 text-[#00FF41]" : isDown ? "bg-red-500/10 text-red-400" : "bg-white/5 text-white/40")}>
+                              {isUp ? <TrendingUp size={10} className="inline mr-0.5" /> : isDown ? <TrendingDown size={10} className="inline mr-0.5" /> : null}
+                              {Math.abs(change).toFixed(2)}%
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    </GlassPanel>
-                  </motion.div>
-                );
-              })}
-            </div>
+                        <div className="text-white font-mono font-bold text-lg mb-2">{fmtPrice(price)}</div>
+                        <div className="flex items-center justify-between">
+                          {item.market_cap_rank && <span className="text-white/20 text-[10px] font-mono">#{item.market_cap_rank}</span>}
+                          <div className="flex items-center gap-1 text-[#00FF41]/50 text-[10px]"><Zap size={9} /> Trending</div>
+                        </div>
+                      </GlassPanel>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )
+          )}
+
+          {/* Pump.fun */}
+          {newSource === "pump" && (
+            pumpCoins.length === 0 ? (
+              <GlassPanel className="py-12 text-center">
+                <div className="text-white/30 text-sm">{newPairsBusy ? "Loading…" : "No data from Pump.fun."}</div>
+              </GlassPanel>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {pumpCoins.map((coin, i) => {
+                  const isUp = (coin.change_24h ?? 0) > 0;
+                  const isDown = (coin.change_24h ?? 0) < 0;
+                  return (
+                    <motion.div key={coin.address} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03, duration: 0.2 }}>
+                      <GlassPanel hover glow={coin.complete ? "green" : "none"} className="p-4">
+                        <div className="flex items-center gap-2.5 mb-3">
+                          <HexAvatar src={coin.image} label={coin.symbol || coin.name} size={40} />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white font-semibold text-sm">{coin.symbol || "—"}</div>
+                            <div className="text-white/40 text-xs truncate">{coin.name}</div>
+                          </div>
+                          {coin.complete && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] bg-[#00FF41]/10 text-[#00FF41] border border-[#00FF41]/20">bonded</span>
+                          )}
+                        </div>
+                        <div className="text-white font-mono font-bold text-lg mb-2">{fmtPrice(coin.price_usd ?? 0)}</div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-white/20 text-[10px]">MCap {fmtUsd(coin.market_cap ?? 0)}</span>
+                          <a
+                            href={`https://pump.fun/${coin.address}`}
+                            target="_blank" rel="noreferrer"
+                            className="text-[#00FF41]/50 text-[10px] hover:text-[#00FF41] transition-colors"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            pump.fun ↗
+                          </a>
+                        </div>
+                      </GlassPanel>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )
+          )}
+
+          {/* DexScreener */}
+          {newSource === "dex" && (
+            dexProfiles.length === 0 ? (
+              <GlassPanel className="py-12 text-center">
+                <div className="text-white/30 text-sm">{newPairsBusy ? "Loading…" : "No Solana profiles on DexScreener."}</div>
+              </GlassPanel>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {dexProfiles.map((coin, i) => {
+                  const isUp = (coin.change_24h ?? 0) > 0;
+                  const isDown = (coin.change_24h ?? 0) < 0;
+                  return (
+                    <motion.div key={coin.address} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03, duration: 0.2 }}>
+                      <GlassPanel hover glow={isUp ? "green" : "none"} className="p-4">
+                        <div className="flex items-center gap-2.5 mb-3">
+                          <HexAvatar src={coin.image} label={coin.symbol || coin.name} size={40} />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white font-semibold text-sm truncate">{coin.symbol || coin.address.slice(0, 8) + "…"}</div>
+                            <div className="text-white/40 text-xs truncate">{coin.name}</div>
+                          </div>
+                          {coin.change_24h !== null && coin.change_24h !== undefined && (
+                            <div className={cn("px-2 py-1 rounded-lg text-xs font-mono font-semibold",
+                              isUp ? "bg-[#00FF41]/10 text-[#00FF41]" : isDown ? "bg-red-500/10 text-red-400" : "bg-white/5 text-white/40")}>
+                              {isUp ? <TrendingUp size={10} className="inline mr-0.5" /> : isDown ? <TrendingDown size={10} className="inline mr-0.5" /> : null}
+                              {Math.abs(coin.change_24h).toFixed(2)}%
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-white font-mono font-bold text-lg mb-2">{fmtPrice(coin.price_usd ?? 0)}</div>
+                        <div className="flex items-center justify-between">
+                          {coin.liquidity_usd ? (
+                            <span className="text-white/20 text-[10px]">Liq {fmtUsd(coin.liquidity_usd)}</span>
+                          ) : <span />}
+                          {coin.dex_url && (
+                            <a href={coin.dex_url} target="_blank" rel="noreferrer"
+                              className="text-[#00FF41]/50 text-[10px] hover:text-[#00FF41] transition-colors"
+                              onClick={e => e.stopPropagation()}>
+                              DexScreener ↗
+                            </a>
+                          )}
+                        </div>
+                      </GlassPanel>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )
           )}
         </div>
       )}
