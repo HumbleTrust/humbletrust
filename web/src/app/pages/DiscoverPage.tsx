@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { HexAvatar } from "../components/HexAvatar";
 import { ArrowLeft, Award, Check, Copy, ExternalLink, HardDrive, Lock, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { ApiToken, ApiTrade, getToken, getTokens, getTokenTrades } from "../../lib/solana/api";
+import { ApiToken, ApiTrade, getToken, getTokens, getTokenTrades, syncTokenTrades } from "../../lib/solana/api";
 import { listTokens, SavedToken } from "../../lib/solana/image";
 import { GlassPanel } from "../components/GlassPanel";
 import { LightweightTradeChart } from "../components/LightweightTradeChart";
@@ -74,22 +74,69 @@ const TokenDetailView = ({ mint, onBack }: TokenDetailViewProps) => {
   const [trades, setTrades] = useState<ApiTrade[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const loadTrades = useCallback(async () => {
+    const result = await getTokenTrades(mint, 500).catch(() => ({ trades: [] as ApiTrade[] }));
+    return result.trades ?? [];
+  }, [mint]);
+
+  const runSync = useCallback(async (silent = false) => {
+    if (!silent) setSyncMsg(null);
+    setSyncing(true);
+    try {
+      const result = await syncTokenTrades(mint, 300);
+      const freshTrades = await loadTrades();
+      setTrades(freshTrades);
+      if (!silent) {
+        setSyncMsg(result.synced ? `Synced ${result.synced} trade${result.synced !== 1 ? "s" : ""} from chain` : (result.message || "No new on-chain trades found"));
+        setTimeout(() => setSyncMsg(null), 5000);
+      }
+    } catch (e: any) {
+      if (!silent) setSyncMsg(`Sync error: ${e.message}`);
+    } finally {
+      setSyncing(false);
+    }
+  }, [mint, loadTrades]);
 
   useEffect(() => {
     let mounted = true;
     setError(null);
     setLoading(true);
-    Promise.all([getToken(mint), getTokenTrades(mint, 80)])
-      .then(([tokenResult, tradeResult]) => {
-        if (!mounted) return;
-        setToken(tokenResult.token);
-        setTrades(tradeResult.trades);
-      })
-      .catch((e) => mounted && setError(e.message || String(e)))
-      .finally(() => mounted && setLoading(false));
+
+    // Fetch token info and trades independently — a 404 on the token must not block trade loading
+    const tokenPromise = getToken(mint).catch(() => null);
+    const tradesPromise = loadTrades();
+
+    Promise.all([tokenPromise, tradesPromise]).then(async ([tokenResult, fetchedTrades]) => {
+      if (!mounted) return;
+      if (tokenResult) setToken(tokenResult.token);
+      setTrades(fetchedTrades);
+      setLoading(false);
+      // Auto-sync from blockchain when no trades are stored yet
+      if (fetchedTrades.length === 0) {
+        setSyncing(true);
+        try {
+          const result = await syncTokenTrades(mint, 300);
+          if (!mounted) return;
+          if (result.synced && result.synced > 0) {
+            const fresh = await loadTrades();
+            if (mounted) setTrades(fresh);
+          }
+        } catch { /* silent */ } finally {
+          if (mounted) setSyncing(false);
+        }
+      }
+    }).catch((e) => {
+      if (!mounted) return;
+      setError(e.message || String(e));
+      setLoading(false);
+    });
+
     return () => { mounted = false; };
-  }, [mint]);
+  }, [mint, loadTrades]);
 
   const score = Number(token?.trust_score ?? 0);
 
@@ -134,7 +181,7 @@ const TokenDetailView = ({ mint, onBack }: TokenDetailViewProps) => {
         </div>
       </GlassPanel>
 
-      {error && (
+      {error && !error.includes("NOT_FOUND") && !error.includes("not found") && (
         <div className="text-red-400 text-sm px-1">{error}</div>
       )}
 
@@ -142,18 +189,37 @@ const TokenDetailView = ({ mint, onBack }: TokenDetailViewProps) => {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
         {/* Chart area */}
         <GlassPanel className="overflow-hidden">
-          <div className="flex items-center gap-1 px-3 py-2 border-b border-white/10 bg-white/[0.02]">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-white/[0.02]">
             <span className="text-xs text-[#00FF41] font-mono px-2 py-0.5 rounded bg-[#00FF41]/10">1m</span>
             <span className="w-px h-4 bg-white/10 mx-1" />
-            <span className="text-xs text-white/40">Real OHLCV</span>
+            <span className="text-xs text-white/40 flex-1">Real OHLCV</span>
+            {syncMsg && (
+              <span className="text-xs text-white/50 font-mono">{syncMsg}</span>
+            )}
+            <button
+              type="button"
+              title="Sync trades from blockchain"
+              disabled={syncing || loading}
+              onClick={() => runSync()}
+              className="flex items-center gap-1 text-xs text-white/40 hover:text-[#00FF41] disabled:opacity-40 transition-colors"
+            >
+              <RefreshCw size={11} className={syncing ? "animate-spin" : ""} />
+              {syncing ? "Syncing…" : "Sync"}
+            </button>
           </div>
-          <LightweightTradeChart
-            trades={trades}
-            periodSec={60}
-            height={288}
-            showVolume={true}
-            mode="candles"
-          />
+          {(loading || syncing) && trades.length === 0 ? (
+            <div className="flex items-center justify-center h-[288px] text-white/30 text-sm">
+              {syncing ? "Syncing transactions from blockchain…" : "Loading…"}
+            </div>
+          ) : (
+            <LightweightTradeChart
+              trades={trades}
+              periodSec={60}
+              height={288}
+              showVolume={true}
+              mode="candles"
+            />
+          )}
         </GlassPanel>
 
         {/* Score card */}
@@ -213,11 +279,13 @@ const TokenDetailView = ({ mint, onBack }: TokenDetailViewProps) => {
         <div className="px-4 py-3 border-b border-white/10 font-semibold text-sm text-white">
           Recent trades
         </div>
-        {trades.length === 0 && !loading && (
-          <div className="px-4 py-6 text-center text-white/30 text-sm">No indexed trades yet.</div>
+        {trades.length === 0 && !loading && !syncing && (
+          <div className="px-4 py-6 text-center text-white/30 text-sm">No trades found on-chain.</div>
         )}
-        {loading && (
-          <div className="px-4 py-6 text-center text-white/30 text-sm">Loading trades...</div>
+        {(loading || syncing) && trades.length === 0 && (
+          <div className="px-4 py-6 text-center text-white/30 text-sm">
+            {syncing ? "Fetching transactions from blockchain…" : "Loading…"}
+          </div>
         )}
         <div className="divide-y divide-white/5">
           {trades.map((trade) => (
