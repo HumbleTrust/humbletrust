@@ -1,11 +1,16 @@
-import { useState, useEffect, useCallback, useRef, memo } from "react";
+import { useState, useEffect, useCallback, useRef, memo, useMemo } from "react";
 import { HexAvatar } from "../components/HexAvatar";
-import { Search, X, RefreshCw, BarChart2, TrendingUp, TrendingDown, Globe } from "lucide-react";
+import {
+  Search, X, RefreshCw, BarChart2, TrendingUp, TrendingDown, Globe,
+  Star, ChevronDown, Zap, Layers, Award,
+} from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { GlassPanel } from "../components/GlassPanel";
 import { cn } from "../components/ui/utils";
 
 // ── types ─────────────────────────────────────────────────────────────────────
+
+type MarketCategory = "all" | "blockchains" | "new" | "gainers_losers" | "watchlist";
 
 interface CoinGeckoCoin {
   id: string;
@@ -22,6 +27,108 @@ interface CoinGeckoCoin {
   ath_change_percentage: number | null;
 }
 
+interface TrendingItem {
+  item: {
+    id: string;
+    name: string;
+    symbol: string;
+    thumb: string;
+    market_cap_rank: number | null;
+    data?: {
+      price?: number | string;
+      price_change_percentage_24h?: { usd?: number };
+      market_cap?: string;
+      total_volume?: string;
+    };
+  };
+}
+
+interface Chain { name: string; category: string; }
+
+// ── chain list ────────────────────────────────────────────────────────────────
+
+const CHAINS: Chain[] = [
+  { name: "Solana",        category: "solana-ecosystem" },
+  { name: "Base",          category: "base-ecosystem" },
+  { name: "Ethereum",      category: "ethereum-ecosystem" },
+  { name: "BSC",           category: "binance-smart-chain" },
+  { name: "Polygon",       category: "polygon-ecosystem" },
+  { name: "TON",           category: "ton-ecosystem" },
+  { name: "Avalanche",     category: "avalanche-ecosystem" },
+  { name: "Arbitrum",      category: "arbitrum-ecosystem" },
+  { name: "Optimism",      category: "optimism-ecosystem" },
+  { name: "Near",          category: "near-protocol-ecosystem" },
+  { name: "Sui",           category: "sui-ecosystem" },
+  { name: "Aptos",         category: "aptos-ecosystem" },
+  { name: "Tron",          category: "tron-ecosystem" },
+  { name: "Fantom",        category: "fantom-ecosystem" },
+  { name: "zkSync",        category: "zksync-ecosystem" },
+  { name: "Starknet",      category: "starknet-ecosystem" },
+  { name: "Injective",     category: "injective-ecosystem" },
+  { name: "ICP",           category: "internet-computer" },
+  { name: "Cardano",       category: "cardano-ecosystem" },
+  { name: "Polkadot",      category: "polkadot-ecosystem" },
+  { name: "XRPL",          category: "xrp-ledger" },
+  { name: "Hedera",        category: "hedera-ecosystem" },
+  { name: "Algorand",      category: "algorand-ecosystem" },
+  { name: "Blast",         category: "blast-l2-ecosystem" },
+  { name: "Mantle",        category: "mantle-ecosystem" },
+  { name: "Linea",         category: "linea-ecosystem" },
+  { name: "Scroll",        category: "scroll-ecosystem" },
+  { name: "Berachain",     category: "berachain-ecosystem" },
+  { name: "Sei V2",        category: "sei-ecosystem" },
+  { name: "Osmosis",       category: "osmosis-ecosystem" },
+  { name: "Celo",          category: "celo-ecosystem" },
+  { name: "Harmony",       category: "harmony-ecosystem" },
+  { name: "Moonbeam",      category: "moonbeam-ecosystem" },
+  { name: "Moonriver",     category: "moonriver-ecosystem" },
+  { name: "Kava",          category: "kava" },
+  { name: "Flow EVM",      category: "flow-ecosystem" },
+  { name: "Manta",         category: "manta-network" },
+  { name: "Taiko",         category: "taiko" },
+  { name: "Mode",          category: "mode-network" },
+  { name: "Movement",      category: "movement-ecosystem" },
+  { name: "Zora",          category: "zora-ecosystem" },
+  { name: "Metis",         category: "metis-ecosystem" },
+  { name: "Cronos",        category: "cronos-ecosystem" },
+  { name: "Conflux",       category: "conflux-ecosystem" },
+  { name: "Stacks",        category: "stacks-ecosystem" },
+  { name: "Telos",         category: "telos-ecosystem" },
+  { name: "MultiversX",    category: "multiversx-ecosystem" },
+  { name: "opBNB",         category: "opbnb-ecosystem" },
+  { name: "Flare",         category: "flare-ecosystem" },
+  { name: "Sonic",         category: "sonic-ecosystem" },
+  { name: "Hyperliquid",   category: "hyperliquid-ecosystem" },
+  { name: "Beam",          category: "beam" },
+  { name: "PulseChain",    category: "" },
+  { name: "HyperEVM",      category: "" },
+  { name: "Monad",         category: "" },
+  { name: "World Chain",   category: "" },
+  { name: "Abstract",      category: "" },
+  { name: "MegaETH",       category: "" },
+  { name: "Ink",           category: "" },
+  { name: "Plasma",        category: "" },
+  { name: "Soneium",       category: "" },
+  { name: "ApeChain",      category: "" },
+  { name: "Dogechain",     category: "" },
+  { name: "Unichain",      category: "" },
+  { name: "Story",         category: "" },
+  { name: "Katana",        category: "" },
+  { name: "EthereumPoW",   category: "" },
+  { name: "Merlin Chain",  category: "" },
+  { name: "Vana",          category: "" },
+  { name: "Fogo",          category: "" },
+  { name: "Venom",         category: "" },
+  { name: "Elastos",       category: "" },
+  { name: "Neon EVM",      category: "" },
+  { name: "Oasis Sapphire",category: "" },
+  { name: "Fuse",          category: "" },
+  { name: "Zircuit",       category: "" },
+  { name: "Oasis Emerald", category: "" },
+  { name: "ZKFair",        category: "" },
+  { name: "Step Network",  category: "" },
+];
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 const fmtUsd = (n: number) =>
@@ -31,56 +138,39 @@ const fmtUsd = (n: number) =>
   n >= 1e3  ? `$${(n / 1e3).toFixed(1)}K`  :
   `$${n.toFixed(2)}`;
 
-const fmtPrice = (n: number) => {
-  if (n >= 1000) return `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
-  if (n >= 1)    return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  if (n >= 0.01) return `$${n.toFixed(4)}`;
-  if (n >= 0.0001) return `$${n.toFixed(6)}`;
-  return `$${n.toExponential(3)}`;
+const fmtPrice = (n: number | string) => {
+  const v = Number(n);
+  if (isNaN(v) || v === 0) return "—";
+  if (v >= 1000) return `$${v.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  if (v >= 1)    return `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (v >= 0.01) return `$${v.toFixed(4)}`;
+  if (v >= 0.0001) return `$${v.toFixed(6)}`;
+  return `$${v.toExponential(3)}`;
 };
 
-// Map CoinGecko symbol → TradingView symbol (EXCHANGE:PAIR)
 const TV_SYMBOL_MAP: Record<string, string> = {
-  btc:  "BINANCE:BTCUSDT",
-  eth:  "BINANCE:ETHUSDT",
-  sol:  "BINANCE:SOLUSDT",
-  bnb:  "BINANCE:BNBUSDT",
-  xrp:  "BINANCE:XRPUSDT",
-  usdc: "BINANCE:USDCUSDT",
-  usdt: "KRAKEN:USDTUSD",
-  ada:  "BINANCE:ADAUSDT",
-  avax: "BINANCE:AVAXUSDT",
-  doge: "BINANCE:DOGEUSDT",
-  dot:  "BINANCE:DOTUSDT",
-  link: "BINANCE:LINKUSDT",
-  ltc:  "BINANCE:LTCUSDT",
-  matic:"BINANCE:MATICUSDT",
-  shib: "BINANCE:SHIBUSDT",
-  uni:  "BINANCE:UNIUSDT",
-  atom: "BINANCE:ATOMUSDT",
-  near: "BINANCE:NEARUSDT",
-  apt:  "BINANCE:APTUSDT",
-  sui:  "BINANCE:SUIUSDT",
-  trx:  "BINANCE:TRXUSDT",
-  ton:  "BINANCE:TONUSDT",
+  btc: "BINANCE:BTCUSDT", eth: "BINANCE:ETHUSDT", sol: "BINANCE:SOLUSDT",
+  bnb: "BINANCE:BNBUSDT", xrp: "BINANCE:XRPUSDT", usdc: "BINANCE:USDCUSDT",
+  usdt: "KRAKEN:USDTUSD", ada: "BINANCE:ADAUSDT",  avax: "BINANCE:AVAXUSDT",
+  doge: "BINANCE:DOGEUSDT", dot: "BINANCE:DOTUSDT", link: "BINANCE:LINKUSDT",
+  ltc: "BINANCE:LTCUSDT", matic: "BINANCE:MATICUSDT", shib: "BINANCE:SHIBUSDT",
+  uni: "BINANCE:UNIUSDT", atom: "BINANCE:ATOMUSDT", near: "BINANCE:NEARUSDT",
+  apt: "BINANCE:APTUSDT", sui: "BINANCE:SUIUSDT", trx: "BINANCE:TRXUSDT",
+  ton: "BINANCE:TONUSDT",
 };
 
-const getTvSymbol = (coin: CoinGeckoCoin) =>
-  TV_SYMBOL_MAP[coin.symbol.toLowerCase()] ??
-  `BINANCE:${coin.symbol.toUpperCase()}USDT`;
+const getTvSymbol = (coin: { symbol: string }) =>
+  TV_SYMBOL_MAP[coin.symbol.toLowerCase()] ?? `BINANCE:${coin.symbol.toUpperCase()}USDT`;
 
-// ── TradingView widget (script injection) ─────────────────────────────────────
+// ── TradingView widget ─────────────────────────────────────────────────────────
 
 const TradingViewChart = memo(({ symbol }: { symbol: string }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-
     const uid = `tv_${Date.now()}`;
     el.innerHTML = `<div id="${uid}" style="height:100%;width:100%"></div>`;
-
     const script = document.createElement("script");
     script.src = "https://s3.tradingview.com/tv.js";
     script.async = true;
@@ -88,29 +178,19 @@ const TradingViewChart = memo(({ symbol }: { symbol: string }) => {
       const TV = (window as any).TradingView;
       if (!TV) return;
       new TV.widget({
-        autosize: true,
-        symbol,
-        interval: "D",
-        timezone: "Etc/UTC",
-        theme: "dark",
-        style: "1",
-        locale: "en",
-        toolbar_bg: "#0d0d0d",
-        enable_publishing: false,
-        hide_side_toolbar: false,
-        allow_symbol_change: true,
-        container_id: uid,
+        autosize: true, symbol, interval: "D", timezone: "Etc/UTC",
+        theme: "dark", style: "1", locale: "en", toolbar_bg: "#0d0d0d",
+        enable_publishing: false, hide_side_toolbar: false,
+        allow_symbol_change: true, container_id: uid,
       });
     };
     el.appendChild(script);
-
     return () => { el.innerHTML = ""; };
   }, [symbol]);
-
   return <div ref={containerRef} className="flex-1 w-full min-h-0" />;
 });
 
-// ── CoinGecko config (Demo plan) ─────────────────────────────────────────────
+// ── CoinGecko config ──────────────────────────────────────────────────────────
 
 const CG_BASE = "https://api.coingecko.com/api/v3";
 const CG_KEY  = (import.meta.env.VITE_COINGECKO_API_KEY as string) || "CG-mGH1d5uGSUubaj8sKxxBbwZT";
@@ -124,30 +204,142 @@ async function cgFetch(path: string, signal?: AbortSignal) {
   return res.json();
 }
 
+// ── CoinCard ──────────────────────────────────────────────────────────────────
+
+const CoinCard = memo(({
+  coin, index, onSelect, onToggleStar, isStarred,
+}: {
+  coin: CoinGeckoCoin;
+  index: number;
+  onSelect: (c: CoinGeckoCoin) => void;
+  onToggleStar: (id: string) => void;
+  isStarred: boolean;
+}) => {
+  const change = coin.price_change_percentage_24h ?? 0;
+  const isUp   = change > 0;
+  const isDown = change < 0;
+  return (
+    <motion.div
+      key={coin.id}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.025, duration: 0.2 }}
+    >
+      <GlassPanel hover glow={isUp ? "green" : "none"} className="p-4 cursor-pointer relative group">
+        {/* Star button */}
+        <button
+          onClick={e => { e.stopPropagation(); onToggleStar(coin.id); }}
+          className={cn(
+            "absolute top-3 right-3 p-1 rounded-md transition-all opacity-0 group-hover:opacity-100",
+            isStarred ? "opacity-100 text-yellow-400" : "text-white/20 hover:text-yellow-400"
+          )}
+        >
+          <Star size={12} fill={isStarred ? "currentColor" : "none"} />
+        </button>
+
+        <div onClick={() => onSelect(coin)}>
+          {/* Header */}
+          <div className="flex items-center gap-2.5 mb-3 pr-5">
+            <HexAvatar src={coin.image} label={coin.symbol} size={40} />
+            <div className="flex-1 min-w-0">
+              <div className="text-white font-semibold text-sm">{coin.symbol.toUpperCase()}</div>
+              <div className="text-white/40 text-xs truncate">{coin.name}</div>
+            </div>
+            <div className={cn(
+              "px-2 py-1 rounded-lg text-xs font-mono font-semibold shrink-0",
+              isUp   ? "bg-[#00FF41]/10 text-[#00FF41]" :
+              isDown ? "bg-red-500/10 text-red-400" :
+                       "bg-white/5 text-white/40"
+            )}>
+              {isUp ? <TrendingUp size={10} className="inline mr-0.5" /> : isDown ? <TrendingDown size={10} className="inline mr-0.5" /> : null}
+              {Math.abs(change).toFixed(2)}%
+            </div>
+          </div>
+          {/* Price */}
+          <div className="text-white font-mono font-bold text-lg mb-3">{fmtPrice(coin.current_price)}</div>
+          {/* Stats */}
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            {[
+              { label: "Market Cap", value: fmtUsd(coin.market_cap) },
+              { label: "Vol 24h",    value: fmtUsd(coin.total_volume) },
+            ].map(({ label, value }) => (
+              <div key={label} className="space-y-0.5">
+                <div className="text-white/30 text-[10px]">{label}</div>
+                <div className="text-white/80 text-xs font-mono font-semibold">{value}</div>
+              </div>
+            ))}
+          </div>
+          {/* Rank */}
+          <div className="flex items-center justify-between">
+            <span className="text-white/20 text-[10px] font-mono">#{coin.market_cap_rank}</span>
+            <div className="flex items-center gap-1 text-[#00FF41]/60 text-xs font-medium">
+              <BarChart2 size={11} /> TradingView chart
+            </div>
+          </div>
+        </div>
+      </GlassPanel>
+    </motion.div>
+  );
+});
+
 // ── MarketPage ────────────────────────────────────────────────────────────────
 
 export const MarketPage = () => {
-  const [coins, setCoins] = useState<CoinGeckoCoin[]>([]);
-  const [filtered, setFiltered] = useState<CoinGeckoCoin[]>([]);
-  const [query, setQuery] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<CoinGeckoCoin | null>(null);
+  const [category, setCategory]   = useState<MarketCategory>("all");
+  const [coins, setCoins]         = useState<CoinGeckoCoin[]>([]);
+  const [filtered, setFiltered]   = useState<CoinGeckoCoin[]>([]);
+  const [query, setQuery]         = useState("");
+  const [busy, setBusy]           = useState(false);
+  const [error, setError]         = useState<string | null>(null);
+  const [selected, setSelected]   = useState<CoinGeckoCoin | null>(null);
+
+  // Blockchains
+  const [selectedChain, setSelectedChain] = useState<Chain | null>(null);
+  const [chainOpen, setChainOpen]         = useState(false);
+  const [chainSearch, setChainSearch]     = useState("");
+  const [chainCoins, setChainCoins]       = useState<CoinGeckoCoin[]>([]);
+  const [chainBusy, setChainBusy]         = useState(false);
+
+  // Trending (New Pairs)
+  const [trending, setTrending] = useState<TrendingItem[]>([]);
+
+  // Gainers/Losers
+  const [glCoins, setGlCoins] = useState<CoinGeckoCoin[]>([]);
+
+  // WatchList
+  const [watchlist, setWatchlist] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("ht_market_watchlist") || "[]")); }
+    catch { return new Set(); }
+  });
+
   const abortRef = useRef<AbortController | null>(null);
 
-  const fetchCoins = useCallback(async () => {
+  // Persist watchlist
+  useEffect(() => {
+    localStorage.setItem("ht_market_watchlist", JSON.stringify([...watchlist]));
+  }, [watchlist]);
+
+  const toggleStar = useCallback((id: string) => {
+    setWatchlist(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  // ── Fetches ──────────────────────────────────────────────────────────────────
+
+  const fetchAll = useCallback(async () => {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    setBusy(true);
-    setError(null);
+    setBusy(true); setError(null);
     try {
       const data: CoinGeckoCoin[] = await cgFetch(
         "/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=20&page=1&price_change_percentage=24h&sparkline=false",
         ctrl.signal,
       );
-      setCoins(data);
-      setFiltered(data);
+      setCoins(data); setFiltered(data);
     } catch (e: any) {
       if (e.name !== "AbortError") setError("Failed to load market data. Try again later.");
     } finally {
@@ -155,21 +347,147 @@ export const MarketPage = () => {
     }
   }, []);
 
-  useEffect(() => {
-    void fetchCoins();
-    return () => abortRef.current?.abort();
-  }, [fetchCoins]);
+  const fetchChainCoins = useCallback(async (chain: Chain) => {
+    if (!chain.category) { setChainCoins([]); return; }
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setChainBusy(true); setError(null);
+    try {
+      const data: CoinGeckoCoin[] = await cgFetch(
+        `/coins/markets?vs_currency=usd&category=${chain.category}&order=market_cap_desc&per_page=20&page=1&price_change_percentage=24h&sparkline=false`,
+        ctrl.signal,
+      );
+      setChainCoins(data);
+    } catch (e: any) {
+      if (e.name !== "AbortError") setError("Failed to load chain data.");
+    } finally {
+      if (!ctrl.signal.aborted) setChainBusy(false);
+    }
+  }, []);
+
+  const fetchTrending = useCallback(async () => {
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setBusy(true); setError(null);
+    try {
+      const data = await cgFetch("/trending", ctrl.signal);
+      setTrending(data.coins || []);
+    } catch (e: any) {
+      if (e.name !== "AbortError") setError("Failed to load trending data.");
+    } finally {
+      if (!ctrl.signal.aborted) setBusy(false);
+    }
+  }, []);
+
+  const fetchGainersLosers = useCallback(async () => {
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setBusy(true); setError(null);
+    try {
+      const data: CoinGeckoCoin[] = await cgFetch(
+        "/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&price_change_percentage=24h&sparkline=false",
+        ctrl.signal,
+      );
+      setGlCoins(data);
+    } catch (e: any) {
+      if (e.name !== "AbortError") setError("Failed to load market data.");
+    } finally {
+      if (!ctrl.signal.aborted) setBusy(false);
+    }
+  }, []);
+
+  // ── Category switch ───────────────────────────────────────────────────────────
 
   useEffect(() => {
+    setError(null); setQuery("");
+    if (category === "all")           void fetchAll();
+    else if (category === "new")      void fetchTrending();
+    else if (category === "gainers_losers") void fetchGainersLosers();
+    else if (category === "blockchains" && selectedChain) void fetchChainCoins(selectedChain);
+    return () => abortRef.current?.abort();
+  }, [category, selectedChain]);
+
+  useEffect(() => {
+    void fetchAll();
+    return () => abortRef.current?.abort();
+  }, [fetchAll]);
+
+  // ── Search filter (all/blockchains) ──────────────────────────────────────────
+
+  useEffect(() => {
+    const src = category === "blockchains" ? chainCoins : coins;
     const q = query.trim().toLowerCase();
-    if (!q) { setFiltered(coins); return; }
-    setFiltered(coins.filter(c =>
+    if (!q) { setFiltered(src); return; }
+    setFiltered(src.filter(c =>
       c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q)
     ));
-  }, [query, coins]);
+  }, [query, coins, chainCoins, category]);
+
+  // ── Gainers/Losers split ──────────────────────────────────────────────────────
+
+  const { gainers, losers } = useMemo(() => {
+    const valid = glCoins.filter(c => c.price_change_percentage_24h !== null);
+    const sorted = [...valid].sort((a, b) => (b.price_change_percentage_24h ?? 0) - (a.price_change_percentage_24h ?? 0));
+    return { gainers: sorted.slice(0, 10), losers: sorted.slice(-10).reverse() };
+  }, [glCoins]);
+
+  // ── Watchlist coins ───────────────────────────────────────────────────────────
+
+  const watchlistCoins = useMemo(() => {
+    const all = [...coins, ...chainCoins, ...glCoins];
+    const seen = new Set<string>();
+    const unique = all.filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true; });
+    return unique.filter(c => watchlist.has(c.id));
+  }, [coins, chainCoins, glCoins, watchlist]);
+
+  // ── Chain selection ───────────────────────────────────────────────────────────
+
+  const filteredChains = useMemo(() => {
+    const q = chainSearch.toLowerCase();
+    return q ? CHAINS.filter(c => c.name.toLowerCase().includes(q)) : CHAINS;
+  }, [chainSearch]);
+
+  const handleSelectChain = (chain: Chain) => {
+    setSelectedChain(chain);
+    setChainOpen(false);
+    setChainSearch("");
+    setCategory("blockchains");
+    void fetchChainCoins(chain);
+  };
+
+  // ── Refresh ───────────────────────────────────────────────────────────────────
+
+  const handleRefresh = () => {
+    if (category === "all")                   void fetchAll();
+    else if (category === "new")              void fetchTrending();
+    else if (category === "gainers_losers")   void fetchGainersLosers();
+    else if (category === "blockchains" && selectedChain) void fetchChainCoins(selectedChain);
+  };
+
+  const isBusy = busy || chainBusy;
+
+  // ── Render helpers ────────────────────────────────────────────────────────────
+
+  const CoinGrid = ({ list }: { list: CoinGeckoCoin[] }) => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      {list.map((coin, i) => (
+        <CoinCard
+          key={coin.id}
+          coin={coin}
+          index={i}
+          onSelect={setSelected}
+          onToggleStar={toggleStar}
+          isStarred={watchlist.has(coin.id)}
+        />
+      ))}
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
         <GlassPanel className="p-6" glow="green">
@@ -180,42 +498,182 @@ export const MarketPage = () => {
             Global <span className="text-[#00FF41]">crypto markets</span>
           </h2>
           <p className="text-white/50 text-sm">
-            Top 20 coins by market cap · CoinGecko data · Click any coin to open TradingView chart
+            Top coins by market cap · CoinGecko data · Click any coin to open TradingView chart
           </p>
         </GlassPanel>
       </motion.div>
 
-      {/* Controls */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+      {/* ── Category tabs ── */}
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-            <input
-              className="w-full pl-9 pr-3 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-white/30 focus:border-[#00FF41]/50 focus:outline-none"
-              placeholder="Filter by name or symbol..."
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-            />
-          </div>
+
+          {/* All */}
           <button
-            disabled={busy}
-            onClick={() => void fetchCoins()}
-            className="flex items-center gap-1.5 p-2.5 rounded-lg bg-white/5 border border-white/10 text-white/50 hover:bg-white/10 disabled:opacity-40 transition-all"
+            onClick={() => { setCategory("all"); setSelectedChain(null); }}
+            className={cn(
+              "flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all",
+              category === "all"
+                ? "bg-[#00FF41]/15 border-[#00FF41]/50 text-[#00FF41]"
+                : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white"
+            )}
           >
-            <RefreshCw size={13} className={busy ? "animate-spin" : undefined} />
+            <Globe size={13} /> All
+          </button>
+
+          {/* Blockchains */}
+          <div className="relative">
+            <button
+              onClick={() => { setCategory("blockchains"); setChainOpen(o => !o); }}
+              className={cn(
+                "flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all",
+                category === "blockchains"
+                  ? "bg-[#00FF41]/15 border-[#00FF41]/50 text-[#00FF41]"
+                  : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white"
+              )}
+            >
+              <Layers size={13} />
+              {selectedChain ? selectedChain.name : "Blockchains"}
+              <ChevronDown size={12} className={cn("transition-transform", chainOpen && "rotate-180")} />
+            </button>
+          </div>
+
+          {/* New Pairs */}
+          <button
+            onClick={() => setCategory("new")}
+            className={cn(
+              "flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all",
+              category === "new"
+                ? "bg-[#00FF41]/15 border-[#00FF41]/50 text-[#00FF41]"
+                : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white"
+            )}
+          >
+            <Zap size={13} /> New Pairs
+          </button>
+
+          {/* Gainers & Losers */}
+          <button
+            onClick={() => setCategory("gainers_losers")}
+            className={cn(
+              "flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all",
+              category === "gainers_losers"
+                ? "bg-[#00FF41]/15 border-[#00FF41]/50 text-[#00FF41]"
+                : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white"
+            )}
+          >
+            <TrendingUp size={13} /> Gainers &amp; Losers
+          </button>
+
+          {/* WatchList */}
+          <button
+            onClick={() => setCategory("watchlist")}
+            className={cn(
+              "flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all",
+              category === "watchlist"
+                ? "bg-yellow-400/15 border-yellow-400/50 text-yellow-400"
+                : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white"
+            )}
+          >
+            <Star size={13} fill={category === "watchlist" ? "currentColor" : "none"} />
+            WatchList
+            {watchlist.size > 0 && (
+              <span className={cn(
+                "ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold",
+                category === "watchlist" ? "bg-yellow-400/20 text-yellow-400" : "bg-white/10 text-white/40"
+              )}>
+                {watchlist.size}
+              </span>
+            )}
+          </button>
+
+          {/* Refresh */}
+          <button
+            disabled={isBusy}
+            onClick={handleRefresh}
+            className="ml-auto flex items-center gap-1.5 p-2.5 rounded-full bg-white/5 border border-white/10 text-white/50 hover:bg-white/10 disabled:opacity-40 transition-all"
+          >
+            <RefreshCw size={13} className={isBusy ? "animate-spin" : undefined} />
           </button>
         </div>
       </motion.div>
 
+      {/* ── Blockchain dropdown panel ── */}
+      <AnimatePresence>
+        {chainOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <GlassPanel className="p-4" glow="none">
+              {/* Chain search */}
+              <div className="relative mb-3">
+                <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                <input
+                  className="w-full pl-8 pr-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-white/30 focus:border-[#00FF41]/50 focus:outline-none"
+                  placeholder="Search blockchain..."
+                  value={chainSearch}
+                  onChange={e => setChainSearch(e.target.value)}
+                  autoFocus
+                />
+                {chainSearch && (
+                  <button onClick={() => setChainSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white">
+                    <X size={11} />
+                  </button>
+                )}
+              </div>
+              {/* Chain grid */}
+              <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
+                {filteredChains.map(chain => (
+                  <button
+                    key={chain.name}
+                    onClick={() => handleSelectChain(chain)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                      selectedChain?.name === chain.name
+                        ? "bg-[#00FF41]/15 border-[#00FF41]/50 text-[#00FF41]"
+                        : chain.category
+                          ? "bg-white/5 border-white/10 text-white/70 hover:bg-white/10 hover:text-white"
+                          : "bg-white/3 border-white/6 text-white/30 hover:bg-white/8 hover:text-white/50"
+                    )}
+                  >
+                    {chain.name}
+                    {!chain.category && <span className="ml-1 text-[9px] text-white/20">·</span>}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 text-[10px] text-white/20">
+                Chains with dimmed text have no CoinGecko category data yet
+              </div>
+            </GlassPanel>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Search bar (for all / blockchains) ── */}
+      <AnimatePresence>
+        {(category === "all" || category === "blockchains") && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <div className="relative">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+              <input
+                className="w-full pl-9 pr-3 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-white/30 focus:border-[#00FF41]/50 focus:outline-none"
+                placeholder="Filter by name or symbol..."
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {error && <div className="text-red-400 text-sm px-1">{error}</div>}
 
-      {/* TradingView chart modal */}
+      {/* ── TradingView modal ── */}
       <AnimatePresence>
         {selected && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
             onClick={() => setSelected(null)}
           >
@@ -227,7 +685,6 @@ export const MarketPage = () => {
               onClick={e => e.stopPropagation()}
             >
               <GlassPanel className="flex flex-col h-full" glow="green">
-                {/* Modal header */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0">
                   <div className="flex items-center gap-3">
                     <HexAvatar src={selected.image} label={selected.symbol} size={28} />
@@ -252,7 +709,6 @@ export const MarketPage = () => {
                     </button>
                   </div>
                 </div>
-
                 <TradingViewChart symbol={getTvSymbol(selected)} />
               </GlassPanel>
             </motion.div>
@@ -260,81 +716,233 @@ export const MarketPage = () => {
         )}
       </AnimatePresence>
 
-      {/* Loading state */}
-      {coins.length === 0 && busy && (
-        <GlassPanel className="py-16 text-center">
-          <div className="text-white/30 text-sm">Loading market data from CoinGecko...</div>
+      {/* ── Loading ── */}
+      {isBusy && (
+        <GlassPanel className="py-10 text-center">
+          <div className="text-white/30 text-sm">Loading market data...</div>
         </GlassPanel>
       )}
 
-      {/* Coin grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {filtered.map((coin, i) => {
-          const change = coin.price_change_percentage_24h ?? 0;
-          const isUp = change > 0;
-          const isDown = change < 0;
+      {/* ── ALL ── */}
+      {!isBusy && category === "all" && (
+        filtered.length === 0
+          ? <div className="text-white/30 text-sm text-center py-8">No coins match your search.</div>
+          : <CoinGrid list={filtered} />
+      )}
 
-          return (
-            <motion.div
-              key={coin.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.03, duration: 0.2 }}
-            >
-              <GlassPanel
-                hover
-                glow={isUp ? "green" : "none"}
-                className="p-4 cursor-pointer"
-                onClick={() => setSelected(coin)}
-              >
-                {/* Header */}
-                <div className="flex items-center gap-2.5 mb-3">
-                  <HexAvatar src={coin.image} label={coin.symbol} size={40} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-white font-semibold text-sm">{coin.symbol.toUpperCase()}</div>
-                    <div className="text-white/40 text-xs truncate">{coin.name}</div>
-                  </div>
-                  <div className={cn(
-                    "px-2 py-1 rounded-lg text-xs font-mono font-semibold shrink-0",
-                    isUp  ? "bg-[#00FF41]/10 text-[#00FF41]" :
-                    isDown ? "bg-red-500/10 text-red-400" :
-                    "bg-white/5 text-white/40"
-                  )}>
-                    {isUp ? <TrendingUp size={10} className="inline mr-0.5" /> : isDown ? <TrendingDown size={10} className="inline mr-0.5" /> : null}
-                    {Math.abs(change).toFixed(2)}%
-                  </div>
-                </div>
+      {/* ── BLOCKCHAINS ── */}
+      {!isBusy && category === "blockchains" && !selectedChain && (
+        <GlassPanel className="py-12 text-center">
+          <Layers size={28} className="mx-auto text-white/20 mb-3" />
+          <div className="text-white/50 text-sm mb-1">Select a blockchain above</div>
+          <div className="text-white/25 text-xs">to explore its top tokens</div>
+        </GlassPanel>
+      )}
 
-                {/* Price */}
-                <div className="text-white font-mono font-bold text-lg mb-3">
-                  {fmtPrice(coin.current_price)}
-                </div>
+      {!isBusy && category === "blockchains" && selectedChain && !selectedChain.category && (
+        <GlassPanel className="py-12 text-center">
+          <Layers size={28} className="mx-auto text-white/20 mb-3" />
+          <div className="text-white/50 text-sm mb-1">{selectedChain.name} ecosystem data coming soon</div>
+          <div className="text-white/25 text-xs">CoinGecko category not yet available for this chain</div>
+        </GlassPanel>
+      )}
 
-                {/* Stats */}
-                <div className="grid grid-cols-2 gap-2 mb-3">
-                  {[
-                    { label: "Market Cap", value: fmtUsd(coin.market_cap) },
-                    { label: "Vol 24h",    value: fmtUsd(coin.total_volume) },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="space-y-0.5">
-                      <div className="text-white/30 text-[10px]">{label}</div>
-                      <div className="text-white/80 text-xs font-mono font-semibold">{value}</div>
-                    </div>
-                  ))}
-                </div>
+      {!isBusy && category === "blockchains" && selectedChain?.category && (
+        filtered.length === 0
+          ? <div className="text-white/30 text-sm text-center py-8">No tokens found for {selectedChain.name}.</div>
+          : (
+            <div>
+              <div className="text-xs text-white/30 mb-3 flex items-center gap-2">
+                <Layers size={11} className="text-[#00FF41]" />
+                Top tokens on <span className="text-[#00FF41] font-medium">{selectedChain.name}</span>
+              </div>
+              <CoinGrid list={filtered} />
+            </div>
+          )
+      )}
 
-                {/* Rank + CTA */}
-                <div className="flex items-center justify-between">
-                  <span className="text-white/20 text-[10px] font-mono">#{coin.market_cap_rank}</span>
-                  <div className="flex items-center gap-1 text-[#00FF41]/60 text-xs font-medium">
-                    <BarChart2 size={11} /> TradingView chart
-                  </div>
-                </div>
-              </GlassPanel>
-            </motion.div>
-          );
-        })}
-      </div>
+      {/* ── NEW PAIRS (Trending) ── */}
+      {!isBusy && category === "new" && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <Zap size={12} className="text-[#00FF41]" />
+            <span className="text-xs text-white/40">Trending searches on CoinGecko right now</span>
+          </div>
+          {trending.length === 0 ? (
+            <GlassPanel className="py-12 text-center">
+              <div className="text-white/30 text-sm">No trending data available.</div>
+            </GlassPanel>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {trending.map((t, i) => {
+                const item   = t.item;
+                const price  = item.data?.price ?? 0;
+                const change = item.data?.price_change_percentage_24h?.usd ?? null;
+                const isUp   = change !== null && change > 0;
+                const isDown = change !== null && change < 0;
+                return (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.04, duration: 0.2 }}
+                  >
+                    <GlassPanel hover glow={isUp ? "green" : "none"} className="p-4">
+                      <div className="flex items-center gap-2.5 mb-3">
+                        <HexAvatar src={item.thumb} label={item.symbol} size={40} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-white font-semibold text-sm">{item.symbol.toUpperCase()}</div>
+                          <div className="text-white/40 text-xs truncate">{item.name}</div>
+                        </div>
+                        {change !== null && (
+                          <div className={cn(
+                            "px-2 py-1 rounded-lg text-xs font-mono font-semibold",
+                            isUp   ? "bg-[#00FF41]/10 text-[#00FF41]" :
+                            isDown ? "bg-red-500/10 text-red-400" : "bg-white/5 text-white/40"
+                          )}>
+                            {isUp ? <TrendingUp size={10} className="inline mr-0.5" /> : isDown ? <TrendingDown size={10} className="inline mr-0.5" /> : null}
+                            {Math.abs(change).toFixed(2)}%
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-white font-mono font-bold text-lg mb-2">{fmtPrice(price)}</div>
+                      <div className="flex items-center justify-between">
+                        {item.market_cap_rank && (
+                          <span className="text-white/20 text-[10px] font-mono">#{item.market_cap_rank}</span>
+                        )}
+                        <div className="flex items-center gap-1 text-[#00FF41]/50 text-[10px]">
+                          <Zap size={9} /> Trending
+                        </div>
+                      </div>
+                    </GlassPanel>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── GAINERS & LOSERS ── */}
+      {!isBusy && category === "gainers_losers" && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Gainers */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingUp size={14} className="text-[#00FF41]" />
+                <span className="text-sm font-semibold text-white">Top Gainers</span>
+                <span className="text-xs text-white/30">24h</span>
+              </div>
+              <div className="space-y-2">
+                {gainers.map((coin, i) => {
+                  const change = coin.price_change_percentage_24h ?? 0;
+                  return (
+                    <motion.div
+                      key={coin.id}
+                      initial={{ opacity: 0, x: -12 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.04 }}
+                    >
+                      <GlassPanel hover glow="green" className="px-4 py-3 cursor-pointer" onClick={() => setSelected(coin)}>
+                        <div className="flex items-center gap-3">
+                          <span className="text-white/20 text-xs font-mono w-4 shrink-0">{i + 1}</span>
+                          <HexAvatar src={coin.image} label={coin.symbol} size={32} />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white text-sm font-semibold">{coin.symbol.toUpperCase()}</div>
+                            <div className="text-white/40 text-xs truncate">{coin.name}</div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="text-white font-mono text-sm">{fmtPrice(coin.current_price)}</div>
+                            <div className="text-[#00FF41] text-xs font-mono font-bold">
+                              <TrendingUp size={9} className="inline mr-0.5" />+{change.toFixed(2)}%
+                            </div>
+                          </div>
+                          <button
+                            onClick={e => { e.stopPropagation(); toggleStar(coin.id); }}
+                            className={cn("p-1 ml-1 shrink-0 transition-all", watchlist.has(coin.id) ? "text-yellow-400" : "text-white/15 hover:text-yellow-400")}
+                          >
+                            <Star size={12} fill={watchlist.has(coin.id) ? "currentColor" : "none"} />
+                          </button>
+                        </div>
+                      </GlassPanel>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Losers */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingDown size={14} className="text-red-400" />
+                <span className="text-sm font-semibold text-white">Top Losers</span>
+                <span className="text-xs text-white/30">24h</span>
+              </div>
+              <div className="space-y-2">
+                {losers.map((coin, i) => {
+                  const change = coin.price_change_percentage_24h ?? 0;
+                  return (
+                    <motion.div
+                      key={coin.id}
+                      initial={{ opacity: 0, x: 12 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.04 }}
+                    >
+                      <GlassPanel hover className="px-4 py-3 cursor-pointer" onClick={() => setSelected(coin)}>
+                        <div className="flex items-center gap-3">
+                          <span className="text-white/20 text-xs font-mono w-4 shrink-0">{i + 1}</span>
+                          <HexAvatar src={coin.image} label={coin.symbol} size={32} />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white text-sm font-semibold">{coin.symbol.toUpperCase()}</div>
+                            <div className="text-white/40 text-xs truncate">{coin.name}</div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="text-white font-mono text-sm">{fmtPrice(coin.current_price)}</div>
+                            <div className="text-red-400 text-xs font-mono font-bold">
+                              <TrendingDown size={9} className="inline mr-0.5" />{change.toFixed(2)}%
+                            </div>
+                          </div>
+                          <button
+                            onClick={e => { e.stopPropagation(); toggleStar(coin.id); }}
+                            className={cn("p-1 ml-1 shrink-0 transition-all", watchlist.has(coin.id) ? "text-yellow-400" : "text-white/15 hover:text-yellow-400")}
+                          >
+                            <Star size={12} fill={watchlist.has(coin.id) ? "currentColor" : "none"} />
+                          </button>
+                        </div>
+                      </GlassPanel>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── WATCHLIST ── */}
+      {!isBusy && category === "watchlist" && (
+        watchlist.size === 0 ? (
+          <GlassPanel className="py-16 text-center">
+            <Star size={32} className="mx-auto text-white/10 mb-3" />
+            <div className="text-white/50 text-sm mb-1">Your watchlist is empty</div>
+            <div className="text-white/25 text-xs">Click the ★ on any coin to add it here</div>
+          </GlassPanel>
+        ) : watchlistCoins.length === 0 ? (
+          <GlassPanel className="py-16 text-center">
+            <div className="text-white/30 text-sm">Watchlisted coins not in current data.</div>
+            <div className="text-white/20 text-xs mt-1">Switch to All, Blockchains, or Gainers/Losers to load them first.</div>
+          </GlassPanel>
+        ) : (
+          <div>
+            <div className="text-xs text-white/30 mb-3 flex items-center gap-2">
+              <Star size={11} className="text-yellow-400" fill="currentColor" />
+              <span>{watchlistCoins.length} coin{watchlistCoins.length !== 1 ? "s" : ""} in your watchlist</span>
+            </div>
+            <CoinGrid list={watchlistCoins} />
+          </div>
+        )
+      )}
     </div>
   );
 };
