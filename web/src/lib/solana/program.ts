@@ -778,6 +778,8 @@ export interface MigrationState {
   isPrepared: boolean;
   migrationTokenAmount: number;
   migrationWsolLamports: number;
+  /** 0 = CPMM (constant-product), 1 = Quadratic. Defaults to 0 for pre-upgrade accounts. */
+  curveType: 0 | 1;
 }
 
 export const fetchMigrationState = async (
@@ -823,6 +825,7 @@ export const fetchMigrationState = async (
         thresholdLamports: FALLBACK_THRESHOLD,
         currentSolLamports,
         isMigrated: false,
+        curveType: 0 as const,
         raydiumPool: PublicKey.default.toBase58(),
         migratedAt: 0,
         progressPct: Math.min(100, (currentSolLamports / FALLBACK_THRESHOLD) * 100),
@@ -833,6 +836,7 @@ export const fetchMigrationState = async (
     }
 
     const threshold = Number(meta.migrationThresholdLamports ?? meta.migration_threshold_lamports ?? 0);
+    const rawCurveType = Number(meta.curveType ?? meta.curve_type ?? 0);
     return {
       thresholdLamports: threshold,
       currentSolLamports,
@@ -843,6 +847,7 @@ export const fetchMigrationState = async (
       isPrepared: migrationTokenBalance > 0 && (migrationWsolInfo?.lamports ?? 0) > wsolRent,
       migrationTokenAmount: migrationTokenBalance,
       migrationWsolLamports,
+      curveType: (rawCurveType === 1 ? 1 : 0) as 0 | 1,
     };
   } catch {
     return null;

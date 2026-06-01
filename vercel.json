@@ -4,6 +4,7 @@
   "installCommand": "npm install && npm install --prefix web",
   "framework": null,
   "rewrites": [
+    { "source": "/api/badges/confirm", "destination": "/api/badges/prepare" },
     { "source": "/((?!api/).*)", "destination": "/" }
   ]
 }

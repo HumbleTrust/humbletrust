@@ -61,7 +61,7 @@ const CURVE_FEE_RATE = 0.01;
 const MIGRATED_FALLBACK: import("../../lib/solana/program").MigrationState = {
   isMigrated: true, thresholdLamports: 0, currentSolLamports: 0,
   raydiumPool: "11111111111111111111111111111111", migratedAt: 0, progressPct: 100,
-  isPrepared: false, migrationTokenAmount: 0, migrationWsolLamports: 0,
+  isPrepared: false, migrationTokenAmount: 0, migrationWsolLamports: 0, curveType: 0,
 };
 
 type TradeSide = "buy" | "sell";
@@ -150,6 +150,7 @@ const isRenderableTrade = (trade: ApiTrade) => {
   );
 };
 
+// ── CPMM (curve_type=0): k = S * T ───────────────────────────────────────────
 const estimateTokensOut = (solIn: number, solReserve: number, tokenReserve: number) => {
   if (solIn <= 0 || solReserve <= 0 || tokenReserve <= 0) return 0;
   const solAfterFee = solIn * (1 - CURVE_FEE_RATE);
@@ -168,6 +169,30 @@ const estimateSolOut = (tokensIn: number, solReserve: number, tokenReserve: numb
   if (tokensIn <= 0 || solReserve <= 0 || tokenReserve <= 0) return 0;
   const k = solReserve * tokenReserve;
   return Math.max(0, solReserve - k / (tokenReserve + tokensIn)) * (1 - CURVE_FEE_RATE);
+};
+
+// ── Quadratic (curve_type=1): invariant T² * S = k ───────────────────────────
+// Buy:  T_out = T * (1 - sqrt(S / (S + net_sol)))
+const estimateTokensOutQuadratic = (solIn: number, solReserve: number, tokenReserve: number) => {
+  if (solIn <= 0 || solReserve <= 0 || tokenReserve <= 0) return 0;
+  const netSol = solIn * (1 - CURVE_FEE_RATE);
+  return Math.max(0, tokenReserve * (1 - Math.sqrt(solReserve / (solReserve + netSol))));
+};
+
+// Sell: gross_sol = S * delta * (2T + delta) / (T + delta)²
+const estimateSolOutQuadratic = (tokensIn: number, solReserve: number, tokenReserve: number) => {
+  if (tokensIn <= 0 || solReserve <= 0 || tokenReserve <= 0) return 0;
+  const tNew = tokenReserve + tokensIn;
+  const gross = solReserve * tokensIn * (2 * tokenReserve + tokensIn) / (tNew * tNew);
+  return Math.max(0, gross * (1 - CURVE_FEE_RATE));
+};
+
+// Price after quadratic buy: spot price = 2 * S_new / T_new
+const estimatePriceAfterQuadratic = (solIn: number, solReserve: number, tokenReserve: number) => {
+  const netSol = Math.max(0, solIn) * (1 - CURVE_FEE_RATE);
+  const sNew = solReserve + netSol;
+  const tNew = tokenReserve * Math.sqrt(solReserve / sNew);
+  return tNew > 0 ? 2 * sNew / tNew : 0;
 };
 
 const toRawTokenAmount = (amount: string, decimals = 9) => {
@@ -386,19 +411,46 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
 
   const solIn = useMemo(() => parsePositive(solAmount, 0), [solAmount]);
   const tokensIn = useMemo(() => parsePositive(tokensAmount, 0), [tokensAmount]);
+  const isQuadratic = migrationState?.curveType === 1;
   const previewSolReserve = useMemo(() => parsePositive(reserveSol, PREVIEW_SOL_RESERVE), [reserveSol]);
   const previewTokenReserve = useMemo(() => parsePositive(reserveTokens, PREVIEW_TOKEN_RESERVE), [reserveTokens]);
-  const estimatedTokens = useMemo(() => estimateTokensOut(solIn, previewSolReserve, previewTokenReserve), [solIn, previewSolReserve, previewTokenReserve]);
-  const estimatedSol = useMemo(() => estimateSolOut(tokensIn, previewSolReserve, previewTokenReserve), [tokensIn, previewSolReserve, previewTokenReserve]);
-  const currentPrice = useMemo(() => previewSolReserve / previewTokenReserve, [previewSolReserve, previewTokenReserve]);
-  const nextPrice = useMemo(() => estimatePriceAfter(solIn, previewSolReserve, previewTokenReserve), [solIn, previewSolReserve, previewTokenReserve]);
+  const estimatedTokens = useMemo(
+    () => isQuadratic
+      ? estimateTokensOutQuadratic(solIn, previewSolReserve, previewTokenReserve)
+      : estimateTokensOut(solIn, previewSolReserve, previewTokenReserve),
+    [isQuadratic, solIn, previewSolReserve, previewTokenReserve]
+  );
+  const estimatedSol = useMemo(
+    () => isQuadratic
+      ? estimateSolOutQuadratic(tokensIn, previewSolReserve, previewTokenReserve)
+      : estimateSolOut(tokensIn, previewSolReserve, previewTokenReserve),
+    [isQuadratic, tokensIn, previewSolReserve, previewTokenReserve]
+  );
+  // Quadratic spot price = 2S/T; CPMM spot price = S/T
+  const currentPrice = useMemo(
+    () => previewTokenReserve > 0
+      ? (isQuadratic ? 2 * previewSolReserve : previewSolReserve) / previewTokenReserve
+      : 0,
+    [isQuadratic, previewSolReserve, previewTokenReserve]
+  );
+  const nextPrice = useMemo(
+    () => isQuadratic
+      ? estimatePriceAfterQuadratic(solIn, previewSolReserve, previewTokenReserve)
+      : estimatePriceAfter(solIn, previewSolReserve, previewTokenReserve),
+    [isQuadratic, solIn, previewSolReserve, previewTokenReserve]
+  );
   const priceImpact = useMemo(() => currentPrice > 0 ? ((nextPrice - currentPrice) / currentPrice) * 100 : 0, [currentPrice, nextPrice]);
   const priceAfterSell = useMemo(() => {
     if (tokensIn <= 0 || previewSolReserve <= 0 || previewTokenReserve <= 0) return currentPrice;
+    if (isQuadratic) {
+      const tNew = previewTokenReserve + tokensIn;
+      const sNew = previewSolReserve - estimateSolOutQuadratic(tokensIn, previewSolReserve, previewTokenReserve);
+      return tNew > 0 ? 2 * sNew / tNew : 0;
+    }
     const k = previewSolReserve * previewTokenReserve;
     const nextToken = previewTokenReserve + tokensIn;
     return (k / nextToken) / nextToken;
-  }, [tokensIn, previewSolReserve, previewTokenReserve, currentPrice]);
+  }, [isQuadratic, tokensIn, previewSolReserve, previewTokenReserve, currentPrice]);
   const sellPriceImpact = useMemo(() =>
     currentPrice > 0 ? Math.abs((priceAfterSell - currentPrice) / currentPrice) * 100 : 0,
     [currentPrice, priceAfterSell]
