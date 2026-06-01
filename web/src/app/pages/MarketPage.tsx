@@ -130,6 +130,20 @@ const CG_TO_SOLANA_MINT: Record<string, string> = {
   "jup":                       "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
 };
 
+// CoinGecko IDs that the score API accepts as direct chain aliases
+// (matched by detect.js ALIASES — no extra address needed)
+const CG_CHAIN_ALIASES = new Set([
+  "bitcoin", "ethereum", "ripple", "cardano", "polkadot",
+  "tron", "near", "cosmos", "algorand", "sui", "aptos",
+  "avalanche", "fantom",
+]);
+
+// Returns the identifier to pass to /api/score/:mint for a CoinGecko coin.
+// Prefers Solana mint (full analysis); falls back to chain alias; null = no score.
+function cgScoreId(id: string): string | null {
+  return CG_TO_SOLANA_MINT[id] ?? (CG_CHAIN_ALIASES.has(id) ? id : null);
+}
+
 // ── TradingView widget ─────────────────────────────────────────────────────────
 
 const TradingViewChart = memo(({ symbol }: { symbol: string }) => {
@@ -241,7 +255,7 @@ const CoinCard = memo(({
           <div className="flex items-center justify-between">
             <span className="text-white/20 text-[10px] font-mono">#{coin.market_cap_rank}</span>
             <div className="flex items-center gap-2">
-              {CG_TO_SOLANA_MINT[coin.id] && <TrustScoreBadge mint={CG_TO_SOLANA_MINT[coin.id]} />}
+              {cgScoreId(coin.id) && <TrustScoreBadge mint={cgScoreId(coin.id)!} />}
               <div className="flex items-center gap-1 text-[#00FF41]/60 text-xs font-medium">
                 <BarChart2 size={11} /> chart
               </div>
@@ -824,7 +838,7 @@ export const MarketPage = () => {
                         <div className="flex items-center justify-between">
                           {item.market_cap_rank && <span className="text-white/20 text-[10px] font-mono">#{item.market_cap_rank}</span>}
                           <div className="flex items-center gap-2">
-                            {CG_TO_SOLANA_MINT[item.id] && <TrustScoreBadge mint={CG_TO_SOLANA_MINT[item.id]} />}
+                            {cgScoreId(item.id) && <TrustScoreBadge mint={cgScoreId(item.id)!} />}
                             <div className="flex items-center gap-1 text-[#00FF41]/50 text-[10px]"><Zap size={9} /> Trending</div>
                           </div>
                         </div>
@@ -933,7 +947,7 @@ export const MarketPage = () => {
                             <div className="text-white text-sm font-semibold">{coin.symbol.toUpperCase()}</div>
                             <div className="text-white/40 text-xs truncate">{coin.name}</div>
                           </div>
-                          {CG_TO_SOLANA_MINT[coin.id] && <TrustScoreBadge mint={CG_TO_SOLANA_MINT[coin.id]} />}
+                          {cgScoreId(coin.id) && <TrustScoreBadge mint={cgScoreId(coin.id)!} />}
                           <div className="text-right shrink-0">
                             <div className="text-white font-mono text-sm">{fmtPrice(coin.current_price)}</div>
                             <div className="text-[#00FF41] text-xs font-mono font-bold">
@@ -979,7 +993,7 @@ export const MarketPage = () => {
                             <div className="text-white text-sm font-semibold">{coin.symbol.toUpperCase()}</div>
                             <div className="text-white/40 text-xs truncate">{coin.name}</div>
                           </div>
-                          {CG_TO_SOLANA_MINT[coin.id] && <TrustScoreBadge mint={CG_TO_SOLANA_MINT[coin.id]} />}
+                          {cgScoreId(coin.id) && <TrustScoreBadge mint={cgScoreId(coin.id)!} />}
                           <div className="text-right shrink-0">
                             <div className="text-white font-mono text-sm">{fmtPrice(coin.current_price)}</div>
                             <div className="text-red-400 text-xs font-mono font-bold">
