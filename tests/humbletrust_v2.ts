@@ -80,6 +80,8 @@ describe("humbletrust_v2", () => {
         provider.wallet.publicKey,  // metrics_authority
         /*tier*/             0,
         /*anti_bot_seconds*/ 0,
+        /*curve_type*/       0,
+        /*lp_policy*/        0,
       )
       .accounts(launchAccounts(mintKp))
       .signers([mintKp])
@@ -123,7 +125,7 @@ describe("humbletrust_v2", () => {
     const mintKp = Keypair.generate();
     try {
       await program.methods
-        .createTokenWithLockV2("BadV2", "BAD2", 90, 25, 50, 0, 25, 20, 5, INITIAL_SOL, provider.wallet.publicKey, 0, 0)
+        .createTokenWithLockV2("BadV2", "BAD2", 90, 25, 50, 0, 25, 20, 5, INITIAL_SOL, provider.wallet.publicKey, 0, 0, 0, 0)
         .accounts(launchAccounts(mintKp))
         .signers([mintKp])
         .rpc();
@@ -137,7 +139,7 @@ describe("humbletrust_v2", () => {
     const mintKp = Keypair.generate();
     try {
       await program.methods
-        .createTokenWithLockV2("SumV2", "SUM2", 90, 25, 40, 0, 40, 15, 0, INITIAL_SOL, provider.wallet.publicKey, 0, 0)
+        .createTokenWithLockV2("SumV2", "SUM2", 90, 25, 40, 0, 40, 15, 0, INITIAL_SOL, provider.wallet.publicKey, 0, 0, 0, 0)
         .accounts(launchAccounts(mintKp))
         .signers([mintKp])
         .rpc();

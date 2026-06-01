@@ -4315,17 +4315,17 @@
       "msg": "Raydium CPI failed"
     },
     {
-      "code": 6058,
+      "code": 6060,
       "name": "InvalidCurveType",
       "msg": "Curve type must be 0 (CPMM) or 1 (Quadratic)"
     },
     {
-      "code": 6059,
+      "code": 6061,
       "name": "InvalidLpPolicy",
       "msg": "LP policy must be 0 (Lock), 1 (Burn), or 2 (ToCreator)"
     },
     {
-      "code": 6060,
+      "code": 6062,
       "name": "LpPolicyAccountMissing",
       "msg": "LP policy requires a creator LP token account in remaining_accounts[0]"
     }
