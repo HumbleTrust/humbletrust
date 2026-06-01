@@ -40,11 +40,17 @@ module.exports = async (req, res) => {
     if (source === "pump" || source === "pumpswap") {
       const url = source === "pumpswap" ? PUMPSWAP_URL : PUMP_URL;
       const r = await fetch(url, {
-        headers: { "User-Agent": "Mozilla/5.0" },
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+          "Accept": "application/json, text/plain, */*",
+          "Referer": "https://pump.fun/",
+          "Origin": "https://pump.fun",
+        },
         signal: AbortSignal.timeout(8000),
       });
       if (!r.ok) return res.status(502).json({ error: `pump.fun ${r.status}` });
-      const coins = await r.json();
+      const raw = await r.json();
+      const coins = Array.isArray(raw) ? raw : (raw.data ?? raw.tokens ?? raw.coins ?? []);
       const items = (Array.isArray(coins) ? coins : []).map((c) => norm({
         address:    c.mint,
         name:       c.name,

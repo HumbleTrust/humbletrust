@@ -824,7 +824,7 @@ export const MarketPage = () => {
                   return (
                     <motion.div key={coin.address + i} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03, duration: 0.2 }}>
                       <GlassPanel hover glow={isUp ? "green" : coin.complete ? "green" : "none"} className="p-4 cursor-pointer"
-                        onClick={() => window.dispatchEvent(new CustomEvent("ht:open-trade", { detail: { mint: coin.address } }))}>
+                        onClick={() => window.dispatchEvent(new CustomEvent("ht:open-trade", { detail: coin.address }))}>
                         <div className="flex items-center gap-2.5 mb-3">
                           <HexAvatar src={coin.image} label={coin.symbol || coin.name} size={40} />
                           <div className="flex-1 min-w-0">
