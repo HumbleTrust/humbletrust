@@ -1,13 +1,40 @@
 // POST /api/badges/prepare  { wallet }                          — reserve edition
-// POST /api/badges/prepare  { wallet, badge_mint, tx_sig, … }  — confirm mint (replaces /confirm)
+// POST /api/badges/confirm  → rewrites here { wallet, badge_mint, tx_sig, … }  — confirm mint
 
 const { getClient } = require('../_lib/db');
 const { getZodiac, getAuraColor } = require('./_zodiac');
 const { isValidWallet, setCors } = require('../_lib/validate');
 const { VALID_ZODIACS, VALID_ELEMENTS } = require('../_lib/trust');
 
-const MINT_PRICE_SOL = 0.2;
+const MINT_PRICE_SOL     = 0.2;
+const MINT_PRICE_LAMPORTS = Math.round(MINT_PRICE_SOL * 1e9);
+const FEE_WALLET          = 'FYRtG8JMun6vqucUaXGcSZrWib6gNVEW4dd2LEP92mGM';
+const SOLANA_RPC          = process.env.SOLANA_RPC || 'https://api.devnet.solana.com';
 const TX_SIG_RE = /^[1-9A-HJ-NP-Za-km-z]{87,88}$/;
+
+// Verify that tx_signature contains a SOL transfer of ≥ MINT_PRICE_LAMPORTS to FEE_WALLET
+async function verifyPayment(txSig) {
+  const res = await fetch(SOLANA_RPC, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0', id: 1, method: 'getTransaction',
+      params: [txSig, { encoding: 'json', commitment: 'confirmed', maxSupportedTransactionVersion: 0 }],
+    }),
+    signal: AbortSignal.timeout(8000),
+  });
+  const { result } = await res.json();
+  if (!result) return false;
+
+  const keys = result.transaction?.message?.accountKeys ?? [];
+  const pre  = result.meta?.preBalances  ?? [];
+  const post = result.meta?.postBalances ?? [];
+  const idx  = keys.indexOf(FEE_WALLET);
+  if (idx === -1) return false;
+
+  // Allow 5% tolerance to cover tx fees on edge cases
+  return (post[idx] - pre[idx]) >= Math.floor(MINT_PRICE_LAMPORTS * 0.95);
+}
 
 module.exports = async (req, res) => {
   setCors(req, res);
@@ -86,6 +113,10 @@ async function handleConfirm(body, res) {
 
   const db = getClient();
   try {
+    // Verify the SOL payment actually reached FEE_WALLET on-chain
+    const paid = await verifyPayment(tx_signature).catch(() => false);
+    if (!paid) return res.status(402).json({ error: 'payment_not_verified' });
+
     const { data: badge, error } = await db.from('badges').upsert({
       wallet, badge_mint, zodiac, element, aura_color, edition: ed,
       tx_signature, price_sol: MINT_PRICE_SOL, status: 'active',

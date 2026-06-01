@@ -10,6 +10,7 @@ import {
   publicKey as umiPublicKey,
   transactionBuilder,
 } from "@metaplex-foundation/umi";
+import bs58 from "bs58";
 import { RPC_DEVNET, FEE_WALLET } from "./constants";
 
 const BADGE_PRICE_LAMPORTS = 200_000_000; // 0.2 SOL
@@ -93,10 +94,11 @@ export async function mintBadgeNft(
     .sendAndConfirm(umi);
 
   const badge_mint = mintSigner.publicKey.toString();
-  const tx_signature = Buffer.from(signature).toString("base64");
+  // UMI returns raw bytes — convert to base58 (standard Solana tx signature format)
+  const tx_signature = bs58.encode(Buffer.from(signature));
 
   // 4. Confirm with backend — store badge_mint + tx_signature
-  const confirmRes = await fetch("/api/badges/prepare", {
+  const confirmRes = await fetch("/api/badges/confirm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

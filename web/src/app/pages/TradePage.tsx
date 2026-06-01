@@ -19,7 +19,7 @@ import {
   Unlock,
   Zap,
 } from "lucide-react";
-import { getTokenTrades, recordTrade, syncTokenTrades, type ApiTrade } from "../../lib/solana/api";
+import { getTokenTrades, getToken, recordTrade, syncTokenTrades, type ApiTrade, type ApiToken } from "../../lib/solana/api";
 import { detectToken, fetchPumpFunTrades, type TokenInfo } from "../../lib/solana/external-trades";
 import { getJupiterQuote, executeJupiterSwap, SOL_MINT, type JupiterQuote } from "../../lib/solana/jupiter-swap";
 import { LightweightTradeChart } from "../components/LightweightTradeChart";
@@ -56,6 +56,13 @@ import { cn } from "../components/ui/utils";
 const PREVIEW_TOKEN_RESERVE = 350_000_000;
 const PREVIEW_SOL_RESERVE = 0.5;
 const CURVE_FEE_RATE = 0.01;
+
+// Used when on-chain account exists (AlreadyMigrated error) but full decode fails
+const MIGRATED_FALLBACK: import("../../lib/solana/program").MigrationState = {
+  isMigrated: true, thresholdLamports: 0, currentSolLamports: 0,
+  raydiumPool: "11111111111111111111111111111111", migratedAt: 0, progressPct: 100,
+  isPrepared: false, migrationTokenAmount: 0, migrationWsolLamports: 0, curveType: 0,
+};
 
 type TradeSide = "buy" | "sell";
 type ChartMode = "candles" | "line" | "area";
@@ -143,6 +150,7 @@ const isRenderableTrade = (trade: ApiTrade) => {
   );
 };
 
+// ── CPMM (curve_type=0): k = S * T ───────────────────────────────────────────
 const estimateTokensOut = (solIn: number, solReserve: number, tokenReserve: number) => {
   if (solIn <= 0 || solReserve <= 0 || tokenReserve <= 0) return 0;
   const solAfterFee = solIn * (1 - CURVE_FEE_RATE);
@@ -161,6 +169,30 @@ const estimateSolOut = (tokensIn: number, solReserve: number, tokenReserve: numb
   if (tokensIn <= 0 || solReserve <= 0 || tokenReserve <= 0) return 0;
   const k = solReserve * tokenReserve;
   return Math.max(0, solReserve - k / (tokenReserve + tokensIn)) * (1 - CURVE_FEE_RATE);
+};
+
+// ── Quadratic (curve_type=1): invariant T² * S = k ───────────────────────────
+// Buy:  T_out = T * (1 - sqrt(S / (S + net_sol)))
+const estimateTokensOutQuadratic = (solIn: number, solReserve: number, tokenReserve: number) => {
+  if (solIn <= 0 || solReserve <= 0 || tokenReserve <= 0) return 0;
+  const netSol = solIn * (1 - CURVE_FEE_RATE);
+  return Math.max(0, tokenReserve * (1 - Math.sqrt(solReserve / (solReserve + netSol))));
+};
+
+// Sell: gross_sol = S * delta * (2T + delta) / (T + delta)²
+const estimateSolOutQuadratic = (tokensIn: number, solReserve: number, tokenReserve: number) => {
+  if (tokensIn <= 0 || solReserve <= 0 || tokenReserve <= 0) return 0;
+  const tNew = tokenReserve + tokensIn;
+  const gross = solReserve * tokensIn * (2 * tokenReserve + tokensIn) / (tNew * tNew);
+  return Math.max(0, gross * (1 - CURVE_FEE_RATE));
+};
+
+// Price after quadratic buy: spot price = 2 * S_new / T_new
+const estimatePriceAfterQuadratic = (solIn: number, solReserve: number, tokenReserve: number) => {
+  const netSol = Math.max(0, solIn) * (1 - CURVE_FEE_RATE);
+  const sNew = solReserve + netSol;
+  const tNew = tokenReserve * Math.sqrt(solReserve / sNew);
+  return tNew > 0 ? 2 * sNew / tNew : 0;
 };
 
 const toRawTokenAmount = (amount: string, decimals = 9) => {
@@ -236,6 +268,9 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
     () => chartTrades.filter(isRenderableTrade),
     [chartTrades]
   );
+
+  // DB token info (social links, description)
+  const [dbTokenInfo, setDbTokenInfo] = useState<ApiToken | null>(null);
 
   // External token detection (pump.fun / mainnet)
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
@@ -313,6 +348,14 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
   // Keep ref in sync for use inside fetchChartTrades closure
   useEffect(() => { tokenInfoRef.current = tokenInfo; }, [tokenInfo]);
 
+  // Fetch DB token info (social links) when mint changes
+  useEffect(() => {
+    if (!validMint) { setDbTokenInfo(null); return; }
+    getToken(mintInput.trim())
+      .then(r => setDbTokenInfo(r.token))
+      .catch(() => setDbTokenInfo(null));
+  }, [validMint, mintInput]);
+
   // Auto-detect token source when a valid mint is entered
   useEffect(() => {
     if (!validMint) { setTokenInfo(null); setJupiterQuote(null); return; }
@@ -368,19 +411,46 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
 
   const solIn = useMemo(() => parsePositive(solAmount, 0), [solAmount]);
   const tokensIn = useMemo(() => parsePositive(tokensAmount, 0), [tokensAmount]);
+  const isQuadratic = migrationState?.curveType === 1;
   const previewSolReserve = useMemo(() => parsePositive(reserveSol, PREVIEW_SOL_RESERVE), [reserveSol]);
   const previewTokenReserve = useMemo(() => parsePositive(reserveTokens, PREVIEW_TOKEN_RESERVE), [reserveTokens]);
-  const estimatedTokens = useMemo(() => estimateTokensOut(solIn, previewSolReserve, previewTokenReserve), [solIn, previewSolReserve, previewTokenReserve]);
-  const estimatedSol = useMemo(() => estimateSolOut(tokensIn, previewSolReserve, previewTokenReserve), [tokensIn, previewSolReserve, previewTokenReserve]);
-  const currentPrice = useMemo(() => previewSolReserve / previewTokenReserve, [previewSolReserve, previewTokenReserve]);
-  const nextPrice = useMemo(() => estimatePriceAfter(solIn, previewSolReserve, previewTokenReserve), [solIn, previewSolReserve, previewTokenReserve]);
+  const estimatedTokens = useMemo(
+    () => isQuadratic
+      ? estimateTokensOutQuadratic(solIn, previewSolReserve, previewTokenReserve)
+      : estimateTokensOut(solIn, previewSolReserve, previewTokenReserve),
+    [isQuadratic, solIn, previewSolReserve, previewTokenReserve]
+  );
+  const estimatedSol = useMemo(
+    () => isQuadratic
+      ? estimateSolOutQuadratic(tokensIn, previewSolReserve, previewTokenReserve)
+      : estimateSolOut(tokensIn, previewSolReserve, previewTokenReserve),
+    [isQuadratic, tokensIn, previewSolReserve, previewTokenReserve]
+  );
+  // Quadratic spot price = 2S/T; CPMM spot price = S/T
+  const currentPrice = useMemo(
+    () => previewTokenReserve > 0
+      ? (isQuadratic ? 2 * previewSolReserve : previewSolReserve) / previewTokenReserve
+      : 0,
+    [isQuadratic, previewSolReserve, previewTokenReserve]
+  );
+  const nextPrice = useMemo(
+    () => isQuadratic
+      ? estimatePriceAfterQuadratic(solIn, previewSolReserve, previewTokenReserve)
+      : estimatePriceAfter(solIn, previewSolReserve, previewTokenReserve),
+    [isQuadratic, solIn, previewSolReserve, previewTokenReserve]
+  );
   const priceImpact = useMemo(() => currentPrice > 0 ? ((nextPrice - currentPrice) / currentPrice) * 100 : 0, [currentPrice, nextPrice]);
   const priceAfterSell = useMemo(() => {
     if (tokensIn <= 0 || previewSolReserve <= 0 || previewTokenReserve <= 0) return currentPrice;
+    if (isQuadratic) {
+      const tNew = previewTokenReserve + tokensIn;
+      const sNew = previewSolReserve - estimateSolOutQuadratic(tokensIn, previewSolReserve, previewTokenReserve);
+      return tNew > 0 ? 2 * sNew / tNew : 0;
+    }
     const k = previewSolReserve * previewTokenReserve;
     const nextToken = previewTokenReserve + tokensIn;
     return (k / nextToken) / nextToken;
-  }, [tokensIn, previewSolReserve, previewTokenReserve, currentPrice]);
+  }, [isQuadratic, tokensIn, previewSolReserve, previewTokenReserve, currentPrice]);
   const sellPriceImpact = useMemo(() =>
     currentPrice > 0 ? Math.abs((priceAfterSell - currentPrice) / currentPrice) * 100 : 0,
     [currentPrice, priceAfterSell]
@@ -474,7 +544,17 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
       : getTokenTrades(mint, 500).then(r => r.trades ?? []);
     fetcher
       .then(trades => { setChartTrades(trades); setChartLoading(false); })
-      .catch((err: Error) => { if (!silent) setChartError(err.message); setChartLoading(false); });
+      .catch((err: Error) => {
+        const msg = err.message || "";
+        // Treat as "no data" when: route not found, token not indexed, or invalid address
+        if (msg.includes("NOT_FOUND") || msg.includes("404") || msg.includes("not found") ||
+            msg.includes("invalid mint") || msg.includes("400") || msg.includes("Bad Request")) {
+          if (!silent) setChartTrades([]);
+        } else if (!silent) {
+          setChartError(msg);
+        }
+        setChartLoading(false);
+      });
   }, []);
 
   const runSyncTrades = useCallback(async (mint: string) => {
@@ -543,11 +623,18 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
     if (!canUseCurve || mintValue.length < 32) return;
     try {
       const mint = new PublicKey(mintValue);
-      const [ms, ls] = await Promise.all([
+      const [ms, ls, cls] = await Promise.all([
         fetchMigrationState(connection, mint),
         fetchLpLockState(connection, mint),
+        fetchCreatorLockState(connection, mint),
       ]);
-      setMigrationState(ms);
+      // If migration state decode failed (isMigrated=false) but creator lock
+      // state says migrated, trust the creator lock state as a cross-check
+      if (ms && !ms.isMigrated && cls?.isMigrated) {
+        setMigrationState({ ...ms, isMigrated: true, progressPct: 100 });
+      } else {
+        setMigrationState(ms);
+      }
       setLpLockState(ls);
     } catch { /* silent */ }
   }, [mintInput, canUseCurve, connection]);
@@ -651,27 +738,34 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
       setTxSig(signature);
       const blockTime = await getConfirmedBlockTime(connection, signature);
       const chainTrade = await fetchCurveTradeFromTransaction(connection, signature, mint, "buy");
-      const indexedTrade = await recordTrade(mintInput.trim(), {
+      const tradePayload = {
         signature,
         trader: chainTrade?.trader ?? anchorWallet.publicKey.toBase58(),
-        side: chainTrade?.side ?? "buy",
-        source: chainTrade?.source ?? "curve",
+        side: (chainTrade?.side ?? "buy") as "buy" | "sell",
+        source: (chainTrade?.source ?? "curve") as "curve" | "raydium",
         token_amount: chainTrade?.token_amount ?? estimatedTokens,
         sol_amount: chainTrade?.sol_amount ?? solIn,
         price_sol: chainTrade?.price_sol ?? nextPrice,
         block_time: chainTrade?.block_time ?? blockTime,
-      });
-      if (indexedTrade?.error) {
-        console.error("[recordTrade:buy]", indexedTrade.error);
-        setChartError(`Trade saved on-chain, but chart history did not index: ${indexedTrade.error}`);
-      } else {
-        setChartError(null);
-      }
+      };
+      // Optimistic: show trade in chart immediately without waiting for backend
+      setChartError(null);
+      setChartTrades(prev => [tradePayload as ApiTrade, ...prev.slice(0, 499)]);
+      // Try direct record first; if it fails, fall back to full chain sync
+      const _mint = mintInput.trim();
+      recordTrade(_mint, tradePayload).then(r => {
+        if (r?.error) {
+          console.warn("[recordTrade:buy] failed:", r.error, "— syncing from chain");
+          syncTokenTrades(_mint, 10).then(s => {
+            if (!s?.error) setTimeout(() => fetchChartTrades(_mint, true), 1000);
+          }).catch(() => {});
+        }
+      }).catch(() => {});
       await Promise.all([
         refreshReserves(),
         loadWalletTokens(),
       ]);
-      fetchChartTrades(mintInput.trim(), true);
+      fetchChartTrades(_mint, true);
     } catch (e: any) {
       const errMsg = e.message || String(e);
       if (errMsg.includes("AlreadyMigrated") || errMsg.includes("6037")) {
@@ -679,9 +773,12 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
         try {
           const mint = new PublicKey(mintInput.trim());
           const [ms, ls] = await Promise.all([fetchMigrationState(connection, mint), fetchLpLockState(connection, mint)]);
-          setMigrationState(ms);
+          setMigrationState(ms?.isMigrated ? ms : MIGRATED_FALLBACK);
           setLpLockState(ls);
-        } catch {}
+        } catch {
+          setMigrationState(MIGRATED_FALLBACK);
+        }
+        return; // UI updates to "Bonding curve is closed" — no separate error message needed
       }
       setTradeError(friendlyError(errMsg));
     } finally {
@@ -730,27 +827,32 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
       setTxSig(signature);
       const blockTime = await getConfirmedBlockTime(connection, signature);
       const chainTrade = await fetchCurveTradeFromTransaction(connection, signature, mint, "sell");
-      const indexedTrade = await recordTrade(mintInput.trim(), {
+      const tradePayload = {
         signature,
         trader: chainTrade?.trader ?? anchorWallet.publicKey.toBase58(),
-        side: chainTrade?.side ?? "sell",
-        source: chainTrade?.source ?? "curve",
+        side: (chainTrade?.side ?? "sell") as "buy" | "sell",
+        source: (chainTrade?.source ?? "curve") as "curve" | "raydium",
         token_amount: chainTrade?.token_amount ?? tokensIn,
         sol_amount: chainTrade?.sol_amount ?? estimatedSol,
         price_sol: chainTrade?.price_sol ?? priceAfterSell,
         block_time: chainTrade?.block_time ?? blockTime,
-      });
-      if (indexedTrade?.error) {
-        console.error("[recordTrade:sell]", indexedTrade.error);
-        setChartError(`Trade saved on-chain, but chart history did not index: ${indexedTrade.error}`);
-      } else {
-        setChartError(null);
-      }
+      };
+      setChartError(null);
+      setChartTrades(prev => [tradePayload as ApiTrade, ...prev.slice(0, 499)]);
+      const _mint = mintInput.trim();
+      recordTrade(_mint, tradePayload).then(r => {
+        if (r?.error) {
+          console.warn("[recordTrade:sell] failed:", r.error, "— syncing from chain");
+          syncTokenTrades(_mint, 10).then(s => {
+            if (!s?.error) setTimeout(() => fetchChartTrades(_mint, true), 1000);
+          }).catch(() => {});
+        }
+      }).catch(() => {});
       await Promise.all([
         refreshReserves(),
         loadWalletTokens(),
       ]);
-      fetchChartTrades(mintInput.trim(), true);
+      fetchChartTrades(_mint, true);
     } catch (e: any) {
       const errMsg = e.message || String(e);
       if (errMsg.includes("AlreadyMigrated") || errMsg.includes("6037")) {
@@ -758,9 +860,12 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
         try {
           const mint = new PublicKey(mintInput.trim());
           const [ms, ls] = await Promise.all([fetchMigrationState(connection, mint), fetchLpLockState(connection, mint)]);
-          setMigrationState(ms);
+          setMigrationState(ms?.isMigrated ? ms : MIGRATED_FALLBACK);
           setLpLockState(ls);
-        } catch {}
+        } catch {
+          setMigrationState(MIGRATED_FALLBACK);
+        }
+        return; // UI updates to "Bonding curve is closed" — no separate error message needed
       }
       setTradeError(friendlyError(errMsg));
     } finally {
@@ -1059,6 +1164,44 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
             )}
             {!tokenDetecting && validMint && !tokenInfo && !isMainnet && (
               <div className="text-[10px] text-white/30 px-1">HumbleTrust token (devnet)</div>
+            )}
+
+            {/* Social links + description from HumbleTrust DB */}
+            {dbTokenInfo && (dbTokenInfo.description || dbTokenInfo.website || dbTokenInfo.twitter || dbTokenInfo.telegram) && (
+              <div className="px-1 space-y-1.5">
+                {dbTokenInfo.description && (
+                  <p className="text-[11px] text-white/40 leading-relaxed line-clamp-2">{dbTokenInfo.description}</p>
+                )}
+                <div className="flex flex-wrap gap-x-3 gap-y-1">
+                  {dbTokenInfo.website && (
+                    <a
+                      href={dbTokenInfo.website.startsWith("http") ? dbTokenInfo.website : `https://${dbTokenInfo.website}`}
+                      target="_blank" rel="noreferrer"
+                      className="text-[10px] text-blue-400/60 hover:text-blue-400 transition-colors"
+                    >
+                      🌐 {dbTokenInfo.website.replace(/^https?:\/\//, "").split("/")[0]}
+                    </a>
+                  )}
+                  {dbTokenInfo.twitter && (
+                    <a
+                      href={`https://x.com/${dbTokenInfo.twitter.replace(/^@/, "")}`}
+                      target="_blank" rel="noreferrer"
+                      className="text-[10px] text-blue-400/60 hover:text-blue-400 transition-colors"
+                    >
+                      𝕏 @{dbTokenInfo.twitter.replace(/^@/, "")}
+                    </a>
+                  )}
+                  {dbTokenInfo.telegram && (
+                    <a
+                      href={dbTokenInfo.telegram.startsWith("http") ? dbTokenInfo.telegram : `https://t.me/${dbTokenInfo.telegram.replace(/^@/, "")}`}
+                      target="_blank" rel="noreferrer"
+                      className="text-[10px] text-blue-400/60 hover:text-blue-400 transition-colors"
+                    >
+                      ✈ {dbTokenInfo.telegram.replace(/^@/, "").replace(/^https?:\/\/t\.me\//, "")}
+                    </a>
+                  )}
+                </div>
+              </div>
             )}
 
             {/* Buy / Sell tabs */}

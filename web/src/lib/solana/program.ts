@@ -778,6 +778,8 @@ export interface MigrationState {
   isPrepared: boolean;
   migrationTokenAmount: number;
   migrationWsolLamports: number;
+  /** 0 = CPMM (constant-product), 1 = Quadratic. Defaults to 0 for pre-upgrade accounts. */
+  curveType: 0 | 1;
 }
 
 export const fetchMigrationState = async (
@@ -800,7 +802,6 @@ export const fetchMigrationState = async (
       connection.getMinimumBalanceForRentExemption(165).catch(() => 2_039_280),
     ]);
     if (!metaInfo) return null;
-    const meta = coder.decode("TokenMetadataV2", metaInfo.data) as any;
 
     // CurveTreasurySol: 8 discriminator + 32 mint + 32 creator + 8 initial + 8 current
     let currentSolLamports = 0;
@@ -809,7 +810,33 @@ export const fetchMigrationState = async (
       currentSolLamports = Number(view.getBigUint64(80, true));
     }
 
+    const migrationWsolLamports = Math.max(0, (migrationWsolInfo?.lamports ?? 0) - wsolRent);
+
+    // Decode — old accounts (created before a program upgrade) may have fewer bytes than
+    // the current IDL expects. In that case fall back to a minimal partial state so the UI
+    // doesn't show "No v2 launch data" for tokens that are genuine HumbleTrust v2 tokens.
+    let meta: any;
+    try {
+      meta = coder.decode("TokenMetadataV2", metaInfo.data);
+    } catch {
+      // Old account format (pre-upgrade) — use devnet test-mode threshold (5 SOL)
+      const FALLBACK_THRESHOLD = 5_000_000_000;
+      return {
+        thresholdLamports: FALLBACK_THRESHOLD,
+        currentSolLamports,
+        isMigrated: false,
+        curveType: 0 as const,
+        raydiumPool: PublicKey.default.toBase58(),
+        migratedAt: 0,
+        progressPct: Math.min(100, (currentSolLamports / FALLBACK_THRESHOLD) * 100),
+        isPrepared: migrationTokenBalance > 0 && migrationWsolLamports > 0,
+        migrationTokenAmount: migrationTokenBalance,
+        migrationWsolLamports,
+      };
+    }
+
     const threshold = Number(meta.migrationThresholdLamports ?? meta.migration_threshold_lamports ?? 0);
+    const rawCurveType = Number(meta.curveType ?? meta.curve_type ?? 0);
     return {
       thresholdLamports: threshold,
       currentSolLamports,
@@ -819,7 +846,8 @@ export const fetchMigrationState = async (
       progressPct: threshold > 0 ? Math.min(100, (currentSolLamports / threshold) * 100) : 0,
       isPrepared: migrationTokenBalance > 0 && (migrationWsolInfo?.lamports ?? 0) > wsolRent,
       migrationTokenAmount: migrationTokenBalance,
-      migrationWsolLamports: Math.max(0, (migrationWsolInfo?.lamports ?? 0) - wsolRent),
+      migrationWsolLamports,
+      curveType: (rawCurveType === 1 ? 1 : 0) as 0 | 1,
     };
   } catch {
     return null;
