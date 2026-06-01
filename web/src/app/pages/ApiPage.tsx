@@ -634,7 +634,7 @@ export const ApiPage = () => {
             </div>
             <h2 className="text-2xl font-black text-white mb-2">Get Your Free API Key</h2>
             <p className="text-white/40 text-sm mb-6">
-              200 requests/day · No credit card · Takes 5 seconds
+              50 requests/day · No credit card · Takes 5 seconds
             </p>
 
             <AnimatePresence mode="wait">
