@@ -58,10 +58,10 @@ interface NewPairItem {
   dex_url?:      string;
   description?:  string;
   links?:        Array<{ type: string; label: string; url: string }>;
-  source:        "pump" | "dex";
+  source:        "pump" | "pumpswap" | "dex" | "raydium" | "meteora" | "orca";
 }
 
-type NewPairsSource = "cg" | "pump" | "dex";
+type NewPairsSource = "cg" | "pump" | "pumpswap" | "dex" | "raydium" | "meteora" | "orca";
 
 interface Chain { name: string; category: string; logo?: string; }
 
@@ -358,8 +358,7 @@ export const MarketPage = () => {
   // Trending / New Pairs
   const [trending,       setTrending]       = useState<TrendingItem[]>([]);
   const [newSource,      setNewSource]      = useState<NewPairsSource>("cg");
-  const [pumpCoins,      setPumpCoins]      = useState<NewPairItem[]>([]);
-  const [dexProfiles,    setDexProfiles]    = useState<NewPairItem[]>([]);
+  const [newPairsData,   setNewPairsData]   = useState<Record<string, NewPairItem[]>>({});
   const [newPairsBusy,   setNewPairsBusy]   = useState(false);
 
   // Gainers/Losers
@@ -440,14 +439,13 @@ export const MarketPage = () => {
     }
   }, []);
 
-  const fetchNewPairs = useCallback(async (src: "pump" | "dex") => {
+  const fetchNewPairs = useCallback(async (src: Exclude<NewPairsSource, "cg">) => {
     setNewPairsBusy(true);
     try {
       const r = await fetch(`/api/new-pairs?source=${src}`);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
-      if (src === "pump") setPumpCoins(data.items ?? []);
-      else setDexProfiles(data.items ?? []);
+      setNewPairsData(prev => ({ ...prev, [src]: data.items ?? [] }));
     } catch (e: any) {
       console.warn("[fetchNewPairs]", src, e.message);
     } finally {
@@ -843,12 +841,16 @@ export const MarketPage = () => {
       {!isBusy && category === "new" && (
         <div>
           {/* Source sub-tabs */}
-          <div className="flex items-center gap-2 mb-4">
-            {(["cg", "pump", "dex"] as const).map(src => {
+          <div className="flex flex-wrap items-center gap-1.5 mb-4">
+            {(["cg", "pump", "pumpswap", "dex", "raydium", "meteora", "orca"] as const).map(src => {
               const labels: Record<NewPairsSource, string> = {
-                cg:   "CoinGecko Trending",
-                pump: "Pump.fun",
-                dex:  "DexScreener",
+                cg:       "CoinGecko",
+                pump:     "Pump.fun",
+                pumpswap: "PumpSwap",
+                dex:      "DexScreener",
+                raydium:  "Raydium",
+                meteora:  "Meteora",
+                orca:     "Orca",
               };
               return (
                 <button
@@ -912,71 +914,42 @@ export const MarketPage = () => {
             )
           )}
 
-          {/* Pump.fun */}
-          {newSource === "pump" && (
-            pumpCoins.length === 0 ? (
+          {/* All non-CG sources — universal card grid */}
+          {newSource !== "cg" && (() => {
+            const coins = newPairsData[newSource] ?? [];
+            const sourceLabels: Record<string, string> = {
+              pump: "pump.fun", pumpswap: "PumpSwap", dex: "DexScreener",
+              raydium: "Raydium", meteora: "Meteora", orca: "Orca",
+            };
+            const label = sourceLabels[newSource] ?? newSource;
+            if (coins.length === 0) return (
               <GlassPanel className="py-12 text-center">
-                <div className="text-white/30 text-sm">{newPairsBusy ? "Loading…" : "No data from Pump.fun."}</div>
+                <div className="text-white/30 text-sm">{newPairsBusy ? "Loading…" : `No data from ${label}.`}</div>
               </GlassPanel>
-            ) : (
+            );
+            return (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {pumpCoins.map((coin, i) => {
-                  const isUp = (coin.change_24h ?? 0) > 0;
+                {coins.map((coin, i) => {
+                  const isUp   = (coin.change_24h ?? 0) > 0;
                   const isDown = (coin.change_24h ?? 0) < 0;
+                  const stat   = coin.liquidity_usd
+                    ? `Liq ${fmtUsd(coin.liquidity_usd)}`
+                    : coin.market_cap
+                      ? `MCap ${fmtUsd(coin.market_cap)}`
+                      : coin.volume_24h
+                        ? `Vol ${fmtUsd(coin.volume_24h)}`
+                        : "";
                   return (
-                    <motion.div key={coin.address} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03, duration: 0.2 }}>
-                      <GlassPanel hover glow={coin.complete ? "green" : "none"} className="p-4">
+                    <motion.div key={coin.address + i} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03, duration: 0.2 }}>
+                      <GlassPanel hover glow={isUp ? "green" : coin.complete ? "green" : "none"} className="p-4">
                         <div className="flex items-center gap-2.5 mb-3">
                           <HexAvatar src={coin.image} label={coin.symbol || coin.name} size={40} />
                           <div className="flex-1 min-w-0">
-                            <div className="text-white font-semibold text-sm">{coin.symbol || "—"}</div>
+                            <div className="text-white font-semibold text-sm truncate">{coin.symbol || coin.name || coin.address.slice(0,8)+"…"}</div>
                             <div className="text-white/40 text-xs truncate">{coin.name}</div>
                           </div>
-                          {coin.complete && (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] bg-[#00FF41]/10 text-[#00FF41] border border-[#00FF41]/20">bonded</span>
-                          )}
-                        </div>
-                        <div className="text-white font-mono font-bold text-lg mb-2">{fmtPrice(coin.price_usd ?? 0)}</div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-white/20 text-[10px]">MCap {fmtUsd(coin.market_cap ?? 0)}</span>
-                          <a
-                            href={`https://pump.fun/${coin.address}`}
-                            target="_blank" rel="noreferrer"
-                            className="text-[#00FF41]/50 text-[10px] hover:text-[#00FF41] transition-colors"
-                            onClick={e => e.stopPropagation()}
-                          >
-                            pump.fun ↗
-                          </a>
-                        </div>
-                      </GlassPanel>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            )
-          )}
-
-          {/* DexScreener */}
-          {newSource === "dex" && (
-            dexProfiles.length === 0 ? (
-              <GlassPanel className="py-12 text-center">
-                <div className="text-white/30 text-sm">{newPairsBusy ? "Loading…" : "No Solana profiles on DexScreener."}</div>
-              </GlassPanel>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {dexProfiles.map((coin, i) => {
-                  const isUp = (coin.change_24h ?? 0) > 0;
-                  const isDown = (coin.change_24h ?? 0) < 0;
-                  return (
-                    <motion.div key={coin.address} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03, duration: 0.2 }}>
-                      <GlassPanel hover glow={isUp ? "green" : "none"} className="p-4">
-                        <div className="flex items-center gap-2.5 mb-3">
-                          <HexAvatar src={coin.image} label={coin.symbol || coin.name} size={40} />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-white font-semibold text-sm truncate">{coin.symbol || coin.address.slice(0, 8) + "…"}</div>
-                            <div className="text-white/40 text-xs truncate">{coin.name}</div>
-                          </div>
-                          {coin.change_24h !== null && coin.change_24h !== undefined && (
+                          {coin.complete && <span className="px-1.5 py-0.5 rounded text-[9px] bg-[#00FF41]/10 text-[#00FF41] border border-[#00FF41]/20">bonded</span>}
+                          {!coin.complete && coin.change_24h !== null && coin.change_24h !== undefined && (
                             <div className={cn("px-2 py-1 rounded-lg text-xs font-mono font-semibold",
                               isUp ? "bg-[#00FF41]/10 text-[#00FF41]" : isDown ? "bg-red-500/10 text-red-400" : "bg-white/5 text-white/40")}>
                               {isUp ? <TrendingUp size={10} className="inline mr-0.5" /> : isDown ? <TrendingDown size={10} className="inline mr-0.5" /> : null}
@@ -984,16 +957,16 @@ export const MarketPage = () => {
                             </div>
                           )}
                         </div>
-                        <div className="text-white font-mono font-bold text-lg mb-2">{fmtPrice(coin.price_usd ?? 0)}</div>
+                        <div className="text-white font-mono font-bold text-lg mb-2">
+                          {coin.price_usd ? fmtPrice(coin.price_usd) : "—"}
+                        </div>
                         <div className="flex items-center justify-between">
-                          {coin.liquidity_usd ? (
-                            <span className="text-white/20 text-[10px]">Liq {fmtUsd(coin.liquidity_usd)}</span>
-                          ) : <span />}
+                          <span className="text-white/20 text-[10px]">{stat}</span>
                           {coin.dex_url && (
                             <a href={coin.dex_url} target="_blank" rel="noreferrer"
                               className="text-[#00FF41]/50 text-[10px] hover:text-[#00FF41] transition-colors"
                               onClick={e => e.stopPropagation()}>
-                              DexScreener ↗
+                              {label} ↗
                             </a>
                           )}
                         </div>
@@ -1002,8 +975,8 @@ export const MarketPage = () => {
                   );
                 })}
               </div>
-            )
-          )}
+            );
+          })()}
         </div>
       )}
 
