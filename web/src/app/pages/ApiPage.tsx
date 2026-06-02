@@ -105,11 +105,11 @@ const PLANS = [
     price: "$29",
     period: "/month",
     accent: "#00FF41",
-    requests: "10,000 req / day",
+    requests: "5,000 req / day",
     badge: "POPULAR",
     desc: "For builders, trading bots, and apps.",
     features: [
-      { ok: true, text: "10,000 requests per day" },
+      { ok: true, text: "5,000 requests per day" },
       { ok: true, text: "Full JSON response" },
       { ok: true, text: "Badge embed (SVG)" },
       { ok: true, text: "Bulk scoring (100 tokens)" },
@@ -147,7 +147,7 @@ const PLANS = [
     price: "4 SOL",
     period: "one-time",
     accent: "#FFD700",
-    requests: "10,000 req / day",
+    requests: "5,000 req / day",
     badge: "LIMITED 444",
     desc: "Founding member · Lifetime PRO access.",
     features: [
@@ -165,7 +165,7 @@ const PLANS = [
 ] as const;
 
 const FEATURE_MATRIX = [
-  { label: "Requests / day",     free: "50",    pro: "10,000",  ent: "Unlimited", nft: "10,000"  },
+  { label: "Requests / day",     free: "50",    pro: "5,000",   ent: "Unlimited", nft: "5,000"   },
   { label: "Bulk scoring",       free: false,   pro: "100",     ent: "500",       nft: "100"     },
   { label: "Webhooks",           free: false,   pro: true,      ent: true,        nft: true      },
   { label: "Score history",      free: false,   pro: "90 days", ent: "365 days",  nft: "90 days" },
