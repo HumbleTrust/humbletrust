@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Shield, Rocket, Lock, ExternalLink, Github, Twitter,
@@ -251,14 +252,14 @@ export function AboutPage({ onTabChange }: AboutPageProps) {
         </GlassPanel>
       </motion.div>
 
-      {/* ── Pitch Modal ── */}
+      {/* ── Pitch Modal — rendered via portal to escape parent stacking context ── */}
       <AnimatePresence>
-        {pitchOpen && (
+        {pitchOpen && createPortal(
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex flex-col"
+            className="fixed inset-0 z-[9999] flex flex-col"
             style={{ background: "rgba(4,4,12,0.97)", backdropFilter: "blur(12px)" }}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/8 shrink-0">
@@ -295,7 +296,8 @@ export function AboutPage({ onTabChange }: AboutPageProps) {
                 <div className="text-white/30 text-sm animate-pulse">Loading pitch…</div>
               </div>
             )}
-          </motion.div>
+          </motion.div>,
+          document.body
         )}
       </AnimatePresence>
 
