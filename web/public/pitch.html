@@ -102,6 +102,7 @@ h2{font-size:clamp(19px,2.7vw,35px);font-weight:800;line-height:1.1;margin-botto
 </style>
 </head>
 <body>
+<canvas id="hxbg" style="position:fixed;inset:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;"></canvas>
 <div id="prog"></div>
 <div class="deck" id="deck">
 
@@ -685,6 +686,94 @@ window.addEventListener("load", function() {
     }
   });
 });
+
+// ── Honeycomb hex background (3D style) ────────────────────────────────────
+(function () {
+  var c = document.getElementById('hxbg');
+  if (!c) return;
+  var ctx = c.getContext('2d');
+
+  function hexPath(cx, cy, R) {
+    ctx.beginPath();
+    for (var i = 0; i < 6; i++) {
+      var a = Math.PI / 2 + Math.PI / 3 * i;
+      i === 0
+        ? ctx.moveTo(cx + R * Math.cos(a), cy + R * Math.sin(a))
+        : ctx.lineTo(cx + R * Math.cos(a), cy + R * Math.sin(a));
+    }
+    ctx.closePath();
+  }
+
+  function draw() {
+    c.width  = window.innerWidth;
+    c.height = window.innerHeight;
+    var W = c.width, H = c.height;
+    var R   = 22;
+    var cw  = R * Math.sqrt(3);
+    var rh  = R * 1.5;
+    ctx.clearRect(0, 0, W, H);
+
+    // Seed for deterministic "glow" hexes
+    var glowSet = new Set();
+    for (var g = 0; g < 18; g++) {
+      glowSet.add((g * 137 + 53) % 200);
+    }
+
+    var idx = 0;
+    for (var row = -1; row * rh < H + R * 2; row++) {
+      for (var col = -1; col * cw < W + cw * 2; col++) {
+        var cx = col * cw + (row % 2 !== 0 ? cw / 2 : 0);
+        var cy = row * rh;
+        var v  = (Math.abs(row * 13 + col * 7)) % 11;
+        var isGlow  = glowSet.has(idx % 200);
+        var isPurp  = v < 3;
+        idx++;
+
+        // ── fill: radial gradient for 3D "face" effect ──
+        var gr = ctx.createRadialGradient(
+          cx - R * 0.25, cy - R * 0.25, 0,   // light source: top-left
+          cx, cy, R * 1.1
+        );
+        if (isPurp) {
+          gr.addColorStop(0, isGlow ? 'rgba(176,38,255,0.18)' : 'rgba(176,38,255,0.09)');
+          gr.addColorStop(1, 'rgba(176,38,255,0.01)');
+        } else {
+          gr.addColorStop(0, isGlow ? 'rgba(0,255,65,0.14)' : 'rgba(0,255,65,0.07)');
+          gr.addColorStop(1, 'rgba(0,255,65,0.01)');
+        }
+        hexPath(cx, cy, R - 0.5);
+        ctx.fillStyle = gr;
+        ctx.fill();
+
+        // ── outer edge ──
+        hexPath(cx, cy, R - 0.5);
+        ctx.strokeStyle = isPurp
+          ? (isGlow ? 'rgba(176,38,255,0.50)' : 'rgba(176,38,255,0.18)')
+          : (isGlow ? 'rgba(0,255,65,0.45)'   : 'rgba(0,255,65,0.12)');
+        ctx.lineWidth = isGlow ? 1.2 : 0.6;
+        ctx.stroke();
+
+        // ── top-left highlight edge (3D light simulation) ──
+        if (isGlow) {
+          var a0 = Math.PI / 2;
+          ctx.beginPath();
+          ctx.moveTo(cx + R * Math.cos(a0), cy + R * Math.sin(a0));
+          for (var s = 1; s <= 2; s++) {
+            var a = a0 + Math.PI / 3 * s;
+            ctx.lineTo(cx + (R-0.5) * Math.cos(a), cy + (R-0.5) * Math.sin(a));
+          }
+          ctx.strokeStyle = isPurp ? 'rgba(220,140,255,0.55)' : 'rgba(140,255,160,0.55)';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  draw();
+  window.addEventListener('resize', draw);
+})();
+
 </script>
 </body>
 </html>
