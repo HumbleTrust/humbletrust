@@ -101,8 +101,8 @@ const LINKS = [
 ];
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-const PITCH_URL = "/HT Pich.html";
-const PITCH_SHARE_URL = "https://humbletrust.vercel.app/HT%20Pich.html";
+const PITCH_URL = "/pitch.html";
+const PITCH_SHARE_URL = "https://humbletrust.vercel.app/pitch.html";
 
 export function AboutPage({ onTabChange }: AboutPageProps) {
   const [pitchOpen, setPitchOpen] = useState(false);
