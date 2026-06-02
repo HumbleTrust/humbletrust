@@ -252,54 +252,57 @@ export function AboutPage({ onTabChange }: AboutPageProps) {
         </GlassPanel>
       </motion.div>
 
-      {/* ── Pitch Modal — rendered via portal to escape parent stacking context ── */}
-      <AnimatePresence>
-        {pitchOpen && createPortal(
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[9999] flex flex-col"
-            style={{ background: "rgba(4,4,12,0.97)", backdropFilter: "blur(12px)" }}
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/8 shrink-0">
-              <div className="flex items-center gap-2">
-                <img src="/HT.PNG" alt="" className="w-7 h-7 rounded-lg object-cover" />
-                <span className="text-sm font-semibold text-white">HumbleTrust — Investor Pitch 2026</span>
-                <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[#00FF41]/10 border border-[#00FF41]/20 text-[#00FF41] hidden sm:inline">Seed Round</span>
+      {/* ── Pitch Modal — portal renders in document.body, AnimatePresence lives inside ── */}
+      {createPortal(
+        <AnimatePresence>
+          {pitchOpen && (
+            <motion.div
+              key="pitch-modal"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 flex flex-col"
+              style={{ zIndex: 9999, background: "rgba(4,4,12,0.97)", backdropFilter: "blur(12px)" }}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/8 shrink-0">
+                <div className="flex items-center gap-2">
+                  <img src="/HT.PNG" alt="" className="w-7 h-7 rounded-lg object-cover" />
+                  <span className="text-sm font-semibold text-white">HumbleTrust — Investor Pitch 2026</span>
+                  <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[#00FF41]/10 border border-[#00FF41]/20 text-[#00FF41] hidden sm:inline">Seed Round</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={PITCH_URL}
+                    download="HumbleTrust-Pitch-2026.html"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-[#B026FF]/30 bg-[#B026FF]/8 text-white/60 hover:bg-[#B026FF]/15 transition-all"
+                  >
+                    <Download size={12} /> Download
+                  </a>
+                  <button
+                    onClick={() => setPitchOpen(false)}
+                    className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/50 hover:bg-white/12 hover:text-white transition-all"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <a
-                  href={PITCH_URL}
-                  download="HumbleTrust-Pitch-2026.html"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-[#B026FF]/30 bg-[#B026FF]/8 text-white/60 hover:bg-[#B026FF]/15 transition-all"
-                >
-                  <Download size={12} /> Download
-                </a>
-                <button
-                  onClick={() => setPitchOpen(false)}
-                  className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/50 hover:bg-white/12 hover:text-white transition-all"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            </div>
-            {pitchBlobUrl ? (
-              <iframe
-                src={pitchBlobUrl}
-                title="HumbleTrust Investor Pitch"
-                className="flex-1 w-full border-0"
-                allow="fullscreen"
-              />
-            ) : (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="text-white/30 text-sm animate-pulse">Loading pitch…</div>
-              </div>
-            )}
-          </motion.div>,
-          document.body
-        )}
-      </AnimatePresence>
+              {pitchBlobUrl ? (
+                <iframe
+                  src={pitchBlobUrl}
+                  title="HumbleTrust Investor Pitch"
+                  className="flex-1 w-full border-0"
+                  allow="fullscreen"
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-white/30 text-sm animate-pulse">Loading pitch…</div>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* ── Story / Timeline ── */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
