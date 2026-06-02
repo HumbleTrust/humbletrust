@@ -7,7 +7,9 @@ module.exports.config = { api: { bodyParser: false } };
 
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-if (!WEBHOOK_SECRET) console.warn("[stripe] STRIPE_WEBHOOK_SECRET is not set — webhook verification disabled");
+if (!WEBHOOK_SECRET && process.env.NODE_ENV === "production") {
+  throw new Error("[stripe] STRIPE_WEBHOOK_SECRET is required in production");
+}
 
 const PRICES = {
   pro:        process.env.STRIPE_PRICE_PRO,
@@ -46,14 +48,14 @@ async function provisionApiKey(customerId, email, plan) {
     owner_email: email || null, owner_wallet: null,
     plan, daily_limit: limit,
     label: `Stripe ${plan} subscription`,
-    metadata: { stripe_customer_id: customerId },
+    stripe_customer_id: customerId,
   });
   if (error) throw error;
   return key;
 }
 
 async function revokeKeysByCustomer(customerId) {
-  await getClient().from("api_keys").update({ revoked: true }).contains("metadata", { stripe_customer_id: customerId });
+  await getClient().from("api_keys").update({ revoked: true }).eq("stripe_customer_id", customerId);
 }
 
 // POST /api/stripe/checkout — create Stripe Checkout session

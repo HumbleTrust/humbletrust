@@ -739,10 +739,10 @@ export const ApiPage = () => {
                 rel="noreferrer"
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-[#00FF41]/10 border border-[#00FF41]/30 text-[#00FF41] text-sm hover:bg-[#00FF41]/20 transition-all"
               >
-                <Chrome size={13} /> Установить
+                <Chrome size={13} /> Install
               </a>
             </div>
-            <p className="text-[10px] text-white/20 text-center -mt-2">Ручная установка через GitHub · Chrome Web Store скоро</p>
+            <p className="text-[10px] text-white/20 text-center -mt-2">Manual install via GitHub · Chrome Web Store coming soon</p>
           </GlassPanel>
 
           {/* Widget */}
@@ -827,7 +827,7 @@ export const ApiPage = () => {
                   href={NFT_EMAIL}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-lg border border-[#FFD700]/30 text-[#FFD700] text-sm hover:bg-[#FFD700]/10 transition-all"
                 >
-                  Войти в вейтлист минта
+                  Join Mint Waitlist
                 </a>
               </div>
             </div>

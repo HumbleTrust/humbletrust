@@ -326,7 +326,7 @@ export function Dashboard({ onTabChange }: DashboardProps) {
                 <h3 className="text-lg font-bold text-white">Creator Earnings</h3>
               </div>
               <div className="text-right">
-                <p className="text-xs text-white/40">Всего заработано (0.5% комиссия)</p>
+                <p className="text-xs text-white/40">Total earned (0.5% fee)</p>
                 <p className="text-lg font-bold text-neon-green font-mono">
                   ◎ {earnings.reduce((s, e) => s + e.solEarned, 0).toFixed(4)}
                 </p>
@@ -343,7 +343,7 @@ export function Dashboard({ onTabChange }: DashboardProps) {
                 </div>
               ))}
             </div>
-            <p className="text-xs text-white/30 mt-3">Комиссия автоматически отправляется на кошелёк создателя при каждой сделке · на основе последних 500 трейдов</p>
+            <p className="text-xs text-white/30 mt-3">Fees auto-sent to creator wallet on each trade · based on last 500 trades</p>
           </GlassPanel>
         </motion.div>
       )}

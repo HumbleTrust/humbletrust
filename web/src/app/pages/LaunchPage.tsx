@@ -365,7 +365,7 @@ export function LaunchPage() {
     return {
       initialPriceSolPerMillion: perMillion(initialPrice).toFixed(6),
       gradPriceSolPerMillion: perMillion(gradPrice).toFixed(4),
-      expectedRaiseSol: 50,
+      expectedRaiseSol: S_grad / 1e9,
     };
   }, [isV2Launch, initialSolNum, curveLiquidity, curveType]);
 

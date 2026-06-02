@@ -262,7 +262,7 @@ export function Portfolio() {
           <GlassPanel className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-white">LP Positions</h3>
-              <span className="text-xs text-white/40">Доход после Raydium graduation</span>
+              <span className="text-xs text-white/40">Earnings after Raydium graduation</span>
             </div>
             <div className="space-y-3">
               {savedTokens.filter(t => t.launchMode === "v2").map(token => {
@@ -293,7 +293,7 @@ export function Portfolio() {
                         <p className="text-sm font-bold text-neon-green">{isPremium ? "60%" : "40%"}</p>
                       </div>
                       <div className="p-2 rounded bg-black/20">
-                        <p className="text-xs text-white/40 mb-1">Статус</p>
+                        <p className="text-xs text-white/40 mb-1">Status</p>
                         <p className="text-sm font-bold text-white/60">Devnet</p>
                       </div>
                     </div>
@@ -302,7 +302,7 @@ export function Portfolio() {
               })}
             </div>
             <p className="text-xs text-white/30 mt-3">
-              Доля LP-комиссий активируется после выхода на Raydium · Premium tier: Trust Score ≥ 80
+              LP fee share activates after Raydium graduation · Premium tier: Trust Score ≥ 80
             </p>
           </GlassPanel>
         </motion.div>
