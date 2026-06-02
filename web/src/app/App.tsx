@@ -85,9 +85,9 @@ export default function App() {
   return (
     <ErrorBoundary>
       <WalletProvider>
-        <div className="min-h-screen bg-[#0a0a14] text-white relative overflow-hidden">
+        <div className="min-h-screen text-white relative">
           {/* ── Global video background ── */}
-          <div className="fixed inset-0 -z-10 pointer-events-none">
+          <div className="fixed inset-0 z-0 pointer-events-none">
             <video
               src="/HTVid.mp4"
               autoPlay
@@ -95,10 +95,10 @@ export default function App() {
               muted
               playsInline
               className="absolute inset-0 w-full h-full object-cover"
-              style={{ filter: "brightness(0.18) saturate(1.3)" }}
+              style={{ filter: "brightness(0.35) saturate(1.4)" }}
             />
             <div className="absolute inset-0" style={{
-              background: "radial-gradient(ellipse at 50% 30%, rgba(10,10,20,0.3) 0%, rgba(10,10,20,0.75) 60%, #0a0a14 100%)"
+              background: "radial-gradient(ellipse at 50% 30%, rgba(10,10,20,0.5) 0%, rgba(10,10,20,0.82) 70%, #0a0a14 100%)"
             }} />
           </div>
           <HexagonBackground />
