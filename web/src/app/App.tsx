@@ -85,7 +85,22 @@ export default function App() {
   return (
     <ErrorBoundary>
       <WalletProvider>
-        <div className="min-h-screen bg-black text-white relative overflow-hidden">
+        <div className="min-h-screen bg-[#0a0a14] text-white relative overflow-hidden">
+          {/* ── Global video background ── */}
+          <div className="fixed inset-0 -z-10 pointer-events-none">
+            <video
+              src="/HTVid.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover"
+              style={{ filter: "brightness(0.18) saturate(1.3)" }}
+            />
+            <div className="absolute inset-0" style={{
+              background: "radial-gradient(ellipse at 50% 30%, rgba(10,10,20,0.3) 0%, rgba(10,10,20,0.75) 60%, #0a0a14 100%)"
+            }} />
+          </div>
           <HexagonBackground />
           <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
           <div className="relative z-10 md:ml-64 flex flex-col min-h-screen">
