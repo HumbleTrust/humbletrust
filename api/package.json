@@ -1,5 +1,8 @@
 {
   "type": "commonjs",
+  "scripts": {
+    "build": "find . -name '*.js' -not -path '*/node_modules/*' | xargs node --check"
+  },
   "dependencies": {
     "@solana/web3.js": "^1.98.4",
     "stripe": "^22.2.0"
