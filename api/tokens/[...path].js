@@ -273,7 +273,7 @@ async function handleGetOhlcv(mint, req, res) {
 
 async function handleRecordTrade(mint, req, res) {
   const { signature, trader, side, source, token_amount, sol_amount, price_sol, block_time } = req.body || {};
-  if (!signature || signature.length < 10) return res.status(400).json({ error: "invalid signature" });
+  if (!signature || !/^[1-9A-HJ-NP-Za-km-z]{87,88}$/.test(signature)) return res.status(400).json({ error: "invalid signature" });
   if (!trader || !isValidWallet(trader))   return res.status(400).json({ error: "invalid trader" });
   if (!["buy", "sell"].includes(side))     return res.status(400).json({ error: "side must be buy or sell" });
   if (Number(token_amount) <= 0 || Number(sol_amount) <= 0 || Number(price_sol) <= 0)

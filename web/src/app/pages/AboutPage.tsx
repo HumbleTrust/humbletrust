@@ -207,6 +207,136 @@ export function AboutPage({ onTabChange }: AboutPageProps) {
         </GlassPanel>
       </motion.div>
 
+      {/* ── Creator Economics ── */}
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.11 }}>
+        <GlassPanel className="p-6 md:p-8 relative overflow-hidden">
+          <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-[#00FF41]/5 blur-3xl pointer-events-none" />
+          <div className="relative z-10">
+            <div className="text-xs font-mono tracking-widest uppercase text-[#00FF41]/60 mb-2">Creator Economics</div>
+            <h2 className="text-xl font-bold text-white mb-1">What creators actually earn</h2>
+            <p className="text-white/40 text-sm mb-6 max-w-2xl">
+              Every revenue stream is enforced on-chain — no middleman, no admin wallet.
+              Fees flow directly to the creator wallet in real time, automatically.
+            </p>
+
+            {/* 4 revenue streams */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+              <div className="p-4 rounded-xl bg-[#00FF41]/[0.05] border border-[#00FF41]/20">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-8 h-8 rounded-lg bg-[#00FF41]/10 border border-[#00FF41]/20 flex items-center justify-center shrink-0">
+                    <TrendingUp className="w-4 h-4 text-[#00FF41]" />
+                  </div>
+                  <span className="text-sm font-bold text-white">Trade Fee — every buy & sell</span>
+                </div>
+                <div className="text-3xl font-black text-[#00FF41] mb-1">0.5%</div>
+                <p className="text-xs text-white/45 leading-relaxed">
+                  Sent automatically to your wallet on every trade. No claim button needed.
+                  <span className="text-white/60 font-mono ml-1">CREATOR_FEE_BPS = 50</span> — immutable in the V2 contract.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-[#B026FF]/[0.05] border border-[#B026FF]/20">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-8 h-8 rounded-lg bg-[#B026FF]/10 border border-[#B026FF]/20 flex items-center justify-center shrink-0">
+                    <Lock className="w-4 h-4 text-[#B026FF]" />
+                  </div>
+                  <span className="text-sm font-bold text-white">Token Allocation — vested</span>
+                </div>
+                <div className="text-3xl font-black text-[#B026FF] mb-1">0–5%</div>
+                <p className="text-xs text-white/45 leading-relaxed">
+                  Of total token supply. Released in 3 tranches — Day 30, 60, 90 — directly to your wallet.
+                  Set once at launch, enforced by the smart contract. Cannot be front-run or blocked.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-[#14b8a6]/[0.05] border border-[#14b8a6]/20">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-8 h-8 rounded-lg bg-[#14b8a6]/10 border border-[#14b8a6]/20 flex items-center justify-center shrink-0">
+                    <ArrowLeftRight className="w-4 h-4 text-[#14b8a6]" />
+                  </div>
+                  <span className="text-sm font-bold text-white">LP Fees — post Raydium</span>
+                </div>
+                <div className="text-3xl font-black text-[#14b8a6] mb-1">40–60%</div>
+                <p className="text-xs text-white/45 leading-relaxed">
+                  After graduating to Raydium: Standard creators receive 40%, Premium receive 60% of all
+                  ongoing LP swap fees. Passive income claimable monthly.
+                  <span className="text-white/60 font-mono ml-1">LP_PREMIUM_BPS = 6000</span>
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-[#f59e0b]/[0.05] border border-[#f59e0b]/20">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-8 h-8 rounded-lg bg-[#f59e0b]/10 border border-[#f59e0b]/20 flex items-center justify-center shrink-0">
+                    <Rocket className="w-4 h-4 text-[#f59e0b]" />
+                  </div>
+                  <span className="text-sm font-bold text-white">Migration Reward — one time</span>
+                </div>
+                <div className="text-3xl font-black text-[#f59e0b] mb-1">0.1 SOL</div>
+                <p className="text-xs text-white/45 leading-relaxed">
+                  Paid to whoever triggers the Raydium graduation transaction when the bonding curve
+                  reaches 50 SOL. Incentivises the community to push tokens to mainnet liquidity.
+                </p>
+              </div>
+            </div>
+
+            {/* Worked example */}
+            <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.07] mb-5">
+              <div className="text-xs font-mono tracking-widest uppercase text-[#00FF41]/50 mb-4">
+                Real example — 1,000 SOL daily trading volume
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div>
+                  <div className="text-[10px] text-white/30 uppercase tracking-wide mb-1">Per day</div>
+                  <div className="text-xl font-black text-white">5 SOL</div>
+                  <div className="text-[10px] text-white/25 mt-0.5">0.5% × 1,000 SOL</div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-white/30 uppercase tracking-wide mb-1">Per month</div>
+                  <div className="text-xl font-black text-[#00FF41]">~150 SOL</div>
+                  <div className="text-[10px] text-white/25 mt-0.5">trade fees alone</div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-white/30 uppercase tracking-wide mb-1">After Raydium</div>
+                  <div className="text-xl font-black text-[#14b8a6]">+ LP fees</div>
+                  <div className="text-[10px] text-white/25 mt-0.5">40–60% of pool fees</div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-white/30 uppercase tracking-wide mb-1">Key insight</div>
+                  <div className="text-xl font-black text-[#B026FF]">Score = volume</div>
+                  <div className="text-[10px] text-white/25 mt-0.5">trust drives traffic</div>
+                </div>
+              </div>
+              <div className="mt-4 pt-4 border-t border-white/[0.06] text-xs text-white/30 leading-relaxed">
+                Higher TrustScore → more visibility in Discover → more traders → higher volume → more fees.
+                Creator earnings and protocol health are <strong className="text-white/50">fully aligned</strong>.
+              </div>
+            </div>
+
+            {/* Vesting schedule */}
+            <div>
+              <div className="text-xs font-mono tracking-widest uppercase text-white/30 mb-3">Token Vesting Schedule (creator allocation)</div>
+              <div className="flex items-stretch gap-2">
+                {[
+                  { day: "Day 30", pct: "33%", label: "Tranche 1", color: "#B026FF" },
+                  { day: "Day 60", pct: "33%", label: "Tranche 2", color: "#8b5cf6" },
+                  { day: "Day 90", pct: "34%", label: "Tranche 3", color: "#6366f1" },
+                ].map((t, i) => (
+                  <div key={i} className="flex-1 text-center p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                    <div className="text-[10px] text-white/30 mb-1">{t.day}</div>
+                    <div className="text-xl font-black mb-0.5" style={{ color: t.color }}>{t.pct}</div>
+                    <div className="text-[10px] text-white/30">{t.label}</div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-white/25 mt-3 leading-relaxed">
+                Each tranche is claimed on-chain directly to your wallet — no intermediary, no admin approval.
+                The contract enforces the schedule immutably from the moment of launch.
+              </p>
+            </div>
+          </div>
+        </GlassPanel>
+      </motion.div>
+
       {/* ── Investor Pitch ── */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
         <GlassPanel className="p-6 md:p-8 relative overflow-hidden" glow="purple">
