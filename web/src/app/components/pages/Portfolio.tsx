@@ -252,12 +252,68 @@ export function Portfolio() {
         </motion.div>
       </div>
 
+      {/* LP Positions */}
+      {savedTokens.filter(t => t.launchMode === "v2").length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <GlassPanel className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-white">LP Positions</h3>
+              <span className="text-xs text-white/40">Доход после Raydium graduation</span>
+            </div>
+            <div className="space-y-3">
+              {savedTokens.filter(t => t.launchMode === "v2").map(token => {
+                const isPremium = (token.trustScore ?? 0) >= 80;
+                return (
+                  <div key={token.mint} className="p-4 rounded-lg bg-white/5 border border-white/10 hover:border-white/20 transition-all">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <p className="font-medium text-white">
+                          {token.name || "Token"}{" "}
+                          <span className="text-neon-green/70">${token.symbol}</span>
+                        </p>
+                        <p className="font-mono text-xs text-white/40">
+                          {token.mint.slice(0, 8)}...{token.mint.slice(-6)}
+                        </p>
+                      </div>
+                      <span className="text-xs px-2 py-0.5 rounded bg-neon-green/20 text-neon-green font-mono">V2 Curve</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 text-center">
+                      <div className="p-2 rounded bg-black/20">
+                        <p className="text-xs text-white/40 mb-1">LP Tier</p>
+                        <p className={`text-sm font-bold ${isPremium ? "text-neon-purple" : "text-white"}`}>
+                          {isPremium ? "Premium" : "Standard"}
+                        </p>
+                      </div>
+                      <div className="p-2 rounded bg-black/20">
+                        <p className="text-xs text-white/40 mb-1">Fee Share</p>
+                        <p className="text-sm font-bold text-neon-green">{isPremium ? "60%" : "40%"}</p>
+                      </div>
+                      <div className="p-2 rounded bg-black/20">
+                        <p className="text-xs text-white/40 mb-1">Статус</p>
+                        <p className="text-sm font-bold text-white/60">Devnet</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-xs text-white/30 mt-3">
+              Доля LP-комиссий активируется после выхода на Raydium · Premium tier: Trust Score ≥ 80
+            </p>
+          </GlassPanel>
+        </motion.div>
+      )}
+
       {/* HumbleTrust Launches */}
       {savedTokens.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+          transition={{ delay: 0.4 }}
         >
           <GlassPanel className="p-6">
             <h3 className="font-bold text-white mb-4">Your HumbleTrust Launches</h3>

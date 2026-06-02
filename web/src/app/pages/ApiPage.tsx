@@ -734,14 +734,15 @@ export const ApiPage = () => {
                 <ExternalLink size={13} /> View on GitHub
               </a>
               <a
-                href="#"
-                onClick={e => e.preventDefault()}
+                href="https://github.com/humbletrust/humbletrust/tree/main/extension"
+                target="_blank"
+                rel="noreferrer"
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-[#00FF41]/10 border border-[#00FF41]/30 text-[#00FF41] text-sm hover:bg-[#00FF41]/20 transition-all"
               >
-                <Chrome size={13} /> Add to Chrome
+                <Chrome size={13} /> Установить
               </a>
             </div>
-            <p className="text-[10px] text-white/20 text-center -mt-2">Chrome Web Store listing coming soon</p>
+            <p className="text-[10px] text-white/20 text-center -mt-2">Ручная установка через GitHub · Chrome Web Store скоро</p>
           </GlassPanel>
 
           {/* Widget */}
@@ -823,11 +824,10 @@ export const ApiPage = () => {
                   <Star size={14} /> Join Waitlist
                 </a>
                 <a
-                  href="#"
-                  onClick={e => e.preventDefault()}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg border border-[#FFD700]/30 text-[#FFD700] text-sm hover:bg-[#FFD700]/10 transition-all cursor-not-allowed opacity-60"
+                  href={NFT_EMAIL}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg border border-[#FFD700]/30 text-[#FFD700] text-sm hover:bg-[#FFD700]/10 transition-all"
                 >
-                  Mint Opens Soon
+                  Войти в вейтлист минта
                 </a>
               </div>
             </div>

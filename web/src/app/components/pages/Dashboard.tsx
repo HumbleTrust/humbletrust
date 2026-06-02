@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { ArrowUpRight, TrendingUp, Wallet, Activity, Clock, ExternalLink, RefreshCw, Rocket, ArrowLeftRight, Compass, Award } from "lucide-react";
+import { ArrowUpRight, TrendingUp, Wallet, Activity, Clock, ExternalLink, RefreshCw, Rocket, ArrowLeftRight, Compass, Award, DollarSign } from "lucide-react";
 import { GlassPanel } from "../GlassPanel";
 import { motion } from "motion/react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
@@ -31,6 +31,7 @@ export function Dashboard({ onTabChange }: DashboardProps) {
   const [splTokens, setSplTokens] = useState<SplToken[]>([]);
   const [recentTxs, setRecentTxs] = useState<RecentTx[]>([]);
   const [loading, setLoading] = useState(false);
+  const [earnings, setEarnings] = useState<{ mint: string; symbol: string; solEarned: number; tradeCount: number }[]>([]);
 
   const savedTokens = listTokens();
 
@@ -82,6 +83,23 @@ export function Dashboard({ onTabChange }: DashboardProps) {
       setRecentTxs([]);
     }
   }, [connected, publicKey?.toBase58()]);
+
+  useEffect(() => {
+    if (!connected || savedTokens.length === 0) { setEarnings([]); return; }
+    Promise.all(
+      savedTokens.slice(0, 5).map(async t => {
+        try {
+          const res = await fetch(`/api/tokens/${t.mint}/trades?limit=500`);
+          const data = await res.json();
+          const trades: any[] = data.trades || [];
+          const solEarned = trades.reduce((s, r) => s + (Number(r.sol_amount) || 0) * 0.005, 0);
+          return { mint: t.mint, symbol: t.symbol || "?", solEarned, tradeCount: trades.length };
+        } catch {
+          return { mint: t.mint, symbol: t.symbol || "?", solEarned: 0, tradeCount: 0 };
+        }
+      })
+    ).then(setEarnings);
+  }, [connected, savedTokens.length]);
 
   const quickActions = [
     { label: "Trade", tab: "trade", icon: ArrowLeftRight, desc: "Buy & sell on curve", color: "#00FF41" },
@@ -292,6 +310,40 @@ export function Dashboard({ onTabChange }: DashboardProps) {
                 </div>
               ))}
             </div>
+          </GlassPanel>
+        </motion.div>
+      )}
+
+      {/* Creator Earnings */}
+      {connected && earnings.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
+          <GlassPanel className="p-6" glow="green">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-neon-green/20 flex items-center justify-center">
+                  <DollarSign className="w-4 h-4 text-neon-green" />
+                </div>
+                <h3 className="text-lg font-bold text-white">Creator Earnings</h3>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-white/40">Всего заработано (0.5% комиссия)</p>
+                <p className="text-lg font-bold text-neon-green font-mono">
+                  ◎ {earnings.reduce((s, e) => s + e.solEarned, 0).toFixed(4)}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {earnings.map(e => (
+                <div key={e.mint} className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
+                  <div>
+                    <p className="font-medium text-white text-sm">${e.symbol}</p>
+                    <p className="text-xs text-white/40">{e.tradeCount} trades</p>
+                  </div>
+                  <p className="font-mono font-bold text-neon-green">◎ {e.solEarned.toFixed(4)}</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-white/30 mt-3">Комиссия автоматически отправляется на кошелёк создателя при каждой сделке · на основе последних 500 трейдов</p>
           </GlassPanel>
         </motion.div>
       )}
