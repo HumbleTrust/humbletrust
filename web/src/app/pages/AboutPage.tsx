@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Shield, Rocket, Lock, ExternalLink, Github, Twitter,
@@ -107,6 +107,24 @@ const PITCH_SHARE_URL = "https://humbletrust.vercel.app/pitch.html";
 export function AboutPage({ onTabChange }: AboutPageProps) {
   const [pitchOpen, setPitchOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [pitchBlobUrl, setPitchBlobUrl] = useState<string | null>(null);
+  const blobRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!pitchOpen || blobRef.current) return;
+    fetch(PITCH_URL)
+      .then(r => r.text())
+      .then(html => {
+        const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+        blobRef.current = url;
+        setPitchBlobUrl(url);
+      })
+      .catch(() => setPitchBlobUrl(PITCH_URL));
+  }, [pitchOpen]);
+
+  useEffect(() => {
+    return () => { if (blobRef.current) URL.revokeObjectURL(blobRef.current); };
+  }, []);
 
   function copyLink() {
     navigator.clipboard.writeText(PITCH_SHARE_URL).then(() => {
@@ -265,12 +283,18 @@ export function AboutPage({ onTabChange }: AboutPageProps) {
                 </button>
               </div>
             </div>
-            <iframe
-              src={PITCH_URL}
-              title="HumbleTrust Investor Pitch"
-              className="flex-1 w-full border-0"
-              allow="fullscreen"
-            />
+            {pitchBlobUrl ? (
+              <iframe
+                src={pitchBlobUrl}
+                title="HumbleTrust Investor Pitch"
+                className="flex-1 w-full border-0"
+                allow="fullscreen"
+              />
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-white/30 text-sm animate-pulse">Loading pitch…</div>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
