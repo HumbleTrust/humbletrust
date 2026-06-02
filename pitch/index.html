@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HumbleTrust — Investor Pitch 2026</title>
+<style>
+  :root {
+    --green: #00FF41;
+    --purple: #B026FF;
+    --blue: #00D4FF;
+    --gold: #FFD700;
+    --bg: #06060f;
+    --panel: rgba(255,255,255,0.04);
+    --border: rgba(255,255,255,0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    overflow: hidden;
+    height: 100vh;
+  }
+  /* ─── Slides ─────────────────────────────────────────────── */
+  .deck { width: 100%; height: 100vh; position: relative; }
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    padding: 48px 64px;
+    opacity: 0; pointer-events: none;
+    transition: opacity .45s ease, transform .45s ease;
+    transform: translateX(40px);
+    overflow: hidden;
+  }
+  .slide.active {
+    opacity: 1; pointer-events: all; transform: translateX(0);
+  }
+  .slide.prev {
+    opacity: 0; transform: translateX(-40px);
+  }
+  /* ─── Background glows ───────────────────────────────────── */
+  .glow-green  { position: absolute; width: 500px; height: 500px; border-radius: 50%; background: radial-gradient(circle, rgba(0,255,65,.06) 0%, transparent 70%); pointer-events: none; top: -100px; right: -100px; }
+  .glow-purple { position: absolute; width: 400px; height: 400px; border-radius: 50%; background: radial-gradient(circle, rgba(176,38,255,.07) 0%, transparent 70%); pointer-events: none; bottom: -80px; left: -80px; }
+  /* ─── Nav ────────────────────────────────────────────────── */
+  #nav {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 16px; z-index: 100;
+    background: rgba(6,6,15,.85); border: 1px solid var(--border);
+    padding: 10px 24px; border-radius: 40px; backdrop-filter: blur(12px);
+  }
+  #nav button {
+    background: none; border: none; color: rgba(255,255,255,.5);
+    font-size: 18px; cursor: pointer; padding: 4px 8px;
+    transition: color .2s;
+  }
+  #nav button:hover { color: var(--green); }
+  #slide-counter { font-size: 12px; color: rgba(255,255,255,.3); font-mono: monospace; min-width: 48px; text-align: center; }
+  .dot-nav { display: flex; gap: 6px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.15); cursor: pointer; transition: background .2s, transform .2s; }
+  .dot.active { background: var(--green); transform: scale(1.3); }
+  /* ─── Typography ─────────────────────────────────────────── */
+  .eyebrow { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: rgba(0,255,65,.55); font-family: monospace; margin-bottom: 12px; }
+  .slide-title { font-size: clamp(28px, 3.5vw, 46px); font-weight: 800; line-height: 1.15; margin-bottom: 16px; }
+  .slide-sub   { font-size: 16px; color: rgba(255,255,255,.45); line-height: 1.65; max-width: 800px; }
+  .grad { background: linear-gradient(90deg, var(--green), #14F195 50%, var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  /* ─── Panels / Cards ─────────────────────────────────────── */
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 24px 28px;
+  }
+  .panel-grid { display: grid; gap: 16px; }
+  .col2 { grid-template-columns: 1fr 1fr; }
+  .col3 { grid-template-columns: 1fr 1fr 1fr; }
+  .col4 { grid-template-columns: repeat(4,1fr); }
+  /* ─── Stat boxes ─────────────────────────────────────────── */
+  .stat { text-align: center; padding: 20px 12px; }
+  .stat-val { font-size: 32px; font-weight: 800; font-family: monospace; }
+  .stat-label { font-size: 11px; color: rgba(255,255,255,.35); text-transform: uppercase; letter-spacing: .12em; margin-top: 4px; }
+  .stat-sub { font-size: 10px; color: rgba(255,255,255,.2); margin-top: 2px; }
+  /* ─── Progress bar ───────────────────────────────────────── */
+  .bar-wrap { margin: 8px 0; }
+  .bar-label { display: flex; justify-content: space-between; font-size: 11px; color: rgba(255,255,255,.4); margin-bottom: 4px; }
+  .bar-track { height: 6px; border-radius: 4px; background: rgba(255,255,255,.07); overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width 1.2s ease; }
+  /* ─── Timeline ───────────────────────────────────────────── */
+  .timeline { position: relative; padding-left: 28px; }
+  .timeline::before { content: ''; position: absolute; left: 6px; top: 8px; bottom: 0; width: 2px; background: linear-gradient(to bottom, var(--green), var(--purple), transparent); }
+  .tl-item { position: relative; margin-bottom: 20px; }
+  .tl-dot {
+    position: absolute; left: -24px; top: 4px;
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .tl-dot.done { border-color: var(--green); background: rgba(0,255,65,.15); }
+  .tl-dot.done::after { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+  .tl-dot.current { border-color: var(--green); background: rgba(0,255,65,.25); box-shadow: 0 0 12px rgba(0,255,65,.4); }
+  .tl-dot.current::after { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--green); animation: pulse 1.2s infinite; }
+  .tl-dot.future { border-color: rgba(255,255,255,.15); background: rgba(0,0,0,.5); }
+  .tl-phase { font-size: 10px; font-family: monospace; color: rgba(0,255,65,.45); margin-bottom: 2px; }
+  .tl-label { font-size: 14px; font-weight: 700; color: #fff; }
+  .tl-desc  { font-size: 12px; color: rgba(255,255,255,.35); line-height: 1.5; margin-top: 2px; }
+  /* ─── Fee flow ───────────────────────────────────────────── */
+  .fee-flow { display: flex; align-items: center; gap: 12px; padding: 16px; background: rgba(0,255,65,.04); border: 1px solid rgba(0,255,65,.12); border-radius: 12px; margin: 8px 0; }
+  .fee-arrow { color: rgba(0,255,65,.5); font-size: 20px; flex-shrink: 0; }
+  .fee-box { text-align: center; padding: 8px 12px; border-radius: 8px; background: rgba(0,0,0,.4); border: 1px solid rgba(255,255,255,.08); min-width: 80px; }
+  .fee-pct { font-size: 22px; font-weight: 800; font-family: monospace; }
+  .fee-name { font-size: 10px; color: rgba(255,255,255,.4); text-transform: uppercase; letter-spacing: .08em; }
+  /* ─── Vault model ────────────────────────────────────────── */
+  .vault-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+  .vault-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+  .vault-name { font-size: 13px; font-weight: 600; }
+  .vault-range { font-size: 11px; color: rgba(255,255,255,.35); }
+  .vault-desc { font-size: 11px; color: rgba(255,255,255,.4); line-height: 1.4; }
+  /* ─── Score bars ─────────────────────────────────────────── */
+  .score-tier { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; border: 1px solid; margin: 4px 0; }
+  /* ─── Donut chart ────────────────────────────────────────── */
+  .donut-wrap { display: flex; align-items: center; gap: 32px; }
+  .donut-legend { display: flex; flex-direction: column; gap: 8px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  /* ─── Big quote ──────────────────────────────────────────── */
+  .quote { font-size: clamp(18px, 2.2vw, 28px); font-weight: 700; line-height: 1.45; color: rgba(255,255,255,.85); position: relative; padding-left: 20px; }
+  .quote::before { content: ''; position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px; background: linear-gradient(to bottom, var(--green), var(--purple)); border-radius: 2px; }
+  /* ─── Animations ─────────────────────────────────────────── */
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.5)} }
+  @keyframes shimmer { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+  /* ─── Misc ───────────────────────────────────────────────── */
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 10px; font-family: monospace; font-weight: 700; letter-spacing: .08em; }
+  .badge-green  { background: rgba(0,255,65,.12);  border: 1px solid rgba(0,255,65,.25);  color: var(--green); }
+  .badge-purple { background: rgba(176,38,255,.12); border: 1px solid rgba(176,38,255,.25); color: var(--purple); }
+  .badge-gold   { background: rgba(255,215,0,.12);  border: 1px solid rgba(255,215,0,.25);  color: var(--gold); }
+  .badge-blue   { background: rgba(0,212,255,.12);  border: 1px solid rgba(0,212,255,.25);  color: var(--blue); }
+  .tag { font-size: 10px; color: rgba(255,255,255,.35); font-family: monospace; }
+  .flex { display: flex; }
+  .flex-col { display: flex; flex-direction: column; }
+  .gap-4 { gap: 16px; }
+  .gap-3 { gap: 12px; }
+  .gap-2 { gap: 8px; }
+  .mt-auto { margin-top: auto; }
+  .mt-4 { margin-top: 16px; }
+  .mt-6 { margin-top: 24px; }
+  .flex-1 { flex: 1; }
+  .items-center { align-items: center; }
+  .green { color: var(--green); }
+  .purple { color: var(--purple); }
+  .gold { color: var(--gold); }
+  .mono { font-family: monospace; }
+  svg text { fill: rgba(255,255,255,.55); font-size: 10px; font-family: monospace; }
+  /* ─── Slide progress bar ─────────────────────────────────── */
+  #progress { position: fixed; top: 0; left: 0; height: 2px; background: linear-gradient(90deg, var(--green), var(--purple)); transition: width .4s ease; z-index: 200; }
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+
+<div class="deck" id="deck">
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 1 — COVER                                          -->
+  <!-- ════════════════════════════════════════════════════════ -->
+  <div class="slide active" id="s1">
+    <div class="glow-green"></div>
+    <div class="glow-purple"></div>
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;max-width:900px">
+      <div class="eyebrow">Investor Presentation · June 2026 · Seed Round</div>
+      <h1 class="slide-title" style="font-size:clamp(38px,5vw,64px)">
+        <span class="grad">HumbleTrust</span><br>Protocol
+      </h1>
+      <p style="font-size:22px;color:rgba(255,255,255,.55);line-height:1.6;max-width:680px;margin-top:12px">
+        The first trust and security layer for Solana token launches.<br>
+        Every launch is provably honest — before the first trade.
+      </p>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:40px">
+        <span class="badge badge-green">● DEVNET LIVE</span>
+        <span class="badge badge-purple">V2 Bonding Curve</span>
+        <span class="badge badge-blue">TrustScore Engine</span>
+        <span class="badge badge-gold">444 NFT Badges</span>
+      </div>
+      <div style="margin-top:56px;padding-top:24px;border-top:1px solid rgba(255,255,255,.06);display:flex;gap:40px;flex-wrap:wrap">
+        <div><div style="font-size:11px;color:rgba(255,255,255,.25);margin-bottom:4px">WEBSITE</div><div style="font-size:13px;color:rgba(255,255,255,.6)">humbletrust.vercel.app</div></div>
+        <div><div style="font-size:11px;color:rgba(255,255,255,.25);margin-bottom:4px">TWITTER</div><div style="font-size:13px;color:rgba(255,255,255,.6)">@HumbleTrust2026</div></div>
+        <div><div style="font-size:11px;color:rgba(255,255,255,.25);margin-bottom:4px">CONTACT</div><div style="font-size:13px;color:rgba(255,255,255,.6)">humble.trust@outlook.com</div></div>
+        <div><div style="font-size:11px;color:rgba(255,255,255,.25);margin-bottom:4px">PROGRAM (V2)</div><div style="font-size:13px;font-family:monospace;color:var(--green);font-size:11px">FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 2 — THE PROBLEM                                    -->
+  <!-- ════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s2">
+    <div class="glow-purple"></div>
+    <div class="eyebrow">The Problem</div>
+    <h2 class="slide-title">The Solana launch ecosystem is <span style="color:#FF4D4D">broken by design</span></h2>
+    <div class="panel-grid col3 mt-4">
+      <div class="panel" style="border-color:rgba(255,77,77,.2)">
+        <div style="font-size:36px;font-weight:800;color:#FF4D4D;font-family:monospace">$2.4B</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:6px">Lost to rug pulls 2023–2025. Most happened within 24 hours of launch.</div>
+      </div>
+      <div class="panel" style="border-color:rgba(255,215,0,.2)">
+        <div style="font-size:36px;font-weight:800;color:var(--gold);font-family:monospace">97%</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:6px">Of new tokens on Pump.fun reach zero market cap within 30 days. Zero creator accountability.</div>
+      </div>
+      <div class="panel" style="border-color:rgba(0,212,255,.2)">
+        <div style="font-size:36px;font-weight:800;color:var(--blue);font-family:monospace">0</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:6px">Existing platforms enforce on-chain accountability. Anyone can launch anything. No consequences.</div>
+      </div>
+    </div>
+    <div class="panel mt-4" style="background:rgba(255,77,77,.04);border-color:rgba(255,77,77,.15)">
+      <div class="quote">
+        "Pump.fun proved the demand: millions of launches per month. But Pump.fun has <span style="color:#FF4D4D">zero trust infrastructure</span>. The market is huge and completely unprotected."
+      </div>
+    </div>
+    <div class="panel-grid col3 mt-4">
+      <div style="padding:16px 0">
+        <div style="font-size:11px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">Root causes</div>
+        <div style="font-size:13px;color:rgba(255,255,255,.55);line-height:2">
+          ✗ No on-chain liquidity lock enforcement<br>
+          ✗ No creator vesting schedule<br>
+          ✗ Mint authority never revoked<br>
+          ✗ No transparent price discovery<br>
+          ✗ No community complaint mechanism
+        </div>
+      </div>
+      <div style="padding:16px 0">
+        <div style="font-size:11px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">Market signals</div>
+        <div style="font-size:13px;color:rgba(255,255,255,.55);line-height:2">
+          → 4M+ tokens launched on Pump.fun<br>
+          → Raydium: $800M+ daily volume<br>
+          → Solana: #2 DeFi chain by TVL<br>
+          → Regulators increasing scrutiny<br>
+          → Retail demanding accountability
+        </div>
+      </div>
+      <div style="padding:16px 0">
+        <div style="font-size:11px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">The gap</div>
+        <div style="font-size:13px;color:rgba(255,255,255,.55);line-height:2">
+          → No "provably honest" launch standard<br>
+          → No trust signal buyers can trust<br>
+          → No incentive for creators to behave<br>
+          → No infrastructure for TrustScore<br>
+          → No reputation system on Solana
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 3 — THE SOLUTION                                   -->
+  <!-- ════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s3">
+    <div class="glow-green"></div>
+    <div class="eyebrow">The Solution</div>
+    <h2 class="slide-title">HumbleTrust: <span class="grad">trust enforced at the protocol level</span></h2>
+    <p class="slide-sub">Not a moderation layer. Not a database. On-chain rules that make honest launches the default — and rugs mechanically impossible.</p>
+    <div class="panel-grid col3 mt-4" style="gap:12px">
+      <div class="panel" style="border-color:rgba(0,255,65,.15)">
+        <div style="color:var(--green);font-size:22px;margin-bottom:10px">⛓</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px">On-chain Enforcement</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.4);line-height:1.6">Liquidity locked in PDA vaults. Creator allocation vested over 90 days. Mint authority revoked at launch. No exception, no override.</div>
+      </div>
+      <div class="panel" style="border-color:rgba(0,255,65,.15)">
+        <div style="color:var(--green);font-size:22px;margin-bottom:10px">📊</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px">TrustScore 0–100</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.4);line-height:1.6">Every token scored at launch from lock%, lock days, curve liquidity, creator allocation, burn rate. Score updates live on every trade and vote.</div>
+      </div>
+      <div class="panel" style="border-color:rgba(0,255,65,.15)">
+        <div style="color:var(--green);font-size:22px;margin-bottom:10px">🚀</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px">Bonding Curve → Raydium</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.4);line-height:1.6">Price discovered on-chain via V2 bonding curve. At 50 SOL: auto-graduate to Raydium CPMM pool. LP locked or burned — provably.</div>
+      </div>
+      <div class="panel" style="border-color:rgba(176,38,255,.15)">
+        <div style="color:var(--purple);font-size:22px;margin-bottom:10px">💰</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px">Creator Earns From Trades</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.4);line-height:1.6">0.5% of every buy AND sell goes to creator wallet in real SOL. Creators are incentivised to build communities, not dump.</div>
+      </div>
+      <div class="panel" style="border-color:rgba(176,38,255,.15)">
+        <div style="color:var(--purple);font-size:22px;margin-bottom:10px">🏆</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px">NFT Launch Certificate</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.4);line-height:1.6">Soulbound Token-2022 NFT minted to creator on launch. Permanent, non-transferable proof of honest launch parameters.</div>
+      </div>
+      <div class="panel" style="border-color:rgba(0,212,255,.15)">
+        <div style="color:var(--blue);font-size:22px;margin-bottom:10px">🌐</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px">Multi-chain TrustScore API</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.4);line-height:1.6">Score any token on Solana, ETH, BNB, TON, and 7 more chains. Sold as API subscription to protocols, bots, and data platforms.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 4 — HOW CREATORS EARN (from contracts)            -->
+  <!-- ════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s4">
+    <div class="glow-green"></div>
+    <div class="eyebrow">Creator Economics · Verified in Smart Contract Code</div>
+    <h2 class="slide-title">Creators earn <span class="grad">4 ways</span> — all enforced on-chain</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px">
+      <!-- Stream 1 -->
+      <div class="panel" style="border-color:rgba(0,255,65,.2);background:rgba(0,255,65,.03)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div style="width:36px;height:36px;border-radius:10px;background:rgba(0,255,65,.12);border:1px solid rgba(0,255,65,.25);display:flex;align-items:center;justify-content:center;font-size:16px">💸</div>
+          <div>
+            <div style="font-size:14px;font-weight:700">Trade Fee — Every Buy & Sell</div>
+            <div style="font-size:10px;color:rgba(0,255,65,.6);font-family:monospace">CREATOR_FEE_BPS = 50 → 0.5% per trade</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:rgba(255,255,255,.45);line-height:1.7">
+          On every buy and every sell on the V2 bonding curve, <strong style="color:#fff">0.5% of the SOL amount goes directly to the creator's wallet</strong> in real time — no claiming, no waiting. Encoded in <span class="mono" style="color:var(--green);font-size:10px">buy_v2</span> and <span class="mono" style="color:var(--green);font-size:10px">sell_v2</span>.
+        </div>
+        <div class="fee-flow" style="margin-top:12px">
+          <div class="fee-box"><div class="fee-pct" style="color:#fff">Buyer</div><div class="fee-name">pays SOL</div></div>
+          <div class="fee-arrow">→</div>
+          <div class="fee-box"><div class="fee-pct" style="color:var(--green)">0.5%</div><div class="fee-name">Creator</div></div>
+          <div class="fee-arrow">+</div>
+          <div class="fee-box"><div class="fee-pct" style="color:rgba(255,255,255,.4)">0.5%</div><div class="fee-name">Protocol</div></div>
+          <div class="fee-arrow">+</div>
+          <div class="fee-box"><div class="fee-pct" style="color:rgba(255,255,255,.7)">99%</div><div class="fee-name">Curve Pool</div></div>
+        </div>
+      </div>
+      <!-- Stream 2 -->
+      <div class="panel" style="border-color:rgba(176,38,255,.2);background:rgba(176,38,255,.03)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div style="width:36px;height:36px;border-radius:10px;background:rgba(176,38,255,.12);border:1px solid rgba(176,38,255,.25);display:flex;align-items:center;justify-content:center;font-size:16px">🗓</div>
+          <div>
+            <div style="font-size:14px;font-weight:700">Vesting — Creator Allocation</div>
+            <div style="font-size:10px;color:rgba(176,38,255,.7);font-family:monospace">0–5% of 1B tokens, in thirds</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:rgba(255,255,255,.45);line-height:1.7">
+          Creator sets aside 0–5% of 1,000,000,000 tokens at launch. Released in 3 tranches over 90 days — <strong style="color:#fff">33% at day 30, 33% at day 60, 34% at day 90</strong>. Cannot dump before lock period. Enforced in <span class="mono" style="color:var(--purple);font-size:10px">use_vesting_tranche_v2</span>.
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:12px">
+          <div style="text-align:center;padding:10px 6px;background:rgba(0,0,0,.3);border-radius:8px;border:1px solid rgba(176,38,255,.15)">
+            <div style="font-size:16px;font-weight:800;color:var(--purple)">33%</div>
+            <div style="font-size:9px;color:rgba(255,255,255,.3);margin-top:3px">Day 30</div>
+          </div>
+          <div style="text-align:center;padding:10px 6px;background:rgba(0,0,0,.3);border-radius:8px;border:1px solid rgba(176,38,255,.15)">
+            <div style="font-size:16px;font-weight:800;color:var(--purple)">33%</div>
+            <div style="font-size:9px;color:rgba(255,255,255,.3);margin-top:3px">Day 60</div>
+          </div>
+          <div style="text-align:center;padding:10px 6px;background:rgba(0,0,0,.3);border-radius:8px;border:1px solid rgba(176,38,255,.15)">
+            <div style="font-size:16px;font-weight:800;color:var(--purple)">34%</div>
+            <div style="font-size:9px;color:rgba(255,255,255,.3);margin-top:3px">Day 90</div>
+          </div>
+        </div>
+      </div>
+      <!-- Stream 3 -->
+      <div class="panel" style="border-color:rgba(0,212,255,.2);background:rgba(0,212,255,.03)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div style="width:36px;height:36px;border-radius:10px;background:rgba(0,212,255,.12);border:1px solid rgba(0,212,255,.25);display:flex;align-items:center;justify-content:center;font-size:16px">🏊</div>
+          <div>
+            <div style="font-size:14px;font-weight:700">LP Fees After Graduation</div>
+            <div style="font-size:10px;color:rgba(0,212,255,.6);font-family:monospace">40% Standard · 60% Premium</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:rgba(255,255,255,.45);line-height:1.7">
+          After graduating to Raydium CPMM, the LP is locked in a PDA vault. Every month, creator can call <span class="mono" style="color:var(--blue);font-size:10px">claim_lp_fees</span> to receive their share of accumulated trading fees. Premium creators earn more.
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+          <div style="padding:10px;background:rgba(0,0,0,.3);border:1px solid rgba(0,212,255,.12);border-radius:8px">
+            <div style="font-size:10px;color:rgba(255,255,255,.3);margin-bottom:4px">STANDARD TIER</div>
+            <div style="font-size:16px;font-weight:800;color:var(--blue)">40%</div>
+            <div style="font-size:9px;color:rgba(255,255,255,.3)">to creator each month</div>
+          </div>
+          <div style="padding:10px;background:rgba(0,0,0,.3);border:1px solid rgba(255,215,0,.15);border-radius:8px">
+            <div style="font-size:10px;color:rgba(255,255,255,.3);margin-bottom:4px">PREMIUM TIER</div>
+            <div style="font-size:16px;font-weight:800;color:var(--gold)">60%</div>
+            <div style="font-size:9px;color:rgba(255,255,255,.3)">to creator each month</div>
+          </div>
+        </div>
+      </div>
+      <!-- Stream 4 -->
+      <div class="panel" style="border-color:rgba(255,215,0,.2);background:rgba(255,215,0,.03)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,215,0,.12);border:1px solid rgba(255,215,0,.25);display:flex;align-items:center;justify-content:center;font-size:16px">🎯</div>
+          <div>
+            <div style="font-size:14px;font-weight:700">Migration Reward + Reputation</div>
+            <div style="font-size:10px;color:rgba(255,215,0,.6);font-family:monospace">0.1 SOL + TrustScore bonus</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:rgba(255,255,255,.45);line-height:1.7">
+          The wallet that triggers the Raydium migration receives <strong style="color:#fff">0.1 SOL (MIGRATION_REWARD_LAMPORTS)</strong> as a reward. Graduation also gives the creator's TrustScore a permanent <strong style="color:var(--gold)">+8 bonus</strong>. Higher score → bigger future rewards multiplier.
+        </div>
+        <div class="fee-flow" style="margin-top:12px">
+          <div class="fee-box"><div class="fee-pct" style="color:var(--gold);font-size:18px">50 SOL</div><div class="fee-name">Threshold</div></div>
+          <div class="fee-arrow">→</div>
+          <div class="fee-box"><div class="fee-pct" style="color:var(--green);font-size:18px">+0.1◎</div><div class="fee-name">Reward</div></div>
+          <div class="fee-arrow">+</div>
+          <div class="fee-box"><div class="fee-pct" style="color:var(--gold);font-size:18px">+8pts</div><div class="fee-name">TrustScore</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel mt-4" style="background:rgba(0,255,65,.03);border-color:rgba(0,255,65,.12);padding:14px 20px">
+      <div style="font-size:11px;color:rgba(255,255,255,.35);font-family:monospace">CONTRACT EVIDENCE: programs/humbletrust-v2/src/lib.rs — CREATOR_FEE_BPS=50, buy_v2:L815, sell_v2:L950, claim_lp_fees:L1060, use_vesting_tranche_v2:L547, MIGRATION_REWARD_LAMPORTS:L36</div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 5 — V2 ARCHITECTURE                               -->
+  <!-- ════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s5">
+    <div class="glow-purple"></div>
+    <div class="eyebrow">Protocol Architecture</div>
+    <h2 class="slide-title">Five-Vault Model — <span class="grad">total supply enforced on-chain</span></h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:20px">
+      <div>
+        <div style="font-size:12px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px;font-family:monospace">V2 Token Vaults (1B supply fixed)</div>
+        <div class="vault-row">
+          <div class="vault-icon" style="background:rgba(176,38,255,.15);border:1px solid rgba(176,38,255,.3)">🔒</div>
+          <div style="flex:1">
+            <div class="vault-name">Locked Vault <span style="color:rgba(255,255,255,.3);font-size:10px">[L]</span></div>
+            <div class="vault-range green">30–80% of supply</div>
+            <div class="vault-desc">Time-locked. Optional burn-on-unlock (25% or 50%). Cannot touch before lock_days expire.</div>
+          </div>
+        </div>
+        <div class="vault-row">
+          <div class="vault-icon" style="background:rgba(0,255,65,.12);border:1px solid rgba(0,255,65,.25)">👤</div>
+          <div style="flex:1">
+            <div class="vault-name">Creator Vault <span style="color:rgba(255,255,255,.3);font-size:10px">[C]</span></div>
+            <div class="vault-range" style="color:var(--green)">0–5% of supply</div>
+            <div class="vault-desc">Vested: 33% day-30, 33% day-60, 34% day-90. Can receive, burn, or add to circulation.</div>
+          </div>
+        </div>
+        <div class="vault-row">
+          <div class="vault-icon" style="background:rgba(0,212,255,.12);border:1px solid rgba(0,212,255,.25)">📈</div>
+          <div style="flex:1">
+            <div class="vault-name">Curve Pool Vault <span style="color:rgba(255,255,255,.3);font-size:10px">[Q]</span></div>
+            <div class="vault-range" style="color:var(--blue)">25–50% of supply</div>
+            <div class="vault-desc">Active bonding curve pool. Price moves via constant-product (CPMM) or quadratic formula.</div>
+          </div>
+        </div>
+        <div class="vault-row">
+          <div class="vault-icon" style="background:rgba(255,215,0,.12);border:1px solid rgba(255,215,0,.25)">🔄</div>
+          <div style="flex:1">
+            <div class="vault-name">Circulation Vault <span style="color:rgba(255,255,255,.3);font-size:10px">[R]</span></div>
+            <div class="vault-range" style="color:var(--gold)">15–40% of supply</div>
+            <div class="vault-desc">Public supply. Combined with Curve Vault: Q + R ≥ 50% enforced. Prevents insider concentration.</div>
+          </div>
+        </div>
+        <div class="vault-row" style="border:none">
+          <div class="vault-icon" style="background:rgba(20,241,149,.12);border:1px solid rgba(20,241,149,.25)">🎁</div>
+          <div style="flex:1">
+            <div class="vault-name">Airdrop Vault <span style="color:rgba(255,255,255,.3);font-size:10px">[A]</span></div>
+            <div class="vault-range" style="color:#14F195">0–5% of supply</div>
+            <div class="vault-desc">Monthly epoch distribution (airdrop_amount ÷ 12). Requires min_score ≥ 56 to unlock.</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;padding:10px 14px;border-radius:8px;background:rgba(0,255,65,.06);border:1px solid rgba(0,255,65,.15);font-size:11px;font-family:monospace;color:rgba(0,255,65,.7)">
+          L + C + Q + R + A = 100%  ·  Q + R ≥ 50%  ·  ENFORCED ON-CHAIN
+        </div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px;font-family:monospace">Graduation Flow</div>
+        <!-- SVG flowchart -->
+        <svg viewBox="0 0 320 380" width="100%" style="max-height:320px">
+          <!-- Boxes -->
+          <rect x="80" y="10" width="160" height="44" rx="8" fill="rgba(0,255,65,0.1)" stroke="rgba(0,255,65,0.3)" stroke-width="1"/>
+          <text x="160" y="30" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="11" font-weight="700">LAUNCH</text>
+          <text x="160" y="46" text-anchor="middle" fill="rgba(0,255,65,0.6)" font-size="9">Creator deposits SOL → Curve starts</text>
+
+          <rect x="80" y="90" width="160" height="44" rx="8" fill="rgba(0,212,255,0.08)" stroke="rgba(0,212,255,0.25)" stroke-width="1"/>
+          <text x="160" y="110" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="11" font-weight="700">BONDING CURVE</text>
+          <text x="160" y="126" text-anchor="middle" fill="rgba(0,212,255,0.5)" font-size="9">CPMM or Quadratic · 0.5% fee each side</text>
+
+          <rect x="80" y="170" width="160" height="44" rx="8" fill="rgba(255,215,0,0.08)" stroke="rgba(255,215,0,0.25)" stroke-width="1"/>
+          <text x="160" y="190" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="11" font-weight="700">50 SOL THRESHOLD</text>
+          <text x="160" y="206" text-anchor="middle" fill="rgba(255,215,0,0.5)" font-size="9">Curve raises 50 SOL → migration ready</text>
+
+          <rect x="80" y="250" width="160" height="44" rx="8" fill="rgba(176,38,255,0.1)" stroke="rgba(176,38,255,0.3)" stroke-width="1"/>
+          <text x="160" y="270" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="11" font-weight="700">RAYDIUM CPMM</text>
+          <text x="160" y="286" text-anchor="middle" fill="rgba(176,38,255,0.5)" font-size="9">Full SOL + tokens → Raydium pool</text>
+
+          <rect x="80" y="330" width="160" height="44" rx="8" fill="rgba(0,255,65,0.08)" stroke="rgba(0,255,65,0.2)" stroke-width="1"/>
+          <text x="160" y="350" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="11" font-weight="700">LP LOCKED / BURNED</text>
+          <text x="160" y="366" text-anchor="middle" fill="rgba(0,255,65,0.4)" font-size="9">Policy 0=Lock · 1=Burn · 2=To Creator</text>
+
+          <!-- Arrows -->
+          <line x1="160" y1="54" x2="160" y2="88" stroke="rgba(255,255,255,0.15)" stroke-width="1.5" marker-end="url(#arr)"/>
+          <line x1="160" y1="134" x2="160" y2="168" stroke="rgba(255,255,255,0.15)" stroke-width="1.5" marker-end="url(#arr)"/>
+          <line x1="160" y1="214" x2="160" y2="248" stroke="rgba(255,255,255,0.15)" stroke-width="1.5" marker-end="url(#arr)"/>
+          <line x1="160" y1="294" x2="160" y2="328" stroke="rgba(255,255,255,0.15)" stroke-width="1.5" marker-end="url(#arr)"/>
+
+          <!-- Side labels -->
+          <text x="250" y="110" fill="rgba(0,255,65,0.5)" font-size="9">+0.5% SOL</text>
+          <text x="250" y="120" fill="rgba(0,255,65,0.5)" font-size="9">→ Creator</text>
+          <text x="250" y="130" fill="rgba(0,255,65,0.3)" font-size="9">per trade</text>
+
+          <defs>
+            <marker id="arr" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L6,3 z" fill="rgba(255,255,255,0.2)"/>
+            </marker>
+          </defs>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 6 — TRUSTSCORE                                     -->
+  <!-- ════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s6">
+    <div class="glow-green"></div>
+    <div class="eyebrow">TrustScore System</div>
+    <h2 class="slide-title">0–100 score. <span class="grad">Entirely on-chain. No oracles.</span></h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:20px">
+      <div>
+        <div style="font-size:12px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px">Score Components (V2)</div>
+        <div class="bar-wrap">
+          <div class="bar-label"><span>Lock Duration</span><span class="green">max +25</span></div>
+          <div class="bar-track"><div class="bar-fill" style="width:100%;background:linear-gradient(90deg,#00FF41,#14F195)"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-label"><span>Lock Percentage</span><span class="green">max +20</span></div>
+          <div class="bar-track"><div class="bar-fill" style="width:80%;background:linear-gradient(90deg,#00FF41,#14F195)"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-label"><span>Burn Rate (0–100%)</span><span class="green">max +15</span></div>
+          <div class="bar-track"><div class="bar-fill" style="width:60%;background:linear-gradient(90deg,#14F195,#00D4FF)"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-label"><span>Curve Liquidity %</span><span class="green">max +15</span></div>
+          <div class="bar-track"><div class="bar-fill" style="width:60%;background:linear-gradient(90deg,#14F195,#00D4FF)"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-label"><span>Creator Allocation (≤5%)</span><span class="green">max +12</span></div>
+          <div class="bar-track"><div class="bar-fill" style="width:48%;background:linear-gradient(90deg,#00D4FF,#B026FF)"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-label"><span>Airdrop % (community reward)</span><span class="green">max +10</span></div>
+          <div class="bar-track"><div class="bar-fill" style="width:40%;background:linear-gradient(90deg,#00D4FF,#B026FF)"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-label"><span>Circulation % (public supply)</span><span class="green">max +8</span></div>
+          <div class="bar-track"><div class="bar-fill" style="width:32%;background:linear-gradient(90deg,#B026FF,#FF6B9D)"></div></div>
+        </div>
+        <div style="margin-top:12px;padding:10px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.06);border-radius:8px;font-size:11px;color:rgba(255,255,255,.35);line-height:1.7">
+          Dynamic adjustments: +8 verified creator · +8 graduation · +5 per clean vesting tranche · −18 >70% negative votes · −15 no activity · −25 >20 complaints
+        </div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px">Score Tiers</div>
+        <div class="score-tier" style="border-color:rgba(0,255,65,.3);background:rgba(0,255,65,.06)">
+          <div style="width:10px;height:10px;border-radius:50%;background:#00FF41;box-shadow:0 0 8px #00FF41;flex-shrink:0"></div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:800;color:#00FF41">ELITE · 85–100</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.35)">Maximum lock + burn + community airdrop. Highest rewards multiplier (3×).</div>
+          </div>
+        </div>
+        <div class="score-tier" style="border-color:rgba(20,241,149,.25);background:rgba(20,241,149,.04)">
+          <div style="width:10px;height:10px;border-radius:50%;background:#14F195;box-shadow:0 0 8px #14F195;flex-shrink:0"></div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:800;color:#14F195">STRONG · 70–84</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.35)">Good lock, clean vesting, verified creator. Eligible for airdrop epoch.</div>
+          </div>
+        </div>
+        <div class="score-tier" style="border-color:rgba(255,219,43,.2);background:rgba(255,219,43,.04)">
+          <div style="width:10px;height:10px;border-radius:50%;background:#FFDB2B;box-shadow:0 0 8px #FFDB2B;flex-shrink:0"></div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:800;color:#FFDB2B">OK · 40–69</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.35)">Average parameters. Token trading. Airdrop requires score ≥ 56.</div>
+          </div>
+        </div>
+        <div class="score-tier" style="border-color:rgba(255,122,47,.2);background:rgba(255,122,47,.04)">
+          <div style="width:10px;height:10px;border-radius:50%;background:#FF7A2F;box-shadow:0 0 8px #FF7A2F;flex-shrink:0"></div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:800;color:#FF7A2F">WEAK · 20–39</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.35)">Short lock, high creator allocation. Community flagged warning.</div>
+          </div>
+        </div>
+        <div class="score-tier" style="border-color:rgba(255,77,77,.25);background:rgba(255,77,77,.06)">
+          <div style="width:10px;height:10px;border-radius:50%;background:#FF4D4D;box-shadow:0 0 8px #FF4D4D;flex-shrink:0"></div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:800;color:#FF4D4D">DANGER · 0–19</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.35)">≥20 complaints + score &lt;30 → token FROZEN. Trading halted on-chain.</div>
+          </div>
+        </div>
+        <div style="margin-top:14px;padding:12px;border-radius:10px;background:rgba(0,255,65,.04);border:1px solid rgba(0,255,65,.1)">
+          <div style="font-size:11px;color:rgba(255,255,255,.35);line-height:1.7">Multi-chain TrustScore: GoPlus Security + RugCheck + DexScreener + Jupiter API + on-chain data for any token across Solana, ETH, BNB, TON, Avalanche, Polygon, Arbitrum, Base, Near, Tron.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 7 — BUSINESS MODEL                                 -->
+  <!-- ════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s7">
+    <div class="glow-purple"></div>
+    <div class="eyebrow">Business Model</div>
+    <h2 class="slide-title">Three revenue streams — <span class="grad">all live on devnet</span></h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:20px">
+      <!-- Stream 1 -->
+      <div class="panel" style="border-color:rgba(0,255,65,.2)">
+        <div style="font-size:11px;color:rgba(0,255,65,.6);text-transform:uppercase;letter-spacing:.1em;font-family:monospace;margin-bottom:12px">01 / Protocol Fee</div>
+        <div style="font-size:36px;font-weight:800;font-family:monospace;color:var(--green);margin-bottom:8px">1%</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.45);margin-bottom:16px;line-height:1.6">On every bonding curve trade. Non-negotiable, enforced in smart contract. Scales linearly with volume.</div>
+        <div style="padding:10px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.06);border-radius:8px;font-size:11px;color:rgba(255,255,255,.3)">
+          <div>At $1M/day volume → <span class="green">$10K/day</span></div>
+          <div>At $10M/day volume → <span class="green">$100K/day</span></div>
+          <div style="margin-top:6px;color:rgba(255,255,255,.2)">Source: PLATFORM_FEE_BPS=50 + CREATOR_FEE_BPS=50</div>
+        </div>
+      </div>
+      <!-- Stream 2 -->
+      <div class="panel" style="border-color:rgba(176,38,255,.2)">
+        <div style="font-size:11px;color:rgba(176,38,255,.6);text-transform:uppercase;letter-spacing:.1em;font-family:monospace;margin-bottom:12px">02 / API Subscriptions</div>
+        <div style="font-size:36px;font-weight:800;font-family:monospace;color:var(--purple);margin-bottom:8px">$29+</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.45);margin-bottom:16px;line-height:1.6">Monthly SaaS subscriptions via Stripe. TrustScore API for bots, platforms, data providers, trading terminals.</div>
+        <div style="display:grid;gap:6px">
+          <div style="display:flex;justify-content:space-between;padding:8px 10px;border-radius:6px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.05);font-size:11px">
+            <span style="color:rgba(255,255,255,.4)">Free</span>
+            <span style="color:rgba(255,255,255,.3)">50 req/day</span>
+            <span style="color:rgba(255,255,255,.3)">$0</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 10px;border-radius:6px;background:rgba(176,38,255,.08);border:1px solid rgba(176,38,255,.2);font-size:11px">
+            <span style="color:var(--purple);font-weight:700">Pro</span>
+            <span style="color:rgba(255,255,255,.5)">5K req/day</span>
+            <span style="color:var(--purple)">$29/mo</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 10px;border-radius:6px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.05);font-size:11px">
+            <span style="color:rgba(255,255,255,.6)">Enterprise</span>
+            <span style="color:rgba(255,255,255,.3)">Unlimited</span>
+            <span style="color:rgba(255,255,255,.5)">$299/mo</span>
+          </div>
+        </div>
+      </div>
+      <!-- Stream 3 -->
+      <div class="panel" style="border-color:rgba(255,215,0,.2)">
+        <div style="font-size:11px;color:rgba(255,215,0,.6);text-transform:uppercase;letter-spacing:.1em;font-family:monospace;margin-bottom:12px">03 / NFT Badges</div>
+        <div style="font-size:36px;font-weight:800;font-family:monospace;color:var(--gold);margin-bottom:8px">4 SOL</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.45);margin-bottom:16px;line-height:1.6">444 Zodiac Badge NFTs (4 rarity tiers). OG Pass = lifetime PRO access. One-time sale. 444 × 4 SOL = 1,776 SOL max.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="text-align:center;padding:8px;border-radius:6px;background:rgba(0,255,65,.08);border:1px solid rgba(0,255,65,.15);font-size:10px">
+            <div style="color:var(--green);font-weight:700">ELITE</div>
+            <div style="color:rgba(255,255,255,.3)">Tier 1</div>
+          </div>
+          <div style="text-align:center;padding:8px;border-radius:6px;background:rgba(20,241,149,.08);border:1px solid rgba(20,241,149,.15);font-size:10px">
+            <div style="color:#14F195;font-weight:700">STRONG</div>
+            <div style="color:rgba(255,255,255,.3)">Tier 2</div>
+          </div>
+          <div style="text-align:center;padding:8px;border-radius:6px;background:rgba(255,219,43,.08);border:1px solid rgba(255,219,43,.15);font-size:10px">
+            <div style="color:#FFDB2B;font-weight:700">OK</div>
+            <div style="color:rgba(255,255,255,.3)">Tier 3</div>
+          </div>
+          <div style="text-align:center;padding:8px;border-radius:6px;background:rgba(255,122,47,.08);border:1px solid rgba(255,122,47,.15);font-size:10px">
+            <div style="color:#FF7A2F;font-weight:700">WEAK</div>
+            <div style="color:rgba(255,255,255,.3)">Tier 4</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Revenue projection chart -->
+    <div class="panel mt-4" style="padding:20px 24px">
+      <div style="font-size:12px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:16px">Revenue Projection (Conservative)</div>
+      <svg viewBox="0 0 700 100" width="100%" style="overflow:visible">
+        <!-- Grid lines -->
+        <line x1="0" y1="80" x2="700" y2="80" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+        <line x1="0" y1="55" x2="700" y2="55" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+        <line x1="0" y1="30" x2="700" y2="30" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+        <!-- Bars: Protocol fee, API, NFT per quarter -->
+        <!-- Q1 2026 (devnet) -->
+        <rect x="20" y="74" width="40" height="6" fill="rgba(0,255,65,0.6)" rx="2"/>
+        <rect x="64" y="70" width="40" height="10" fill="rgba(176,38,255,0.6)" rx="2"/>
+        <rect x="108" y="60" width="40" height="20" fill="rgba(255,215,0,0.6)" rx="2"/>
+        <!-- Q3 2026 (mainnet launch) -->
+        <rect x="220" y="60" width="40" height="20" fill="rgba(0,255,65,0.6)" rx="2"/>
+        <rect x="264" y="65" width="40" height="15" fill="rgba(176,38,255,0.6)" rx="2"/>
+        <rect x="308" y="72" width="40" height="8" fill="rgba(255,215,0,0.6)" rx="2"/>
+        <!-- Q1 2027 -->
+        <rect x="420" y="30" width="40" height="50" fill="rgba(0,255,65,0.6)" rx="2"/>
+        <rect x="464" y="50" width="40" height="30" fill="rgba(176,38,255,0.6)" rx="2"/>
+        <rect x="508" y="68" width="40" height="12" fill="rgba(255,215,0,0.6)" rx="2"/>
+        <!-- Q3 2027 -->
+        <rect x="600" y="8" width="40" height="72" fill="rgba(0,255,65,0.7)" rx="2"/>
+        <rect x="644" y="35" width="40" height="45" fill="rgba(176,38,255,0.7)" rx="2"/>
+        <!-- Labels -->
+        <text x="100" y="96" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-size="9">Devnet Alpha</text>
+        <text x="300" y="96" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-size="9">Mainnet Launch</text>
+        <text x="500" y="96" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-size="9">Growth</text>
+        <text x="660" y="96" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-size="9">Scale</text>
+      </svg>
+      <div style="display:flex;gap:20px;margin-top:8px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:rgba(255,255,255,.35)"><div style="width:10px;height:10px;background:rgba(0,255,65,.7);border-radius:2px"></div> Protocol fees</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:rgba(255,255,255,.35)"><div style="width:10px;height:10px;background:rgba(176,38,255,.7);border-radius:2px"></div> API subscriptions</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:rgba(255,255,255,.35)"><div style="width:10px;height:10px;background:rgba(255,215,0,.7);border-radius:2px"></div> NFT / one-time</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 8 — WHAT WE BUILT                                  -->
+  <!-- ════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s8">
+    <div class="glow-green"></div>
+    <div class="eyebrow">Execution · Built in 3 months</div>
+    <h2 class="slide-title">Zero to <span class="grad">full-stack Solana protocol</span> — solo</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:18px">
+      <div>
+        <div style="font-size:12px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px">Development Progress</div>
+        <!-- Progress items -->
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:20px;height:20px;border-radius:50%;background:rgba(0,255,65,.15);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0"><div style="width:7px;height:7px;border-radius:50%;background:var(--green)"></div></div>
+            <div style="flex:1"><div style="font-size:13px;font-weight:600">V2 Bonding Curve Protocol</div><div style="font-size:10px;color:rgba(255,255,255,.3)">4,643 lines Rust/Anchor · 2 curve types · 5-vault model</div></div>
+            <span class="badge badge-green">LIVE</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:20px;height:20px;border-radius:50%;background:rgba(0,255,65,.15);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0"><div style="width:7px;height:7px;border-radius:50%;background:var(--green)"></div></div>
+            <div style="flex:1"><div style="font-size:13px;font-weight:600">Raydium CPMM Migration</div><div style="font-size:10px;color:rgba(255,255,255,.3)">Tested on devnet · Full LP lock/burn/creator policies</div></div>
+            <span class="badge badge-green">LIVE</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:20px;height:20px;border-radius:50%;background:rgba(0,255,65,.15);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0"><div style="width:7px;height:7px;border-radius:50%;background:var(--green)"></div></div>
+            <div style="flex:1"><div style="font-size:13px;font-weight:600">TrustScore Engine</div><div style="font-size:10px;color:rgba(255,255,255,.3)">10+ chains · GoPlus · RugCheck · DexScreener · Jupiter</div></div>
+            <span class="badge badge-green">LIVE</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:20px;height:20px;border-radius:50%;background:rgba(0,255,65,.15);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0"><div style="width:7px;height:7px;border-radius:50%;background:var(--green)"></div></div>
+            <div style="flex:1"><div style="font-size:13px;font-weight:600">API + Stripe Monetisation</div><div style="font-size:10px;color:rgba(255,255,255,.3)">Key gen · Rate limiting · Webhooks · Free/Pro/Enterprise</div></div>
+            <span class="badge badge-green">LIVE</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:20px;height:20px;border-radius:50%;background:rgba(0,255,65,.15);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0"><div style="width:7px;height:7px;border-radius:50%;background:var(--green)"></div></div>
+            <div style="flex:1"><div style="font-size:13px;font-weight:600">Chrome Extension</div><div style="font-size:10px;color:rgba(255,255,255,.3)">Published to Web Store · TrustScore on any page</div></div>
+            <span class="badge badge-green">LIVE</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:20px;height:20px;border-radius:50%;background:rgba(0,255,65,.15);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0"><div style="width:7px;height:7px;border-radius:50%;background:var(--green)"></div></div>
+            <div style="flex:1"><div style="font-size:13px;font-weight:600">NFT Zodiac Badges (444 pieces)</div><div style="font-size:10px;color:rgba(255,255,255,.3)">4-tier aura system · On-chain payment binding</div></div>
+            <span class="badge badge-green">LIVE</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:20px;height:20px;border-radius:50%;background:rgba(0,255,65,.15);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0"><div style="width:7px;height:7px;border-radius:50%;background:var(--green)"></div></div>
+            <div style="flex:1"><div style="font-size:13px;font-weight:600">Full Frontend · 12 Pages</div><div style="font-size:10px;color:rgba(255,255,255,.3)">19,157 lines TypeScript/React · Mobile-first · Supabase auth</div></div>
+            <span class="badge badge-green">LIVE</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px">Key Metrics</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="panel stat">
+            <div class="stat-val green">6,970</div>
+            <div class="stat-label">Lines of Rust</div>
+            <div class="stat-sub">V1 + V2 contracts</div>
+          </div>
+          <div class="panel stat">
+            <div class="stat-val" style="color:var(--purple)">19K+</div>
+            <div class="stat-label">Lines TypeScript</div>
+            <div class="stat-sub">Frontend / React</div>
+          </div>
+          <div class="panel stat">
+            <div class="stat-val" style="color:var(--blue)">7</div>
+            <div class="stat-label">API Functions</div>
+            <div class="stat-sub">Vercel serverless</div>
+          </div>
+          <div class="panel stat">
+            <div class="stat-val" style="color:var(--gold)">3mo</div>
+            <div class="stat-label">Time to Build</div>
+            <div class="stat-sub">Mar → Jun 2026</div>
+          </div>
+          <div class="panel stat">
+            <div class="stat-val green">444</div>
+            <div class="stat-label">NFT Badges</div>
+            <div class="stat-sub">Limited collection</div>
+          </div>
+          <div class="panel stat">
+            <div class="stat-val" style="color:var(--purple)">10+</div>
+            <div class="stat-label">Chains Scored</div>
+            <div class="stat-sub">TrustScore API</div>
+          </div>
+        </div>
+        <div class="panel mt-4" style="background:rgba(0,255,65,.04);border-color:rgba(0,255,65,.12)">
+          <div style="font-size:11px;color:rgba(255,255,255,.35);line-height:1.7">Built solo using Claude (Anthropic) as a coding assistant. Every product decision, architecture choice, and business direction was founder-driven. Speed of execution is a feature, not a shortcut.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 9 — ROADMAP WITH HISTORY                           -->
+  <!-- ════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s9">
+    <div class="glow-purple"></div>
+    <div class="eyebrow">Development History & Future Roadmap</div>
+    <h2 class="slide-title">8 milestones completed — <span class="grad">3 phases ahead</span></h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:20px">
+      <div>
+        <div style="font-size:11px;color:rgba(255,255,255,.25);text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px;font-family:monospace">✅ Completed</div>
+        <div class="timeline">
+          <div class="tl-item">
+            <div class="tl-dot done"></div>
+            <div class="tl-phase">Mar 2026</div>
+            <div class="tl-label">Foundation</div>
+            <div class="tl-desc">Solana wallet connect, V1 bonding curve, TradingView charts, trade recording.</div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-dot done"></div>
+            <div class="tl-phase">Apr 2026</div>
+            <div class="tl-label">V2 Protocol</div>
+            <div class="tl-desc">5-vault model, 2 curve types, Raydium CPMM graduation, LP lock, creator fee 0.5%.</div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-dot done"></div>
+            <div class="tl-phase">May 2026</div>
+            <div class="tl-label">TrustScore Engine</div>
+            <div class="tl-desc">On-chain scoring 0–100 across 10+ chains. GoPlus, RugCheck, Jupiter integrated.</div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-dot done"></div>
+            <div class="tl-phase">May 2026</div>
+            <div class="tl-label">API + Stripe + Chrome Extension</div>
+            <div class="tl-desc">Rate-limited API, Stripe subscriptions, Chrome Extension published to Web Store.</div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-dot done"></div>
+            <div class="tl-phase">May 2026</div>
+            <div class="tl-label">NFT Zodiac Badges (444 pieces)</div>
+            <div class="tl-desc">4-tier aura collection. On-chain reservation + payment system. Lifetime OG Pass.</div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-dot current"></div>
+            <div class="tl-phase">Jun 2026 · NOW</div>
+            <div class="tl-label" style="color:var(--green)">Devnet Alpha — Live</div>
+            <div class="tl-desc">Mobile-first UI, security hardening, Supabase auth, Vercel optimised to 7 functions.</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:rgba(255,255,255,.25);text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px;font-family:monospace">🔮 Coming Next</div>
+        <div class="timeline">
+          <div class="tl-item">
+            <div class="tl-dot future"></div>
+            <div class="tl-phase">Q3 2026</div>
+            <div class="tl-label">Smart Contract Audit</div>
+            <div class="tl-desc">Ottersec or Neodyme audit. Deploy V2 to Solana mainnet. TrustScore goes live for all tokens.</div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-dot future"></div>
+            <div class="tl-phase">Q4 2026</div>
+            <div class="tl-label">Growth & Analytics</div>
+            <div class="tl-desc">Public TrustScore API tier, advanced charts, volume bars, multi-token comparison.</div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-dot future"></div>
+            <div class="tl-phase">Q4 2026</div>
+            <div class="tl-label">Community & Governance</div>
+            <div class="tl-desc">Squads multisig upgrade authority. Community DAO for protocol parameters.</div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-dot future"></div>
+            <div class="tl-phase">2027</div>
+            <div class="tl-label">NFT Certificate Market</div>
+            <div class="tl-desc">Soulbound launch certificates + open secondary market for Zodiac Badge collection.</div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-dot future"></div>
+            <div class="tl-phase">2027</div>
+            <div class="tl-label">Protocol-as-a-Service</div>
+            <div class="tl-desc">White-label HumbleTrust bonding curve for other launchpads. B2B licensing model.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 10 — VISION & MARKET                              -->
+  <!-- ════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s10">
+    <div class="glow-green"></div>
+    <div class="eyebrow">Market Opportunity & Vision</div>
+    <h2 class="slide-title">The internet of finance needs a <span class="grad">trust layer</span></h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:20px">
+      <div>
+        <div class="panel" style="margin-bottom:14px;border-color:rgba(0,255,65,.12)">
+          <div class="quote" style="font-size:16px">
+            "We are not building a launchpad.<br>We are building the standard that every launchpad will eventually need to comply with."
+          </div>
+        </div>
+        <div style="font-size:12px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px">Market Size</div>
+        <div class="panel-grid col2" style="gap:10px">
+          <div class="panel stat" style="padding:14px">
+            <div class="stat-val" style="font-size:24px;color:var(--green)">$4.3B</div>
+            <div class="stat-label">Solana DEX Volume</div>
+            <div class="stat-sub">Daily (peak 2025)</div>
+          </div>
+          <div class="panel stat" style="padding:14px">
+            <div class="stat-val" style="font-size:24px;color:var(--purple)">4M+</div>
+            <div class="stat-label">Tokens launched</div>
+            <div class="stat-sub">Pump.fun all-time</div>
+          </div>
+          <div class="panel stat" style="padding:14px">
+            <div class="stat-val" style="font-size:24px;color:var(--blue)">$800M</div>
+            <div class="stat-label">Raydium Volume</div>
+            <div class="stat-sub">Daily average</div>
+          </div>
+          <div class="panel stat" style="padding:14px">
+            <div class="stat-val" style="font-size:24px;color:var(--gold)">TAM</div>
+            <div class="stat-label">All new token launches</div>
+            <div class="stat-sub">on Solana + EVM</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px">My Vision for HumbleTrust</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div class="panel" style="padding:14px;border-color:rgba(0,255,65,.1)">
+            <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:4px">Short term (2026)</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.4);line-height:1.6">Become the default launchpad for serious Solana projects. Every token that wants credibility launches through HumbleTrust.</div>
+          </div>
+          <div class="panel" style="padding:14px;border-color:rgba(176,38,255,.1)">
+            <div style="font-size:12px;font-weight:700;color:var(--purple);margin-bottom:4px">Medium term (2027)</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.4);line-height:1.6">TrustScore becomes an industry standard — like a credit score for tokens. Used by wallets, explorers, trading bots, and DeFi protocols to gate access.</div>
+          </div>
+          <div class="panel" style="padding:14px;border-color:rgba(0,212,255,.1)">
+            <div style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:4px">Long term (2028+)</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.4);line-height:1.6">Protocol-as-a-Service: white-label the HumbleTrust bonding curve and trust infrastructure for other chains and launchpads. Licensing model.</div>
+          </div>
+          <div class="panel" style="padding:14px;border-color:rgba(255,215,0,.1);background:rgba(255,215,0,.03)">
+            <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:4px">The Big Picture</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.4);line-height:1.6">Regulators are coming for DeFi. The first protocol that provides verifiable, on-chain proof of honest token launches will be positioned as the compliance layer of the next cycle.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 11 — THE ASK                                       -->
+  <!-- ════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s11">
+    <div class="glow-green"></div>
+    <div class="glow-purple"></div>
+    <div style="display:flex;flex-direction:column;justify-content:center;flex:1;max-width:900px">
+      <div class="eyebrow">Investment Opportunity</div>
+      <h2 class="slide-title">Pre-seed / Seed · <span class="grad">$150K – $250K</span></h2>
+      <p class="slide-sub mt-4">The protocol is built. The contracts are live. The platform is running. We're raising to fund the audit and mainnet launch — the last step before going live to millions of Solana users.</p>
+      <div class="panel-grid col3 mt-4" style="gap:14px">
+        <div class="panel" style="border-color:rgba(0,255,65,.2)">
+          <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:8px">Smart Contract Audit</div>
+          <div style="font-size:28px;font-weight:800;font-family:monospace">$60K</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.35);margin-top:8px;line-height:1.6">Ottersec or Neodyme. Required before mainnet. Unlocks institutional trust and exchange listings.</div>
+        </div>
+        <div class="panel" style="border-color:rgba(176,38,255,.2)">
+          <div style="font-size:13px;font-weight:700;color:var(--purple);margin-bottom:8px">Mainnet Infrastructure</div>
+          <div style="font-size:28px;font-weight:800;font-family:monospace">$40K</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.35);margin-top:8px;line-height:1.6">RPC nodes, indexing, Helius API, Supabase scaling, Vercel Pro, monitoring infrastructure.</div>
+        </div>
+        <div class="panel" style="border-color:rgba(255,215,0,.2)">
+          <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:8px">Marketing + Growth</div>
+          <div style="font-size:28px;font-weight:800;font-family:monospace">$80K</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.35);margin-top:8px;line-height:1.6">Community launch on X/Twitter, KOL partnerships, listing on DexScreener, CoinGecko listing, paid ads.</div>
+        </div>
+      </div>
+      <div class="panel mt-4" style="padding:20px 24px;background:rgba(0,255,65,.04);border-color:rgba(0,255,65,.15)">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
+          <div>
+            <div style="font-size:11px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">What you're investing in</div>
+            <div style="font-size:14px;color:rgba(255,255,255,.7);line-height:1.7">
+              A working protocol · Live on devnet · Auditable open-source code · Clear revenue model<br>
+              A solo founder who shipped a full DeFi stack in 3 months · A genuine market gap
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:11px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">Contact</div>
+            <div style="font-size:14px;color:var(--green);font-family:monospace">humble.trust@outlook.com</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.3);margin-top:4px">@HumbleTrust2026</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /deck -->
+
+<!-- ─── Navigation ──────────────────────────────────────────── -->
+<div id="nav">
+  <button onclick="prev()">◀</button>
+  <div class="dot-nav" id="dots"></div>
+  <div id="slide-counter">1 / 11</div>
+  <button onclick="next()">▶</button>
+</div>
+
+<script>
+const slides = document.querySelectorAll('.slide');
+const dotsEl = document.getElementById('dots');
+const counter = document.getElementById('slide-counter');
+const progress = document.getElementById('progress');
+let current = 0;
+const N = slides.length;
+
+// Build dots
+slides.forEach((_,i) => {
+  const d = document.createElement('div');
+  d.className = 'dot' + (i===0 ? ' active' : '');
+  d.onclick = () => goTo(i);
+  dotsEl.appendChild(d);
+});
+
+function goTo(n) {
+  if(n < 0 || n >= N) return;
+  slides[current].classList.remove('active');
+  slides[current].classList.add('prev');
+  setTimeout(() => slides[current].classList.remove('prev'), 500);
+  current = n;
+  slides[current].classList.add('active');
+  dotsEl.querySelectorAll('.dot').forEach((d,i) => d.classList.toggle('active', i===current));
+  counter.textContent = (current+1) + ' / ' + N;
+  progress.style.width = ((current+1)/N*100) + '%';
+}
+function next() { goTo(current+1); }
+function prev() { goTo(current-1); }
+
+document.addEventListener('keydown', e => {
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='ArrowDown') { e.preventDefault(); next(); }
+  if(e.key==='ArrowLeft'||e.key==='ArrowUp') { e.preventDefault(); prev(); }
+});
+
+// Touch support
+let tx=0;
+document.addEventListener('touchstart',e=>tx=e.touches[0].clientX,{passive:true});
+document.addEventListener('touchend',e=>{const d=e.changedTouches[0].clientX-tx;if(Math.abs(d)>50){d<0?next():prev();}},{passive:true});
+
+// Init progress
+progress.style.width = (1/N*100) + '%';
+</script>
+</body>
+</html>
