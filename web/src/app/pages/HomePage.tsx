@@ -48,11 +48,11 @@ const TAB_CONTENT: Record<InfoTabId, { title: string; items: { icon: React.Eleme
     ],
   },
   roadmap: {
-    title: "What's next",
+    title: "Built in 3 months — from zero to devnet alpha",
     items: [
-      { icon: Rocket,     title: "Q3 2026 — Mainnet Launch",    desc: "Deploy V2 bonding curve to Solana mainnet with fully audited smart contracts. Trust scores go live for all tokens." },
-      { icon: BarChart2,  title: "Q4 2026 — Advanced Charts",   desc: "Raydium CPMM migration for graduated tokens. Full OHLCV history with volume bars and indicator overlays." },
-      { icon: Users,      title: "2027 — NFT Certificates",     desc: "Creators get an NFT certificate for every successful launch. Collectors can trade proof-of-launch badges on secondary markets." },
+      { icon: Rocket,     title: "Devnet Alpha — Live Now",      desc: "V2 bonding curve, TrustScore engine, 444-piece NFT badges, Chrome Extension, and Stripe monetisation — all running on devnet." },
+      { icon: BarChart2,  title: "Q3 2026 — Mainnet Launch",     desc: "Smart-contract audit + mainnet deployment. TrustScore becomes a public API for every Solana token in existence." },
+      { icon: Users,      title: "2027 — NFT Certificate Market", desc: "Soulbound launch certificates for creators + open secondary market for the HumbleTrust Zodiac Badge collection." },
     ],
   },
 };
@@ -385,30 +385,41 @@ export function HomePage({ onTabChange }: HomePageProps) {
       {/* ── Roadmap ── */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
         <GlassPanel className="p-6">
-          <h2 className="text-base font-bold text-white mb-6">Roadmap</h2>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-base font-bold text-white">Development History &amp; Roadmap</h2>
+            <span className="text-[10px] font-mono text-[#00FF41]/50 px-2 py-0.5 rounded-full bg-[#00FF41]/8 border border-[#00FF41]/15">Built Mar–Jun 2026</span>
+          </div>
           <div className="relative pl-6">
-            <div className="absolute left-2 top-0 bottom-0 w-px bg-gradient-to-b from-[#00FF41]/40 via-[#B026FF]/30 to-transparent" />
-            {[
-              { phase: "Now",         label: "Devnet Launch",           done: true,  desc: "V2 bonding curve live on devnet. TrustScore, LP lock, certificates deployed." },
-              { phase: "Q3 2026",     label: "Mainnet Launch",          done: false, desc: "Fully audited contracts. TrustScore goes live for all Solana tokens." },
-              { phase: "Q4 2026",     label: "Raydium CPMM Migration",  done: false, desc: "Graduated tokens auto-migrate to Raydium CPMM with LP lock proof." },
-              { phase: "Q4 2026",     label: "Advanced Charts",         done: false, desc: "Full OHLCV history, volume bars, indicator overlays, and multi-token comparison." },
-              { phase: "2027",        label: "NFT Certificates",        done: false, desc: "Creators receive soulbound NFTs for every successful graduation." },
-            ].map(({ phase, label, done, desc }, i) => (
-              <div key={i} className="relative mb-6 last:mb-0">
+            <div className="absolute left-2 top-0 bottom-0 w-px bg-gradient-to-b from-[#00FF41]/40 via-[#B026FF]/40 to-transparent" />
+            {([
+              { phase: "Mar 2026",  label: "Foundation",                done: true,  current: false, desc: "Solana wallet connect, bonding-curve smart contracts, TradingView charts, live OHLCV trade recording." },
+              { phase: "Apr 2026",  label: "V2 Protocol",               done: true,  current: false, desc: "Five-vault model, Protected CPMM & Quadratic curve types, Raydium CPMM graduation at 50 SOL, on-chain LP lock." },
+              { phase: "Apr 2026",  label: "Creator Controls",          done: true,  current: false, desc: "Token unlock, vested creator payouts at day 30/60/90, on-chain social fields, burn-on-unlock, DexScreener chart integration." },
+              { phase: "May 2026",  label: "TrustScore Engine",         done: true,  current: false, desc: "On-chain 0–100 scoring across 10+ chains. GoPlus, RugCheck, DexScreener & Jupiter integrations. Multi-chain fingerprinting." },
+              { phase: "May 2026",  label: "Platform & Monetisation",   done: true,  current: false, desc: "API key system with rate limiting, Stripe subscriptions (Free / Pro / Enterprise), Chrome Extension published to Web Store." },
+              { phase: "May 2026",  label: "NFT Zodiac Badges",         done: true,  current: false, desc: "444-piece NFT collection with 4-tier aura system. On-chain reservation, payment binding, badge image API." },
+              { phase: "May 2026",  label: "Market Page & Discovery",   done: true,  current: false, desc: "Real-time prices, New Pairs from Raydium/Meteora/Orca/PumpSwap, Gainers & Losers leaderboard, WatchList." },
+              { phase: "Jun 2026",  label: "Devnet Alpha — Live",       done: true,  current: true,  desc: "Mobile-first responsive UI, video branding, security hardening. Serverless functions optimised 12→7. Supabase auth wired in." },
+              { phase: "Q3 2026",   label: "Mainnet Launch",            done: false, current: false, desc: "Audited contracts on Solana mainnet. TrustScore becomes a public API for every token on the network." },
+              { phase: "Q4 2026",   label: "Advanced Analytics",        done: false, current: false, desc: "Public TrustScore API tier, volume bars, indicator overlays, multi-token comparison charts." },
+              { phase: "2027",      label: "NFT Certificate Market",    done: false, current: false, desc: "Soulbound launch certificates for every graduation + open secondary market for the Zodiac Badge collection." },
+            ] as { phase: string; label: string; done: boolean; current: boolean; desc: string }[]).map(({ phase, label, done, current, desc }, i) => (
+              <div key={i} className="relative mb-5 last:mb-0">
                 <div
                   className="absolute -left-4 w-4 h-4 rounded-full border-2 flex items-center justify-center"
                   style={{
-                    borderColor: done ? "#00FF41" : "rgba(255,255,255,0.15)",
-                    background: done ? "rgba(0,255,65,0.15)" : "rgba(0,0,0,0.6)",
+                    borderColor: current ? "#00FF41" : done ? "rgba(0,255,65,0.5)" : "rgba(255,255,255,0.12)",
+                    background: current ? "rgba(0,255,65,0.2)" : done ? "rgba(0,255,65,0.08)" : "rgba(0,0,0,0.6)",
+                    boxShadow: current ? "0 0 10px rgba(0,255,65,0.4)" : undefined,
                   }}
                 >
-                  {done && <div className="w-1.5 h-1.5 rounded-full bg-[#00FF41]" />}
+                  {(done || current) && <div className="w-1.5 h-1.5 rounded-full bg-[#00FF41]" />}
                 </div>
                 <div className="pl-4">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                     <span className="text-[10px] font-mono text-[#00FF41]/50">{phase}</span>
-                    {done && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#00FF41]/15 text-[#00FF41] font-mono">LIVE</span>}
+                    {current && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#00FF41]/15 text-[#00FF41] font-mono animate-pulse">LIVE</span>}
+                    {done && !current && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/30 font-mono">DONE</span>}
                   </div>
                   <p className="text-sm font-semibold text-white mb-0.5">{label}</p>
                   <p className="text-xs text-white/40 leading-relaxed">{desc}</p>
