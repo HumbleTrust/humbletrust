@@ -63,7 +63,7 @@ body{background:var(--bg);color:#fff;font-family:-apple-system,BlinkMacSystemFon
 .er{color:rgba(255,68,68,.75);} .eg{color:rgba(0,255,65,.6);}
 h1{font-size:clamp(28px,3.6vw,50px);font-weight:900;line-height:1.04;margin-bottom:9px;}
 h2{font-size:clamp(19px,2.7vw,35px);font-weight:800;line-height:1.1;margin-bottom:9px;}
-.sub{font-size:13px;color:rgba(255,255,255,.38);line-height:1.68;max-width:680px;}
+.sub{font-size:14px;color:rgba(255,255,255,.38);line-height:1.68;max-width:680px;}
 .grad{background:linear-gradient(90deg,var(--g),#14F195 44%,var(--p));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
 /* ── cards ── */
 .grid{display:grid;gap:9px;}
@@ -76,23 +76,23 @@ h2{font-size:clamp(19px,2.7vw,35px);font-weight:800;line-height:1.1;margin-botto
 .cp{border-color:rgba(176,38,255,.17);background:rgba(176,38,255,.04);}
 .cb{border-color:rgba(0,212,255,.17);background:rgba(0,212,255,.04);}
 .cy{border-color:rgba(255,215,0,.17);background:rgba(255,215,0,.04);}
-.card h3{font-size:12px;font-weight:700;margin-bottom:4px;}
-.card p{font-size:11px;color:rgba(255,255,255,.34);line-height:1.52;}
+.card h3{font-size:14px;font-weight:700;margin-bottom:5px;}
+.card p{font-size:13px;color:rgba(255,255,255,.38);line-height:1.58;}
 /* ── big numbers ── */
 .bn{text-align:center;padding:13px 6px;}
 .bn .n{font-size:34px;font-weight:900;font-family:monospace;line-height:1;}
-.bn .l{font-size:9px;color:rgba(255,255,255,.24);text-transform:uppercase;letter-spacing:.09em;margin-top:4px;}
-.bn .s{font-size:8px;color:rgba(255,255,255,.14);margin-top:2px;}
+.bn .l{font-size:11px;color:rgba(255,255,255,.24);text-transform:uppercase;letter-spacing:.09em;margin-top:4px;}
+.bn .s{font-size:10px;color:rgba(255,255,255,.14);margin-top:2px;}
 .nr{color:var(--r);} .ny{color:var(--y);} .ng{color:var(--g);} .nb{color:var(--b)}
 /* ── pills ── */
-.pill{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:9px;font-family:monospace;font-weight:700;letter-spacing:.05em;}
+.pill{display:inline-flex;align-items:center;gap:4px;padding:4px 11px;border-radius:20px;font-size:11px;font-family:monospace;font-weight:700;letter-spacing:.05em;}
 .pg{background:rgba(0,255,65,.08);border:1px solid rgba(0,255,65,.17);color:var(--g);}
 .pp{background:rgba(176,38,255,.08);border:1px solid rgba(176,38,255,.17);color:var(--p);}
 .pb{background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.17);color:var(--b);}
 .py{background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.17);color:var(--y);}
 .pr{background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.17);color:var(--r);}
 /* ── misc ── */
-.src{font-size:8px;color:rgba(255,255,255,.11);font-family:monospace;margin-top:3px;}
+.src{font-size:10px;color:rgba(255,255,255,.22);font-family:monospace;margin-top:3px;}
 .z1{position:relative;z-index:1;}
 .flex1{flex:1;}
 .fl{display:flex;}
@@ -405,23 +405,65 @@ h2{font-size:clamp(19px,2.7vw,35px);font-weight:800;line-height:1.1;margin-botto
 <div class="z1 flex1 fl" style="flex-direction:column">
   <div class="eye eg">Timeline</div>
   <h2>3 months built. <span class="grad">Mainnet is next.</span></h2>
-  <div class="flex1 fl" style="align-items:center;margin-top:14px">
-    <div style="width:100%;position:relative">
-      <div style="position:absolute;top:19px;left:7%;right:7%;height:2px;background:linear-gradient(90deg,var(--g),var(--p));z-index:0"></div>
-      <div style="display:grid;grid-template-columns:repeat(6,1fr);position:relative;z-index:1">
-        <div style="text-align:center;padding:0 4px"><div style="width:12px;height:12px;border-radius:50%;background:var(--g);margin:13px auto 9px;box-shadow:0 0 10px rgba(0,255,65,.7)"></div><div style="font-size:8px;font-family:monospace;color:var(--g);margin-bottom:3px">Feb–Mar 2026</div><div style="font-size:10px;font-weight:700;margin-bottom:3px">Foundation</div><p style="font-size:9px;color:rgba(255,255,255,.3)">V1 contract, TrustScore engine, web app</p><div style="margin-top:4px;display:inline-block;font-size:7px;background:rgba(0,255,65,.1);border:1px solid rgba(0,255,65,.2);color:var(--g);padding:1px 6px;border-radius:8px">DONE</div></div>
-        <div style="text-align:center;padding:0 4px"><div style="width:12px;height:12px;border-radius:50%;background:var(--g);margin:13px auto 9px;box-shadow:0 0 10px rgba(0,255,65,.7)"></div><div style="font-size:8px;font-family:monospace;color:var(--g);margin-bottom:3px">Apr 2026</div><div style="font-size:10px;font-weight:700;margin-bottom:3px">V2 Launch</div><p style="font-size:9px;color:rgba(255,255,255,.3)">5-vault model, creator fees, Metaplex NFTs</p><div style="margin-top:4px;display:inline-block;font-size:7px;background:rgba(0,255,65,.1);border:1px solid rgba(0,255,65,.2);color:var(--g);padding:1px 6px;border-radius:8px">DONE</div></div>
-        <div style="text-align:center;padding:0 4px"><div style="width:14px;height:14px;border-radius:50%;background:var(--g);margin:12px auto 9px;animation:pulse 2s infinite"></div><div style="font-size:8px;font-family:monospace;color:var(--g);margin-bottom:3px">Jun 2026</div><div style="font-size:10px;font-weight:700;margin-bottom:3px">Devnet Alpha</div><p style="font-size:9px;color:rgba(255,255,255,.3)">444 NFTs, Chrome ext, API, Stripe</p><div style="margin-top:4px;display:inline-block;font-size:7px;background:rgba(0,255,65,.14);border:1px solid rgba(0,255,65,.28);color:var(--g);padding:1px 6px;border-radius:8px;animation:pulse 2s infinite">● LIVE</div></div>
-        <div style="text-align:center;padding:0 4px"><div style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.08);border:2px solid rgba(255,215,0,.38);margin:13px auto 9px"></div><div style="font-size:8px;font-family:monospace;color:rgba(255,215,0,.55);margin-bottom:3px">Q3 2026</div><div style="font-size:10px;font-weight:700;margin-bottom:3px">Audit + Mainnet</div><p style="font-size:9px;color:rgba(255,255,255,.3)">Security audit, mainnet launch, public API</p></div>
-        <div style="text-align:center;padding:0 4px"><div style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.07);border:2px solid rgba(176,38,255,.32);margin:13px auto 9px"></div><div style="font-size:8px;font-family:monospace;color:rgba(176,38,255,.5);margin-bottom:3px">Q4 2026</div><div style="font-size:10px;font-weight:700;margin-bottom:3px">B2B Integrations</div><p style="font-size:9px;color:rgba(255,255,255,.3)">DEX + wallet partnerships, API licensing</p></div>
-        <div style="text-align:center;padding:0 4px"><div style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.07);border:2px solid rgba(0,212,255,.28);margin:13px auto 9px"></div><div style="font-size:8px;font-family:monospace;color:rgba(0,212,255,.45);margin-bottom:3px">2027</div><div style="font-size:10px;font-weight:700;margin-bottom:3px">NFT Market</div><p style="font-size:9px;color:rgba(255,255,255,.3)">Certificate market, Zodiac secondary</p></div>
+  <div class="flex1" style="margin-top:18px;position:relative">
+    <svg preserveAspectRatio="none" viewBox="0 0 600 76" style="position:absolute;top:0;left:4%;width:92%;height:76px;pointer-events:none;z-index:0">
+      <defs>
+        <linearGradient id="zg" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#00FF41" stop-opacity="1"/>
+          <stop offset="45%" stop-color="#00FF41" stop-opacity="0.7"/>
+          <stop offset="75%" stop-color="#9945FF" stop-opacity="0.45"/>
+          <stop offset="100%" stop-color="#00D4FF" stop-opacity="0.25"/>
+        </linearGradient>
+        <filter id="glo"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      <path d="M 50,21 C 90,21 110,55 150,55 C 190,55 210,21 250,21 C 290,21 310,55 350,55 C 390,55 410,21 450,21 C 490,21 510,55 550,55" stroke="url(#zg)" stroke-width="3" fill="none" filter="url(#glo)"/>
+    </svg>
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);position:relative;z-index:1">
+      <div style="text-align:center;padding:0 5px">
+        <div style="width:20px;height:20px;border-radius:50%;background:var(--g);margin:11px auto 10px;box-shadow:0 0 14px rgba(0,255,65,.8)"></div>
+        <div style="font-size:11px;font-family:monospace;color:var(--g);margin-bottom:4px">Feb–Mar 2026</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:5px">Foundation</div>
+        <p style="font-size:11px;color:rgba(255,255,255,.36);line-height:1.4">V1 contract, TrustScore engine, web app</p>
+        <div style="margin-top:6px;display:inline-block;font-size:9px;background:rgba(0,255,65,.12);border:1px solid rgba(0,255,65,.28);color:var(--g);padding:2px 8px;border-radius:10px">DONE</div>
+      </div>
+      <div style="text-align:center;padding:0 5px">
+        <div style="width:20px;height:20px;border-radius:50%;background:var(--g);margin:44px auto 10px;box-shadow:0 0 14px rgba(0,255,65,.8)"></div>
+        <div style="font-size:11px;font-family:monospace;color:var(--g);margin-bottom:4px">Apr 2026</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:5px">V2 Launch</div>
+        <p style="font-size:11px;color:rgba(255,255,255,.36);line-height:1.4">5-vault model, creator fees, Metaplex NFTs</p>
+        <div style="margin-top:6px;display:inline-block;font-size:9px;background:rgba(0,255,65,.12);border:1px solid rgba(0,255,65,.28);color:var(--g);padding:2px 8px;border-radius:10px">DONE</div>
+      </div>
+      <div style="text-align:center;padding:0 5px">
+        <div style="width:22px;height:22px;border-radius:50%;background:var(--g);margin:10px auto 10px;animation:pulse 2s infinite"></div>
+        <div style="font-size:11px;font-family:monospace;color:var(--g);margin-bottom:4px">Jun 2026</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:5px">Devnet Alpha</div>
+        <p style="font-size:11px;color:rgba(255,255,255,.36);line-height:1.4">444 NFTs, Chrome ext, API, Stripe</p>
+        <div style="margin-top:6px;display:inline-block;font-size:9px;background:rgba(0,255,65,.16);border:1px solid rgba(0,255,65,.38);color:var(--g);padding:2px 8px;border-radius:10px;animation:pulse 2s infinite">● LIVE</div>
+      </div>
+      <div style="text-align:center;padding:0 5px">
+        <div style="width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.06);border:2px solid rgba(255,215,0,.5);margin:45px auto 10px"></div>
+        <div style="font-size:11px;font-family:monospace;color:rgba(255,215,0,.7);margin-bottom:4px">Q3 2026</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:5px">Audit + Mainnet</div>
+        <p style="font-size:11px;color:rgba(255,255,255,.36);line-height:1.4">Security audit, mainnet launch, public API</p>
+      </div>
+      <div style="text-align:center;padding:0 5px">
+        <div style="width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.06);border:2px solid rgba(176,38,255,.45);margin:12px auto 10px"></div>
+        <div style="font-size:11px;font-family:monospace;color:rgba(176,38,255,.7);margin-bottom:4px">Q4 2026</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:5px">B2B Integrations</div>
+        <p style="font-size:11px;color:rgba(255,255,255,.36);line-height:1.4">DEX + wallet partnerships, API licensing</p>
+      </div>
+      <div style="text-align:center;padding:0 5px">
+        <div style="width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.06);border:2px solid rgba(0,212,255,.4);margin:45px auto 10px"></div>
+        <div style="font-size:11px;font-family:monospace;color:rgba(0,212,255,.6);margin-bottom:4px">2027</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:5px">NFT Market</div>
+        <p style="font-size:11px;color:rgba(255,255,255,.36);line-height:1.4">Certificate market, Zodiac secondary</p>
       </div>
     </div>
   </div>
-  <div class="grid g3" style="margin-top:12px;gap:7px">
-    <div class="card cg" style="padding:9px 13px"><h3 style="color:var(--g);font-size:11px">Critical: Security Audit</h3><p>OtterSec or Neodyme class audit required before mainnet. $35K–55K. The single gate between devnet and production.</p></div>
-    <div class="card cy" style="padding:9px 13px"><h3 style="color:var(--y);font-size:11px">This Round Unlocks Mainnet</h3><p>Seed round funds audit, infrastructure, and go-to-market. Without it mainnet cannot happen safely or on schedule.</p></div>
-    <div class="card cp" style="padding:9px 13px"><h3 style="color:var(--p);font-size:11px">First Mover Advantage</h3><p>98.6% rug rate on Solana today. Trust infrastructure needed now. No competitor has what we built.</p></div>
+  <div class="grid g3" style="margin-top:14px;gap:9px">
+    <div class="card cg" style="padding:11px 15px"><h3 style="color:var(--g)">Critical: Security Audit</h3><p>OtterSec or Neodyme class audit required before mainnet. $35K–$55K. The single gate between devnet and production.</p></div>
+    <div class="card cy" style="padding:11px 15px"><h3 style="color:var(--y)">This Round Unlocks Mainnet</h3><p>Seed round funds audit, infrastructure, and go-to-market. Without it mainnet cannot happen safely or on schedule.</p></div>
+    <div class="card cp" style="padding:11px 15px"><h3 style="color:var(--p)">First Mover Advantage</h3><p>98.6% rug rate on Solana today. Trust infrastructure needed now. No competitor has what we built.</p></div>
   </div>
 </div>
 </div>
