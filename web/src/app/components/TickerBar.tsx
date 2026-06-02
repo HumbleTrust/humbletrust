@@ -7,7 +7,7 @@ interface TickerItem {
   change24h: number;
 }
 
-const CG_KEY = (import.meta.env.VITE_COINGECKO_API_KEY as string) || "CG-mGH1d5uGSUubaj8sKxxBbwZT";
+const CG_KEY = import.meta.env.VITE_COINGECKO_API_KEY as string | undefined;
 
 const COINS = [
   // Market leaders

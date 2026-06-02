@@ -7,11 +7,18 @@ module.exports.config = { api: { bodyParser: false } };
 
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+if (!WEBHOOK_SECRET) console.warn("[stripe] STRIPE_WEBHOOK_SECRET is not set — webhook verification disabled");
 
 const PRICES = {
   pro:        process.env.STRIPE_PRICE_PRO,
   enterprise: process.env.STRIPE_PRICE_ENTERPRISE,
 };
+
+const ALLOWED_ORIGINS = [
+  "https://humbletrust.vercel.app",
+];
+const isSafeOrigin = (o) => !o || ALLOWED_ORIGINS.includes(o) || /^https:\/\/humbletrust(-[a-z0-9]+)*\.vercel\.app$/.test(o);
+const SAFE_ORIGIN = "https://humbletrust.vercel.app";
 
 async function getRawBody(req) {
   return new Promise((resolve, reject) => {
@@ -54,7 +61,7 @@ async function handleCheckout(body, req, res) {
   const { plan, email } = body;
   if (!plan || !PRICES[plan]) return res.status(400).json({ error: "invalid_plan", valid: Object.keys(PRICES) });
 
-  const origin = req.headers.origin || "https://humbletrust.vercel.app";
+  const origin = isSafeOrigin(req.headers.origin) ? (req.headers.origin || SAFE_ORIGIN) : SAFE_ORIGIN;
   try {
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -69,8 +76,8 @@ async function handleCheckout(body, req, res) {
     });
     return res.status(200).json({ url: session.url, session_id: session.id });
   } catch (e) {
-    console.error("Stripe checkout error", e);
-    return res.status(500).json({ error: "checkout_failed", message: e.message });
+    console.error("Stripe checkout error", e.message);
+    return res.status(500).json({ error: "checkout_failed" });
   }
 }
 
@@ -90,11 +97,12 @@ async function handleWebhook(rawBody, req, res) {
       case "checkout.session.completed": {
         const session = event.data.object;
         if (session.mode !== "subscription") break;
-        const plan  = session.metadata?.plan || "pro";
+        const plan  = session.metadata?.plan;
+        if (!plan || !PRICES[plan]) { console.warn("[stripe] invalid plan in session metadata:", plan); break; }
         const email = session.customer_details?.email || session.customer_email;
         const cid   = session.customer;
         const key = await provisionApiKey(cid, email, plan);
-        if (key) console.log(`Provisioned ${plan} key for ${email}: ${key.slice(0, 16)}...`);
+        if (key) console.log(`Provisioned ${plan} key prefix=${key.slice(0, 12)}`);
         break;
       }
       case "customer.subscription.deleted": {
@@ -117,7 +125,8 @@ async function handleWebhook(rawBody, req, res) {
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  const reqOrigin = req.headers.origin;
+  res.setHeader("Access-Control-Allow-Origin", isSafeOrigin(reqOrigin) ? (reqOrigin || SAFE_ORIGIN) : SAFE_ORIGIN);
   res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type,stripe-signature");
   if (req.method === "OPTIONS") return res.status(204).end();

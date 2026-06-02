@@ -152,7 +152,10 @@ const TradingViewChart = memo(({ symbol }: { symbol: string }) => {
     const el = containerRef.current;
     if (!el) return;
     const uid = `tv_${Date.now()}`;
-    el.innerHTML = `<div id="${uid}" style="height:100%;width:100%"></div>`;
+    const container = document.createElement("div");
+    container.id = uid;
+    container.style.cssText = "height:100%;width:100%";
+    el.appendChild(container);
     const script = document.createElement("script");
     script.src = "https://s3.tradingview.com/tv.js";
     script.async = true;
@@ -175,7 +178,10 @@ const TradingViewChart = memo(({ symbol }: { symbol: string }) => {
 // ── CoinGecko config ──────────────────────────────────────────────────────────
 
 const CG_BASE = "https://api.coingecko.com/api/v3";
-const CG_KEY  = (import.meta.env.VITE_COINGECKO_API_KEY as string) || "CG-mGH1d5uGSUubaj8sKxxBbwZT";
+const CG_KEY  = import.meta.env.VITE_COINGECKO_API_KEY as string | undefined;
+
+const DEX_URL_WHITELIST = /^https:\/\/(dexscreener\.com|birdeye\.so|raydium\.io|pump\.fun|jup\.ag|orca\.so|meteora\.ag|solscan\.io)\//;
+const safeDexUrl = (url: string | undefined) => (url && DEX_URL_WHITELIST.test(url) ? url : undefined);
 
 async function cgFetch(path: string, signal?: AbortSignal) {
   const res = await fetch(`${CG_BASE}${path}`, {
@@ -900,8 +906,8 @@ export const MarketPage = () => {
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-white/20 text-[10px]">{stat}</span>
-                          {coin.dex_url && (
-                            <a href={coin.dex_url} target="_blank" rel="noreferrer"
+                          {safeDexUrl(coin.dex_url) && (
+                            <a href={safeDexUrl(coin.dex_url)} target="_blank" rel="noreferrer"
                               className="text-[#00FF41]/50 text-[10px] hover:text-[#00FF41] transition-colors"
                               onClick={e => e.stopPropagation()}>
                               {label} ↗

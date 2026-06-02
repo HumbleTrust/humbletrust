@@ -6,5 +6,21 @@
   "rewrites": [
     { "source": "/api/badges/confirm", "destination": "/api/badges/prepare" },
     { "source": "/((?!api/).*)", "destination": "/" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://s3.tradingview.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; connect-src 'self' https://*.supabase.co https://api.coingecko.com https://api.devnet.solana.com https://api.mainnet-beta.solana.com https://*.helius-rpc.com wss://*.supabase.co wss:; font-src 'self' data:; frame-src https://s3.tradingview.com; worker-src blob:;"
+        }
+      ]
+    }
   ]
 }

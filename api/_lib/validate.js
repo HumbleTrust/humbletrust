@@ -22,10 +22,11 @@ const isValidWallet = (w) => {
   }
 };
 
+const IS_DEV = process.env.NODE_ENV !== 'production';
+
 const ALLOWED_ORIGINS = [
   'https://humbletrust.vercel.app',
-  'http://localhost:5173',
-  'http://localhost:3000',
+  ...(IS_DEV ? ['http://localhost:5173', 'http://localhost:3000'] : []),
 ];
 
 const isAllowedOrigin = (origin) => {
