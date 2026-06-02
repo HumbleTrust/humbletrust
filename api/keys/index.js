@@ -4,7 +4,9 @@ const { getClient } = require("../_lib/db");
 // GET  /api/keys   — key info + usage (requires Bearer token)
 // POST /api/keys   — generate a free API key
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  const allowedOrigins = ["https://humbletrust.vercel.app"];
+  const origin = req.headers["origin"] || "";
+  res.setHeader("Access-Control-Allow-Origin", allowedOrigins.includes(origin) ? origin : "");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Authorization,Content-Type");
   if (req.method === "OPTIONS") return res.status(204).end();
@@ -18,13 +20,13 @@ module.exports = async function handler(req, res) {
 
     const [keyRow, usageLast30d, rl] = await Promise.all([
       db.from("api_keys").select("key_prefix, plan, daily_limit, label, created_at, owner_email").eq("id", keyData.keyId).single(),
-      db.from("api_usage").select("ts, cached, format").eq("key_id", keyData.keyId).gte("ts", since30d).order("ts", { ascending: false }).limit(1000),
+      db.from("api_usage").select("created_at, cached, format").eq("key_id", keyData.keyId).gte("created_at", since30d).order("created_at", { ascending: false }).limit(1000),
       checkRateLimit(keyData.keyId, null, keyData.dailyLimit),
     ]);
 
     const rows = usageLast30d.data || [];
     const byDay = {};
-    for (const r of rows) { const d = r.ts.slice(0, 10); byDay[d] = (byDay[d] || 0) + 1; }
+    for (const r of rows) { const d = r.created_at.slice(0, 10); byDay[d] = (byDay[d] || 0) + 1; }
 
     return res.status(200).json({
       key_prefix:  keyRow.data?.key_prefix,
@@ -55,6 +57,10 @@ module.exports = async function handler(req, res) {
     if (email) {
       const { count } = await db.from("api_keys").select("id", { count: "exact", head: true }).eq("owner_email", email).eq("revoked", false);
       if ((count || 0) >= 3) return res.status(429).json({ error: "max_keys_reached", message: "Maximum 3 active keys per email on free plan." });
+    }
+    if (wallet) {
+      const { count: walletCount } = await db.from("api_keys").select("id", { count: "exact", head: true }).eq("owner_wallet", wallet).eq("revoked", false);
+      if ((walletCount || 0) >= 1) return res.status(429).json({ error: "max_keys_reached", message: "Maximum 1 active key per wallet on free plan." });
     }
 
     const key    = generateKey();

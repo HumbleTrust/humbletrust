@@ -8,6 +8,7 @@
  *   POST /api/tokens/:mint/trades?action=sync  — backfill from RPC
  */
 
+const crypto = require("crypto");
 const { getClient } = require("../_lib/db");
 const { isValidWallet, setCors } = require("../_lib/validate");
 const { parseCurveTradeEvents } = require("../_lib/curve-events");
@@ -201,7 +202,7 @@ async function handleHealth(mint, req, res) {
     await db.from("token_health_events").insert(criticalSignals.map(s => ({
       mint, event_type: s.type,
       severity: s.delta <= -15 ? "critical" : "warning",
-      data: { msg: s.msg, delta: s.delta, health_score: health },
+      details: { msg: s.msg, delta: s.delta, health_score: health },
     }))).catch(() => {});
   }
   await db.from("tokens").update({
@@ -238,7 +239,7 @@ async function handleGetTrades(mint, req, res) {
     .order("block_time", { ascending: false }).limit(limit);
   if (error) {
     console.warn("[handleGetTrades] %s error: %s", mint.slice(0, 8), error.message);
-    return res.json({ trades: [] });
+    return res.status(500).json({ error: "database_error" });
   }
   return res.json({ trades: data || [] });
 }
@@ -398,7 +399,12 @@ module.exports = async (req, res) => {
       if (!internalSecret) return res.status(503).json({ error: "auth_not_configured" });
       const authHeader = req.headers["authorization"] || "";
       const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-      if (token !== internalSecret) return res.status(401).json({ error: "unauthorized" });
+      let authorized = false;
+      try {
+        const a = Buffer.from(token), b = Buffer.from(internalSecret);
+        authorized = a.length === b.length && crypto.timingSafeEqual(a, b);
+      } catch { authorized = false; }
+      if (!authorized) return res.status(401).json({ error: "unauthorized" });
       const { mint: m, creator, name, symbol, signature, launchScore, lockPercent, burnOption, certificateMint, tier, logoUri, logo_uri, raydium_pool, description, website, twitter, telegram } = req.body || {};
       if (!m || !creator) return res.status(400).json({ error: "mint and creator required" });
       if (!isValidWallet(m)) return res.status(400).json({ error: "invalid mint address" });
@@ -435,6 +441,16 @@ module.exports = async (req, res) => {
         return await handleGetTrades(mint, req, res);
       }
       if (req.method === "POST") {
+        const internalSecret2 = process.env.INTERNAL_API_SECRET;
+        if (!internalSecret2) return res.status(503).json({ error: "auth_not_configured" });
+        const authHeader2 = req.headers["authorization"] || "";
+        const token2 = authHeader2.startsWith("Bearer ") ? authHeader2.slice(7) : "";
+        let authorized2 = false;
+        try {
+          const a2 = Buffer.from(token2), b2 = Buffer.from(internalSecret2);
+          authorized2 = a2.length === b2.length && crypto.timingSafeEqual(a2, b2);
+        } catch { authorized2 = false; }
+        if (!authorized2) return res.status(401).json({ error: "unauthorized" });
         if (req.query.action === "sync") return await handleSyncTrades(mint, req, res);
         return await handleRecordTrade(mint, req, res);
       }
@@ -448,6 +464,6 @@ module.exports = async (req, res) => {
 
   } catch (e) {
     console.error("[api/tokens/[...path]]", e.message);
-    return res.status(500).json({ error: e.message || "Internal server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 };

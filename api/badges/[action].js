@@ -333,6 +333,10 @@ async function verifyPayment(txSig, wallet, badgeMint) {
   });
   const { result } = await rpcRes.json();
   if (!result) return false;
+  if (result.meta?.err) return false;
+
+  const blockTime = result.blockTime;
+  if (!blockTime || (Date.now() / 1000 - blockTime) > 7200) return false; // reject tx older than 2h
 
   const staticKeys  = result.transaction?.message?.accountKeys ?? [];
   const loadedWrite = result.meta?.loadedAddresses?.writable ?? [];

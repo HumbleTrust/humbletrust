@@ -4,7 +4,6 @@ const DEVNET_RPCS = [
   (import.meta.env.VITE_SOLANA_RPC as string | undefined) || "",
   "https://api.devnet.solana.com",
   "https://rpc.ankr.com/solana_devnet",
-  "https://devnet.helius-rpc.com/?api-key=1d8e6f5c-1e4a-4c2a-b3f8-9a0d2e7c5b3f",
 ].filter(Boolean);
 
 const is429 = (e: unknown) => {

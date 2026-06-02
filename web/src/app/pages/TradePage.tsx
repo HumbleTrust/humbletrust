@@ -733,6 +733,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
       const ata = getAssociatedTokenAddressSync(mint, anchorWallet.publicKey);
       const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
       const program = getProgramV2(provider);
+      if (!Number.isFinite(Number(solAmount)) || Number(solAmount) <= 0) return;
       const minTokensOut = rawTokenAmountFromUi(estimatedTokens * (1 - slippageBps / 10_000), selectedDecimals);
       const { signature } = await buyOnCurveV2(program, anchorWallet.publicKey, mint, ata, Number(solAmount), minTokensOut);
       setTxSig(signature);

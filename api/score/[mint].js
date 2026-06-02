@@ -1536,8 +1536,8 @@ module.exports = async (req, res) => {
       // L1 + L2 cache (fire-and-forget on DB write)
       l1set(mint, scoreData);
       db.from("token_score_cache").upsert({
-        mint, score: finalScore, trust_level: finalTrustLevel, source: "external",
-        score_components: { categories, signals: mktSignals, flags: mktFlags, onchain, token: tokenInfo, network, platform, data_quality,
+        mint, score: finalScore, trust_level: finalTrustLevel,
+        components: { categories, signals: mktSignals, flags: mktFlags, onchain, token: tokenInfo, network, platform, data_quality,
           enrichments: {
             goplus:      goplusRaw    ? { is_honeypot: goplusRaw.is_honeypot, transfer_pausable: goplusRaw.transfer_pausable } : null,
             rugcheck:    rugcheckRaw  ? { score: rugcheckRaw.score, risks_count: rugcheckRaw.risks.length } : null,
@@ -1555,14 +1555,14 @@ module.exports = async (req, res) => {
       db.from("score_history")
         .select("score")
         .eq("mint", mint)
-        .order("computed_at", { ascending: false })
+        .order("recorded_at", { ascending: false })
         .limit(1)
         .single()
         .then(({ data: last }) => {
           if (!last || Math.abs(last.score - score) >= HISTORY_MIN_DELTA) {
             return db.from("score_history").insert({
-              mint, score: finalScore, trust_level: finalTrustLevel, categories, flags: mktFlags,
-              computed_at: now.toISOString(),
+              mint, score: finalScore, trust_level: finalTrustLevel,
+              recorded_at: now.toISOString(),
             });
           }
         })

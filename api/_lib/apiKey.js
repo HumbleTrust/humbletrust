@@ -51,7 +51,7 @@ async function checkRateLimit(keyId, ip, dailyLimit) {
   const db = getClient();
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  let query = db.from("api_usage").select("id", { count: "exact", head: true }).gte("ts", since);
+  let query = db.from("api_usage").select("id", { count: "exact", head: true }).gte("created_at", since);
   if (keyId) query = query.eq("key_id", keyId);
   else       query = query.is("key_id", null).eq("ip", ip);
 
@@ -76,7 +76,7 @@ async function handleApiAuth(req, res) {
   }
 
   const ip = (req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "unknown").split(",")[0].trim();
-  const rl = await checkRateLimit(keyData.keyId, ip, keyData.dailyLimit).catch(() => ({ used: 0, limit: keyData.dailyLimit, exceeded: false }));
+  const rl = await checkRateLimit(keyData.keyId, ip, keyData.dailyLimit).catch(() => ({ used: 0, limit: keyData.dailyLimit, exceeded: true }));
 
   if (rl.exceeded) {
     res.setHeader("X-RateLimit-Limit",     String(rl.limit));

@@ -165,6 +165,7 @@ export async function swapOnRaydiumCpmm(
     const lamports = Math.floor(amountIn * LAMPORTS_PER_SOL);
     amountInRaw    = BigInt(lamports);
     minAmountOutRaw = BigInt(Math.floor(estimatedOut * slippageMul * Math.pow(10, tokenDecimals)));
+    if (minAmountOutRaw === 0n) minAmountOutRaw = 1n;
 
     instructions.push(
       SystemProgram.transfer({ fromPubkey: payer, toPubkey: userWsolAta, lamports }),
@@ -184,6 +185,7 @@ export async function swapOnRaydiumCpmm(
     const tokenUnits = Math.floor(amountIn * Math.pow(10, tokenDecimals));
     amountInRaw    = BigInt(tokenUnits);
     minAmountOutRaw = BigInt(Math.floor(estimatedOut * slippageMul * LAMPORTS_PER_SOL));
+    if (minAmountOutRaw === 0n) minAmountOutRaw = 1n;
 
     if (!wsolAccInfo) {
       // WSOL ATA was just created above; it's already in instructions

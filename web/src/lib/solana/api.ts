@@ -180,7 +180,8 @@ export interface TrustScore {
   rug_risk: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   rug_risk_score: number;
   rug_indicators: TrustScoreFlag[];
-  source: "humbletrust" | "external" | "external_cached";
+  source: "humbletrust" | "external" | "external_cached" | "registry" | "registry+onchain";
+  category?: string | null;
   network?: string;
   platform?: string;
   token: {
