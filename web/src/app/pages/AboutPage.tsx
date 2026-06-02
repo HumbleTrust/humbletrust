@@ -1,9 +1,10 @@
-import { motion } from "motion/react";
+import { useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   Shield, Rocket, Lock, ExternalLink, Github, Twitter,
   TrendingUp, Users, CheckCircle2, ArrowLeftRight,
   BarChart2, Award, Globe, Mail, FileText, Zap,
-  Code2, Database, Activity,
+  Code2, Database, Activity, Download, Presentation, X, Copy, Check,
 } from "lucide-react";
 import { GlassPanel } from "../components/GlassPanel";
 
@@ -100,7 +101,20 @@ const LINKS = [
 ];
 
 // ── Main ──────────────────────────────────────────────────────────────────────
+const PITCH_URL = "/HT Pich.html";
+const PITCH_SHARE_URL = "https://humbletrust.vercel.app/HT%20Pich.html";
+
 export function AboutPage({ onTabChange }: AboutPageProps) {
+  const [pitchOpen, setPitchOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  function copyLink() {
+    navigator.clipboard.writeText(PITCH_SHARE_URL).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
 
@@ -173,6 +187,93 @@ export function AboutPage({ onTabChange }: AboutPageProps) {
           </p>
         </GlassPanel>
       </motion.div>
+
+      {/* ── Investor Pitch ── */}
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+        <GlassPanel className="p-6 md:p-8 relative overflow-hidden" glow="purple">
+          <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-[#B026FF]/6 blur-3xl pointer-events-none" />
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="text-xs font-mono tracking-widest uppercase text-[#B026FF]/70">Investor Pitch</div>
+              <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[#00FF41]/10 border border-[#00FF41]/20 text-[#00FF41]">Seed Round · June 2026</span>
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">View or download the pitch deck</h2>
+            <p className="text-white/45 text-sm mb-5 max-w-xl">
+              12-slide investor presentation — real data on Solana rug pulls, creator economics from the smart contract, charts, business model and funding ask.
+            </p>
+            <div className="flex flex-wrap gap-3 mb-5">
+              <button
+                onClick={() => setPitchOpen(true)}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm text-black transition-all hover:opacity-90 active:scale-95"
+                style={{ background: "linear-gradient(90deg,#00FF41,#14F195)" }}
+              >
+                <Presentation size={15} /> View Pitch
+              </button>
+              <a
+                href={PITCH_URL}
+                download="HumbleTrust-Pitch-2026.html"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm text-white border border-[#B026FF]/40 bg-[#B026FF]/8 hover:bg-[#B026FF]/18 transition-all"
+              >
+                <Download size={15} /> Download
+              </a>
+              <button
+                onClick={copyLink}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 transition-all"
+              >
+                {copied ? <Check size={15} className="text-[#00FF41]" /> : <Copy size={15} />}
+                {copied ? "Copied!" : "Copy link"}
+              </button>
+            </div>
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-white/[0.03] border border-white/[0.06]">
+              <span className="text-[10px] font-mono text-white/30 shrink-0">SHARE:</span>
+              <span className="text-[11px] font-mono text-[#B026FF]/80 truncate">{PITCH_SHARE_URL}</span>
+              <ExternalLink size={11} className="text-white/20 shrink-0" />
+            </div>
+          </div>
+        </GlassPanel>
+      </motion.div>
+
+      {/* ── Pitch Modal ── */}
+      <AnimatePresence>
+        {pitchOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex flex-col"
+            style={{ background: "rgba(4,4,12,0.97)", backdropFilter: "blur(12px)" }}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/8 shrink-0">
+              <div className="flex items-center gap-2">
+                <img src="/HT.PNG" alt="" className="w-7 h-7 rounded-lg object-cover" />
+                <span className="text-sm font-semibold text-white">HumbleTrust — Investor Pitch 2026</span>
+                <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[#00FF41]/10 border border-[#00FF41]/20 text-[#00FF41] hidden sm:inline">Seed Round</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={PITCH_URL}
+                  download="HumbleTrust-Pitch-2026.html"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-[#B026FF]/30 bg-[#B026FF]/8 text-white/60 hover:bg-[#B026FF]/15 transition-all"
+                >
+                  <Download size={12} /> Download
+                </a>
+                <button
+                  onClick={() => setPitchOpen(false)}
+                  className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/50 hover:bg-white/12 hover:text-white transition-all"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+            <iframe
+              src={PITCH_URL}
+              title="HumbleTrust Investor Pitch"
+              className="flex-1 w-full border-0"
+              allow="fullscreen"
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Story / Timeline ── */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
