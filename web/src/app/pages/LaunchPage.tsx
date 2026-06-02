@@ -348,7 +348,7 @@ export function LaunchPage() {
     const TOTAL_SUPPLY = 1_000_000_000_000_000_000; // 1B with 9 decimals
     const S_init = initialSolNum * 1e9; // lamports
     const T_init = TOTAL_SUPPLY * (curveLiquidity / 100);
-    const S_grad = 5 * 1e9; // 5 SOL migration threshold (devnet test-mode)
+    const S_grad = 50 * 1e9; // 50 SOL mainnet graduation target
     if (T_init <= 0 || S_init <= 0) return null;
     const initialPrice = curveType === 1
       ? (2 * S_init * 1e9) / T_init   // quadratic spot price × 1e9
@@ -1199,7 +1199,7 @@ export function LaunchPage() {
                     <span className="text-sm font-semibold text-white">Phase 4 — Raydium CPMM Migration</span>
                   </div>
                   <p className="text-xs text-white/40 leading-relaxed mb-2">
-                    Target flow: when the curve reaches 5 SOL (devnet test-mode; 50 SOL on mainnet), v2 migrates PDA reserves into a Raydium CPMM pool and locks LP custody in a PDA. This is still a devnet integration milestone, not a completed mainnet feature.
+                    Target flow: when the curve reaches 50 SOL, v2 migrates PDA reserves into a Raydium CPMM pool and locks LP custody in a PDA. On devnet, graduation triggers at 5 SOL for testing purposes.
                   </p>
                   <p className="text-xs text-white/25 italic">
                     Manual LP input is not enough for the final anti-rug model; the next contract step is real Raydium CPMM CPI.
@@ -1332,7 +1332,7 @@ export function LaunchPage() {
                   </div>
                 </div>
                 <p className="text-white/20 text-[10px] mt-3 leading-relaxed">
-                  Prices shown in SOL per 1M tokens. Graduation at ◎5 SOL raised (devnet test-mode).
+                  Prices shown in SOL per 1M tokens. Graduation at ◎50 SOL raised → Raydium CPMM migration.
                 </p>
               </GlassPanel>
             </motion.div>
