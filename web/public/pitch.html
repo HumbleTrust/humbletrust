@@ -708,14 +708,17 @@ window.addEventListener("load", function() {
     c.width  = window.innerWidth;
     c.height = window.innerHeight;
     var W = c.width, H = c.height;
-    var R   = 22;
+    var R   = 28;
     var cw  = R * Math.sqrt(3);
     var rh  = R * 1.5;
-    ctx.clearRect(0, 0, W, H);
 
-    // Seed for deterministic "glow" hexes
+    // Dark base
+    ctx.fillStyle = '#040d08';
+    ctx.fillRect(0, 0, W, H);
+
+    // Seed for deterministic "glow" hexes — ~30% of grid
     var glowSet = new Set();
-    for (var g = 0; g < 18; g++) {
+    for (var g = 0; g < 60; g++) {
       glowSet.add((g * 137 + 53) % 200);
     }
 
@@ -729,41 +732,48 @@ window.addEventListener("load", function() {
         var isPurp  = v < 3;
         idx++;
 
-        // ── fill: radial gradient for 3D "face" effect ──
+        // ── dark base fill ──
+        hexPath(cx, cy, R - 1);
+        ctx.fillStyle = isPurp ? 'rgba(40,5,70,0.85)' : 'rgba(2,28,12,0.85)';
+        ctx.fill();
+
+        // ── radial gradient "lit face" ──
         var gr = ctx.createRadialGradient(
-          cx - R * 0.25, cy - R * 0.25, 0,   // light source: top-left
-          cx, cy, R * 1.1
+          cx - R * 0.3, cy - R * 0.3, 0,
+          cx + R * 0.2, cy + R * 0.2, R * 1.2
         );
         if (isPurp) {
-          gr.addColorStop(0, isGlow ? 'rgba(176,38,255,0.18)' : 'rgba(176,38,255,0.09)');
-          gr.addColorStop(1, 'rgba(176,38,255,0.01)');
+          gr.addColorStop(0, isGlow ? 'rgba(200,80,255,0.55)' : 'rgba(130,30,200,0.30)');
+          gr.addColorStop(0.5, isGlow ? 'rgba(120,20,180,0.20)' : 'rgba(80,10,130,0.12)');
+          gr.addColorStop(1, 'rgba(30,0,50,0.04)');
         } else {
-          gr.addColorStop(0, isGlow ? 'rgba(0,255,65,0.14)' : 'rgba(0,255,65,0.07)');
-          gr.addColorStop(1, 'rgba(0,255,65,0.01)');
+          gr.addColorStop(0, isGlow ? 'rgba(60,255,100,0.55)' : 'rgba(0,200,60,0.30)');
+          gr.addColorStop(0.5, isGlow ? 'rgba(0,140,50,0.22)' : 'rgba(0,100,30,0.12)');
+          gr.addColorStop(1, 'rgba(0,30,10,0.04)');
         }
-        hexPath(cx, cy, R - 0.5);
+        hexPath(cx, cy, R - 1);
         ctx.fillStyle = gr;
         ctx.fill();
 
-        // ── outer edge ──
-        hexPath(cx, cy, R - 0.5);
+        // ── bright border ──
+        hexPath(cx, cy, R - 1);
         ctx.strokeStyle = isPurp
-          ? (isGlow ? 'rgba(176,38,255,0.50)' : 'rgba(176,38,255,0.18)')
-          : (isGlow ? 'rgba(0,255,65,0.45)'   : 'rgba(0,255,65,0.12)');
-        ctx.lineWidth = isGlow ? 1.2 : 0.6;
+          ? (isGlow ? 'rgba(200,100,255,0.90)' : 'rgba(140,40,220,0.50)')
+          : (isGlow ? 'rgba(50,255,90,0.90)'   : 'rgba(0,180,50,0.50)');
+        ctx.lineWidth = isGlow ? 1.4 : 0.8;
         ctx.stroke();
 
-        // ── top-left highlight edge (3D light simulation) ──
+        // ── top-left highlight edge (extruded 3D look) ──
         if (isGlow) {
           var a0 = Math.PI / 2;
           ctx.beginPath();
-          ctx.moveTo(cx + R * Math.cos(a0), cy + R * Math.sin(a0));
+          ctx.moveTo(cx + (R-1) * Math.cos(a0), cy + (R-1) * Math.sin(a0));
           for (var s = 1; s <= 2; s++) {
             var a = a0 + Math.PI / 3 * s;
-            ctx.lineTo(cx + (R-0.5) * Math.cos(a), cy + (R-0.5) * Math.sin(a));
+            ctx.lineTo(cx + (R-1) * Math.cos(a), cy + (R-1) * Math.sin(a));
           }
-          ctx.strokeStyle = isPurp ? 'rgba(220,140,255,0.55)' : 'rgba(140,255,160,0.55)';
-          ctx.lineWidth = 1.2;
+          ctx.strokeStyle = isPurp ? 'rgba(230,160,255,0.80)' : 'rgba(160,255,180,0.80)';
+          ctx.lineWidth = 1.8;
           ctx.stroke();
         }
       }
