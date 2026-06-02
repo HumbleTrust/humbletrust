@@ -109,13 +109,10 @@ export function HomePage({ onTabChange }: HomePageProps) {
               <motion.div
                 whileHover={{ scale: 1.06, rotate: 3 }}
                 transition={{ type: "spring", stiffness: 300 }}
-                className="w-20 h-20 rounded-2xl flex items-center justify-center shrink-0"
-                style={{
-                  background: "linear-gradient(135deg, #00FF41 0%, #B026FF 100%)",
-                  boxShadow: "0 0 40px rgba(0,255,65,0.35), 0 0 80px rgba(176,38,255,0.25)",
-                }}
+                className="w-20 h-20 rounded-2xl overflow-hidden shrink-0"
+                style={{ boxShadow: "0 0 40px rgba(0,255,65,0.35), 0 0 80px rgba(176,38,255,0.25)" }}
               >
-                <Shield className="w-11 h-11 text-black" />
+                <img src="/HT.PNG" alt="HumbleTrust" className="w-full h-full object-cover" />
               </motion.div>
 
               {/* Text */}

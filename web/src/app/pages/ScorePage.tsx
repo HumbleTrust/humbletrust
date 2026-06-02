@@ -326,9 +326,9 @@ export function ScorePage() {
         <GlassPanel className="p-8 relative overflow-hidden" glow="green">
           <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-[#00FF41]/5 blur-3xl pointer-events-none" />
           <div className="flex items-center gap-4 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#00FF41] to-[#B026FF] flex items-center justify-center"
+            <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0"
               style={{ boxShadow: "0 0 24px rgba(0,255,65,0.3)" }}>
-              <Shield className="w-6 h-6 text-black" />
+              <img src="/HT.PNG" alt="HumbleTrust" className="w-full h-full object-cover" />
             </div>
             <div>
               <div className="text-xs font-mono tracking-widest uppercase text-[#00FF41]/60">Public API</div>

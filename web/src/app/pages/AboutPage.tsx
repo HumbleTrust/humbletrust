@@ -112,13 +112,10 @@ export function AboutPage({ onTabChange }: AboutPageProps) {
           <div className="relative z-10 p-8 md:p-12">
             <div className="flex items-center gap-5 mb-6">
               <div
-                className="w-16 h-16 rounded-2xl flex items-center justify-center shrink-0"
-                style={{
-                  background: "linear-gradient(135deg, #00FF41, #B026FF)",
-                  boxShadow: "0 0 32px rgba(0,255,65,0.3), 0 0 64px rgba(176,38,255,0.2)",
-                }}
+                className="w-16 h-16 rounded-2xl overflow-hidden shrink-0"
+                style={{ boxShadow: "0 0 32px rgba(0,255,65,0.3), 0 0 64px rgba(176,38,255,0.2)" }}
               >
-                <Shield className="w-9 h-9 text-black" />
+                <img src="/HT.PNG" alt="HumbleTrust" className="w-full h-full object-cover" />
               </div>
               <div>
                 <div className="text-xs font-mono tracking-[0.2em] uppercase text-[#00FF41]/60 mb-1">
