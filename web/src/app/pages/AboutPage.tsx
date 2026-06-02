@@ -148,7 +148,7 @@ export function AboutPage({ onTabChange }: AboutPageProps) {
                 className="w-16 h-16 rounded-2xl overflow-hidden shrink-0"
                 style={{ boxShadow: "0 0 32px rgba(0,255,65,0.3), 0 0 64px rgba(176,38,255,0.2)" }}
               >
-                <img src="/HT.PNG" alt="HumbleTrust" className="w-full h-full object-cover" />
+                <img src="/HTlogo512.png" alt="HumbleTrust" className="w-full h-full object-cover" />
               </div>
               <div>
                 <div className="text-xs font-mono tracking-[0.2em] uppercase text-[#00FF41]/60 mb-1">
@@ -266,7 +266,7 @@ export function AboutPage({ onTabChange }: AboutPageProps) {
             >
               <div className="flex items-center justify-between px-4 py-3 border-b border-white/8 shrink-0">
                 <div className="flex items-center gap-2">
-                  <img src="/HT.PNG" alt="" className="w-7 h-7 rounded-lg object-cover" />
+                  <img src="/HTlogo512.png" alt="" className="w-7 h-7 rounded-lg object-cover" />
                   <span className="text-sm font-semibold text-white">HumbleTrust — Investor Pitch 2026</span>
                   <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[#00FF41]/10 border border-[#00FF41]/20 text-[#00FF41] hidden sm:inline">Seed Round</span>
                 </div>

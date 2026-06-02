@@ -112,7 +112,7 @@ export function HomePage({ onTabChange }: HomePageProps) {
                 className="w-20 h-20 rounded-2xl overflow-hidden shrink-0"
                 style={{ boxShadow: "0 0 40px rgba(0,255,65,0.35), 0 0 80px rgba(176,38,255,0.25)" }}
               >
-                <img src="/HT.PNG" alt="HumbleTrust" className="w-full h-full object-cover" />
+                <img src="/HTlogo512.png" alt="HumbleTrust" className="w-full h-full object-cover" />
               </motion.div>
 
               {/* Text */}

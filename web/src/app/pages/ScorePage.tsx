@@ -328,7 +328,7 @@ export function ScorePage() {
           <div className="flex items-center gap-4 mb-4">
             <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0"
               style={{ boxShadow: "0 0 24px rgba(0,255,65,0.3)" }}>
-              <img src="/HT.PNG" alt="HumbleTrust" className="w-full h-full object-cover" />
+              <img src="/HTlogo512.png" alt="HumbleTrust" className="w-full h-full object-cover" />
             </div>
             <div>
               <div className="text-xs font-mono tracking-widest uppercase text-[#00FF41]/60">Public API</div>

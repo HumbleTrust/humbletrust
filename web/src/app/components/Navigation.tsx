@@ -76,7 +76,7 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
               className="w-10 h-10 rounded-lg overflow-hidden shrink-0"
               style={{ boxShadow: "0 0 16px rgba(0,255,65,0.25), 0 0 32px rgba(176,38,255,0.15)" }}
             >
-              <img src="/HT.PNG" alt="HumbleTrust" className="w-full h-full object-cover" />
+              <img src="/HTlogo512.png" alt="HumbleTrust" className="w-full h-full object-cover" />
             </motion.div>
             <div>
               <h1 className="font-bold text-xl text-white">HumbleTrust</h1>
