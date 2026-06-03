@@ -1,5 +1,10 @@
 const { setCors } = require("./_lib/validate");
 
+// ── in-memory cache (5 min TTL, keyed by source) ─────────────────────────────
+const _cache = {};
+const _cacheTime = {};
+const CACHE_TTL = 5 * 60 * 1000;
+
 // ── source URLs ───────────────────────────────────────────────────────────────
 
 const PUMP_URL =
@@ -35,6 +40,18 @@ module.exports = async (req, res) => {
 
   const source = req.query?.source ?? "pump";
 
+  // ── cache hit ──────────────────────────────────────────────────────────────
+  if (_cache[source] && Date.now() - _cacheTime[source] < CACHE_TTL) {
+    return res.json(_cache[source]);
+  }
+
+  // helper: write to cache then respond
+  const respond = (data) => {
+    _cache[source] = data;
+    _cacheTime[source] = Date.now();
+    return res.json(data);
+  };
+
   try {
     /* ── PUMP.FUN ──────────────────────────────────────────────────────────── */
     if (source === "pump" || source === "pumpswap") {
@@ -64,7 +81,7 @@ module.exports = async (req, res) => {
         dex_url:    `https://pump.fun/${c.mint}`,
         source,
       }));
-      return res.json({ source, items });
+      return respond({ source, items });
 
     /* ── DEXSCREENER ───────────────────────────────────────────────────────── */
     } else if (source === "dex") {
@@ -76,7 +93,7 @@ module.exports = async (req, res) => {
         .filter((p) => p.chainId === "solana")
         .slice(0, 20);
 
-      if (solProfiles.length === 0) return res.json({ source: "dex", items: [] });
+      if (solProfiles.length === 0) return respond({ source: "dex", items: [] });
 
       const addresses = solProfiles.map((p) => p.tokenAddress).join(",");
       let priceMap = {};
@@ -97,7 +114,7 @@ module.exports = async (req, res) => {
             }
           }
         }
-      } catch { /* best-effort */ }
+      } catch { /* best-effort — price data is optional */ }
 
       const items = solProfiles.map((p) => norm({
         address:     p.tokenAddress,
@@ -110,7 +127,7 @@ module.exports = async (req, res) => {
         ...(priceMap[p.tokenAddress] ?? {}),
         source:      "dex",
       }));
-      return res.json({ source: "dex", items });
+      return respond({ source: "dex", items });
 
     /* ── RAYDIUM ───────────────────────────────────────────────────────────── */
     } else if (source === "raydium") {
@@ -132,7 +149,7 @@ module.exports = async (req, res) => {
         dex_url:       `https://raydium.io/liquidity/increase/?mode=add&pool_id=${p.id}`,
         source:        "raydium",
       }));
-      return res.json({ source: "raydium", items });
+      return respond({ source: "raydium", items });
 
     /* ── METEORA ───────────────────────────────────────────────────────────── */
     } else if (source === "meteora") {
@@ -152,7 +169,7 @@ module.exports = async (req, res) => {
         dex_url:       `https://app.meteora.ag/dlmm/${p.address}`,
         source:        "meteora",
       }));
-      return res.json({ source: "meteora", items });
+      return respond({ source: "meteora", items });
 
     /* ── ORCA ──────────────────────────────────────────────────────────────── */
     } else if (source === "orca") {
@@ -173,7 +190,7 @@ module.exports = async (req, res) => {
         dex_url:       `https://www.orca.so/liquidity/browse?tokenMint=${p.tokenA?.mint}`,
         source:        "orca",
       }));
-      return res.json({ source: "orca", items });
+      return respond({ source: "orca", items });
 
     } else {
       return res.status(400).json({ error: "source must be: pump, pumpswap, dex, raydium, meteora, orca" });
