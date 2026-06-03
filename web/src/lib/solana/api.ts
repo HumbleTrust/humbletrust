@@ -107,7 +107,10 @@ export const registerToken = (data: {
 }) =>
   fetch(`${API_BASE}/tokens`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(import.meta.env.VITE_INTERNAL_SECRET ? { Authorization: `Bearer ${import.meta.env.VITE_INTERNAL_SECRET}` } : {}),
+    },
     body: JSON.stringify(data),
   }).then((r) => readJson<{ ok?: boolean; error?: string }>(r));
 
@@ -126,7 +129,12 @@ export const getTokenOhlcv = (mint: string, timeframe: string, limit = 500) =>
   );
 
 export const syncTokenTrades = (mint: string, limit = 100) =>
-  fetch(`${API_BASE}/tokens/${mint}/trades?action=sync&limit=${limit}`, { method: "POST" })
+  fetch(`${API_BASE}/tokens/${mint}/trades?action=sync&limit=${limit}`, {
+    method: "POST",
+    headers: {
+      ...(import.meta.env.VITE_INTERNAL_SECRET ? { Authorization: `Bearer ${import.meta.env.VITE_INTERNAL_SECRET}` } : {}),
+    },
+  })
     .then((r) => readJson<{ synced: number; total_sigs?: number; message?: string; error?: string }>(r))
     .catch(e => ({ synced: 0, error: e.message }));
 

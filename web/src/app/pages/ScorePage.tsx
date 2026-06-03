@@ -727,7 +727,7 @@ export function ScorePage() {
                         f.severity === "critical" ? "bg-[#FF4444]" :
                         f.severity === "info"     ? "bg-[#00FF41]" : "bg-[#FFDB2B]"
                       }`} />
-                      <p className="text-xs text-white/55">{f.message}</p>
+                      <p className="text-xs text-white/55">{f.msg}</p>
                     </div>
                   ))}
                 </div>

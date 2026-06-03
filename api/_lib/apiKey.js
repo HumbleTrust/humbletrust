@@ -68,7 +68,7 @@ async function trackUsage({ keyId, ip, mint, format, cached }) {
 }
 
 async function handleApiAuth(req, res) {
-  const keyData = await validateApiKey(req).catch(() => ({ valid: false, plan: "free", dailyLimit: PLAN_LIMITS.free, keyId: null }));
+  const keyData = await validateApiKey(req).catch(() => ({ valid: false, error: "auth_error", plan: "free", dailyLimit: PLAN_LIMITS.free, keyId: null }));
 
   if (keyData.error) {
     res.setHeader("WWW-Authenticate", "Bearer realm=\"HumbleTrust API\"");

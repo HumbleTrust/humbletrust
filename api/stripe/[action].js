@@ -95,7 +95,7 @@ async function handleWebhook(rawBody, req, res) {
     event = stripe.webhooks.constructEvent(rawBody, sig, WEBHOOK_SECRET);
   } catch (e) {
     console.error("Webhook signature failed", e.message);
-    return res.status(400).json({ error: `Webhook error: ${e.message}` });
+    return res.status(400).json({ error: 'Webhook signature invalid' });
   }
 
   try {

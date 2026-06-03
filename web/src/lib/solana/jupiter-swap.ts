@@ -84,12 +84,18 @@ export async function executeJupiterSwap(
   }
 
   const tx = VersionedTransaction.deserialize(base64ToUint8Array(swapTransaction));
+  // Extract blockhash from the transaction (Jupiter embeds it at creation time)
+  const recentBlockhash = tx.message.recentBlockhash;
+  // Fetch lastValidBlockHeight before sending so confirmTransaction has a valid window
+  const { lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
   const signed = await wallet.signTransaction(tx);
   const sig = await connection.sendRawTransaction(signed.serialize(), {
     skipPreflight: false,
     maxRetries: 3,
   });
-  const blockhash = await connection.getLatestBlockhash("confirmed");
-  await connection.confirmTransaction({ signature: sig, ...blockhash }, "confirmed");
+  await connection.confirmTransaction(
+    { signature: sig, blockhash: recentBlockhash, lastValidBlockHeight },
+    "confirmed"
+  );
   return sig;
 }

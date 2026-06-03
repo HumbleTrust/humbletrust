@@ -142,6 +142,8 @@ export async function swapOnRaydiumCpmm(
   slippageBps = 100,
   tokenDecimals = 9,
 ): Promise<CpmmSwapResult> {
+  if (tokenDecimals === undefined || tokenDecimals === null || tokenDecimals < 0 || tokenDecimals > 18)
+    throw new Error("tokenDecimals required and must be between 0 and 18");
   if (!wallet.publicKey || !wallet.signTransaction)
     throw new Error("Wallet not connected");
 

@@ -881,9 +881,9 @@ async function handleHistory(req, res, mint, db) {
 
   const { data: rows } = await db
     .from("score_history")
-    .select("score, trust_level, computed_at")
+    .select("score, trust_level, recorded_at")
     .eq("mint", mint)
-    .order("computed_at", { ascending: false })
+    .order("recorded_at", { ascending: false })
     .limit(limit);
 
   if (!rows?.length) {
@@ -907,13 +907,13 @@ async function handleHistory(req, res, mint, db) {
 
   const latest       = rows[0];
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const row7d        = rows.find(r => r.computed_at <= sevenDaysAgo);
+  const row7d        = rows.find(r => r.recorded_at <= sevenDaysAgo);
   const delta7d      = row7d ? latest.score - row7d.score : null;
   const trend        = delta7d === null ? "stable" : delta7d > 5 ? "up" : delta7d < -5 ? "down" : "stable";
 
   return res.json({
     mint,
-    history: rows.map(r => ({ score: r.score, trust_level: r.trust_level, computed_at: r.computed_at })),
+    history: rows.map(r => ({ score: r.score, trust_level: r.trust_level, recorded_at: r.recorded_at })),
     trend,
     delta_7d:            delta7d,
     current_score:       latest.score,
@@ -1242,7 +1242,7 @@ module.exports = async (req, res) => {
         .single();
 
       if (cached) {
-        const d = cached.score_components || {};
+        const d = cached.components || {};
         scoreData = {
           score:        cached.score,
           trust_level:  cached.trust_level,

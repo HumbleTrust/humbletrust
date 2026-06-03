@@ -1,6 +1,13 @@
 const { generateKey, hashKey, validateApiKey, checkRateLimit, PLAN_LIMITS } = require("../_lib/apiKey");
 const { getClient } = require("../_lib/db");
 
+// Solana addresses are base58-encoded 32-byte public keys (32–44 chars, base58 alphabet)
+function isValidWallet(addr) {
+  if (typeof addr !== "string") return false;
+  if (addr.length < 32 || addr.length > 44) return false;
+  return /^[1-9A-HJ-NP-Za-km-z]+$/.test(addr);
+}
+
 // GET  /api/keys   — key info + usage (requires Bearer token)
 // POST /api/keys   — generate a free API key
 module.exports = async function handler(req, res) {
@@ -52,6 +59,7 @@ module.exports = async function handler(req, res) {
     if (!email && !wallet) return res.status(400).json({ error: "email or wallet required" });
     const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (email && !emailRe.test(email)) return res.status(400).json({ error: "invalid email" });
+    if (wallet && !isValidWallet(wallet)) return res.status(400).json({ error: "invalid_wallet" });
 
     const db = getClient();
     if (email) {

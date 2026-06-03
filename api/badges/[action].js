@@ -412,7 +412,7 @@ async function doPrepare(body, req, res) {
     const { error: upsertErr } = await db.from('badges').upsert({
       wallet, zodiac, element, aura_color: auraColor, edition,
       status: 'reserved', reserved_at: new Date().toISOString(),
-      badge_mint: null, tx_signature: null, minted_at: null,
+      badge_mint: null, tx_signature: null,
       sold_at: null, cooldown_until: null,
     }, { onConflict: 'wallet' });
     if (upsertErr) throw upsertErr;
