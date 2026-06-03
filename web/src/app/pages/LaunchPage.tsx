@@ -1127,6 +1127,7 @@ export function LaunchPage() {
                   ) : (
                     <>
                       <button
+                        type="button"
                         onClick={handleInitReputation}
                         disabled={repBusy || !wallet.connected}
                         className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#00FF41]/10 border border-[#00FF41]/30 text-[#00FF41] text-xs hover:bg-[#00FF41]/20 disabled:opacity-50 transition-all"
@@ -1154,6 +1155,7 @@ export function LaunchPage() {
                   ) : (
                     <>
                       <button
+                        type="button"
                         onClick={handleMintCertificate}
                         disabled={certBusy || !isV2Launch}
                         className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs hover:bg-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
@@ -1184,6 +1186,7 @@ export function LaunchPage() {
                   </ul>
                   {result && (
                     <button
+                      type="button"
                       onClick={() => window.dispatchEvent(new CustomEvent("ht:open-trade", { detail: result.mint }))}
                       className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-300 text-xs hover:bg-purple-500/20 transition-all"
                     >
@@ -1213,13 +1216,14 @@ export function LaunchPage() {
           {/* Launch button */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
             <button
+              type="button"
               onClick={() => handleLaunch()}
               disabled={
                 busy || isCheckingProgram || !wallet.connected ||
                 !validDistribution || !validCombinedLiquidity ||
                 !validInitialSol || insufficientSol || !name || !symbol
               }
-              className="w-full py-4 rounded-lg bg-gradient-to-r from-[#00FF41] to-[#00cc33] text-black font-bold text-lg hover:shadow-[0_0_30px_rgba(0,255,65,0.4)] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full py-4 rounded-lg bg-gradient-to-r from-[#00FF41] to-[#00cc33] text-black font-bold text-lg hover:shadow-[0_0_30px_rgba(0,255,65,0.4)] active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FF41]/50 focus-visible:ring-offset-1 focus-visible:ring-offset-[#050A0E]"
             >
               {busy ? (
                 <><Loader size={18} className="animate-spin" />Launching...</>
@@ -1234,13 +1238,14 @@ export function LaunchPage() {
             {isV2Launch && (
               <div className="mt-2 flex justify-center">
                 <button
+                  type="button"
                   onClick={() => handleLaunch(1)}
                   disabled={
                     busy || isCheckingProgram || !wallet.connected ||
                     !validDistribution || !validCombinedLiquidity ||
                     !validInitialSol || insufficientSol || !name || !symbol
                   }
-                  className="text-xs px-4 py-1.5 rounded-lg border border-white/10 bg-white/5 text-white/35 hover:border-white/20 hover:text-white/55 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  className="text-xs px-4 py-1.5 rounded-lg border border-white/10 bg-white/5 text-white/35 hover:border-white/20 hover:text-white/55 disabled:opacity-40 disabled:cursor-not-allowed transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
                 >
                   ⚡ Test launch · 1-min lock (devnet only)
                 </button>

@@ -21,9 +21,10 @@ function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
+      type="button"
       onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
       aria-label="Copy to clipboard"
-      className="ml-auto p-1.5 rounded text-white/30 hover:text-white/70 transition-colors"
+      className="ml-auto p-1.5 rounded text-white/30 hover:text-white/70 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
     >
       {copied ? <CheckCircle2 size={13} className="text-[#00FF41]" /> : <Copy size={13} />}
     </button>
@@ -771,8 +772,10 @@ export function ScorePage() {
                 { id: "curl", label: "cURL" },
               ] as const).map(({ id, label }) => (
                 <button key={id}
+                  type="button"
                   onClick={() => setActiveCode(id)}
-                  className={`px-3 py-1 rounded-md text-xs font-mono transition-all ${
+                  aria-pressed={activeCode === id}
+                  className={`px-3 py-1 rounded-md text-xs font-mono transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00FF41]/50 ${
                     activeCode === id ? "bg-[#00FF41] text-black font-bold" : "text-white/40 hover:text-white/70"
                   }`}
                 >

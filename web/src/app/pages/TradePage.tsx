@@ -266,7 +266,6 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
   const [chartError, setChartError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
-  const chartAbortRef = useRef<AbortController | null>(null);
   const lastRaydiumSyncRef = useRef<string | null>(null);
   const chartDisplayTrades = useMemo(
     () => chartTrades.filter(isRenderableTrade),
@@ -1282,7 +1281,13 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                     <button
                       key={f}
                       type="button"
-                      className="py-1.5 text-[11px] rounded bg-white/5 text-white/50 hover:bg-white/10 disabled:opacity-40"
+                      aria-label={f === 1 ? "Use 100% of SOL balance" : `Use ${f * 100}% of SOL balance`}
+                      className={cn(
+                        "py-1.5 text-[11px] font-medium rounded border transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20",
+                        "bg-white/[0.04] border-white/[0.08] text-white/45",
+                        "hover:bg-[#00FF41]/10 hover:border-[#00FF41]/25 hover:text-[#00FF41]",
+                        "active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white/[0.04] disabled:hover:text-white/45 disabled:hover:border-white/[0.08]"
+                      )}
                       disabled={!walletSolBalance}
                       onClick={() => setFractionSol(f)}
                     >
@@ -1455,23 +1460,41 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
 
             {/* Action button */}
             <button
+              type="button"
               onClick={side === "buy" ? runBuy : runSell}
               disabled={!canSubmitTrade}
               className={cn(
-                "w-full py-3.5 rounded-lg font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed",
+                "relative w-full py-3.5 rounded-lg font-semibold text-sm transition-all duration-200",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-black",
+                "active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100",
                 side === "buy"
-                  ? "bg-gradient-to-r from-[#00FF41] to-[#00FF41]/80 text-black hover:shadow-[0_0_24px_rgba(0,255,65,0.4)]"
-                  : "bg-gradient-to-r from-red-500 to-red-500/80 text-white hover:shadow-[0_0_24px_rgba(239,68,68,0.4)]"
+                  ? [
+                      "bg-[#00FF41] text-black",
+                      "hover:bg-[#00FF41]/90 hover:shadow-[0_0_28px_rgba(0,255,65,0.45)]",
+                      "focus-visible:ring-[#00FF41]/60",
+                    ]
+                  : [
+                      "bg-red-500 text-white",
+                      "hover:bg-red-400 hover:shadow-[0_0_28px_rgba(239,68,68,0.45)]",
+                      "focus-visible:ring-red-500/60",
+                    ]
               )}
             >
-              {busy === "buy" ? "Buying…" : busy === "sell" ? "Selling…"
-                : isMainnet
+              <span className={cn("transition-opacity", (busy === "buy" || busy === "sell") ? "opacity-0" : "opacity-100")}>
+                {isMainnet
                   ? side === "buy" ? `Buy ${selectedSymbol} via Jupiter` : `Sell ${selectedSymbol} via Jupiter`
                   : raydiumTradingActive
                     ? side === "buy" ? `Buy ${selectedSymbol}` : `Sell ${selectedSymbol}`
                   : migrationPreparedOnly
                     ? "Migration prepared"
                   : side === "buy" ? "Buy on Curve" : "Sell on Curve"}
+              </span>
+              {(busy === "buy" || busy === "sell") && (
+                <span className="absolute inset-0 flex items-center justify-center gap-2">
+                  <RefreshCw size={13} className="animate-spin" />
+                  {busy === "buy" ? "Buying…" : "Selling…"}
+                </span>
+              )}
             </button>
 
 
@@ -1515,90 +1538,63 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
         >
           <GlassPanel className={cn("overflow-hidden", fullChart && "fixed inset-1 md:inset-4 z-50")}>
             {/* Chart topbar */}
-            <div className="flex items-center gap-1 px-3 py-2 border-b border-white/10 bg-white/[0.02] flex-wrap">
-              {!showDexChart && TIMEFRAMES.map((tf) => (
-                <button
-                  type="button"
-                  key={tf}
-                  onClick={() => setTimeframe(tf)}
-                  className={cn(
-                    "px-2.5 py-1 rounded text-xs font-mono transition-all",
-                    timeframe === tf
-                      ? "bg-[#00FF41]/15 text-[#00FF41]"
-                      : "text-white/40 hover:text-white/70"
-                  )}
-                >
-                  {tf}
-                </button>
-              ))}
-              {!showDexChart && <span className="w-px h-4 bg-white/10 mx-1" />}
-              {!showDexChart && (["candles", "line", "area"] as ChartMode[]).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  className={cn(
-                    "px-2.5 py-1 rounded text-xs capitalize transition-all",
-                    chartMode === m
-                      ? "bg-[#00FF41]/15 text-[#00FF41]"
-                      : "text-white/40 hover:text-white/70"
-                  )}
-                  onClick={() => setChartMode(m)}
-                >
-                  {m}
-                </button>
-              ))}
-              {!showDexChart && <span className="w-px h-4 bg-white/10 mx-1" />}
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-white/[0.02]">
               {!showDexChart && (
                 <button
                   type="button"
+                  aria-pressed={showIndicators}
                   className={cn(
-                    "px-2.5 py-1 rounded text-xs transition-all",
+                    "flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#B026FF]/60",
                     showIndicators
-                      ? "bg-[#B026FF]/15 text-[#B026FF]"
-                      : "text-white/40 hover:text-white/70"
+                      ? "bg-[#B026FF]/15 text-[#B026FF] border border-[#B026FF]/25"
+                      : "text-white/40 hover:text-white/70 hover:bg-white/5 border border-transparent"
                   )}
                   onClick={() => setShowIndicators((v) => !v)}
                 >
-                  fx Indicators
+                  <span className="font-mono">fx</span> Indicators
                 </button>
               )}
               {showDexChart && (
                 <span className="text-xs text-white/30 font-mono">DexScreener · live chart</span>
               )}
-              <span className="w-px h-4 bg-white/10 mx-1 ml-auto" />
+              <span className="ml-auto" />
               <button
                 type="button"
-                className="p-1.5 rounded text-white/40 hover:text-white/70 transition-all"
-                title={fullChart ? "Exit full" : "Expand"}
+                aria-label={fullChart ? "Exit fullscreen" : "Expand chart"}
+                className="p-1.5 rounded text-white/40 hover:text-white/70 hover:bg-white/5 transition-all border border-transparent hover:border-white/10"
                 onClick={() => setFullChart((v) => !v)}
               >
                 {fullChart ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
               </button>
             </div>
 
-            {/* Indicator options */}
+            {/* Indicator options — toggle pills */}
             {showIndicators && !showDexChart && (
-              <div className="flex items-center gap-4 px-3 py-2 border-b border-white/10 bg-white/[0.02] flex-wrap">
-                <label className="flex items-center gap-1.5 text-xs text-white/60 cursor-pointer">
-                  <input type="checkbox" className="accent-[#00FF41]" checked={showVolume} onChange={(e) => setShowVolume(e.target.checked)} />
-                  Volume
-                </label>
-                <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                  <input type="checkbox" className="accent-yellow-400" checked={indicators.sma20} onChange={() => toggleIndicator("sma20")} />
-                  <span className="text-yellow-400">SMA 20</span>
-                </label>
-                <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                  <input type="checkbox" className="accent-purple-400" checked={indicators.sma50} onChange={() => toggleIndicator("sma50")} />
-                  <span className="text-purple-400">SMA 50</span>
-                </label>
-                <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                  <input type="checkbox" className="accent-cyan-400" checked={indicators.ema20} onChange={() => toggleIndicator("ema20")} />
-                  <span className="text-cyan-400">EMA 20</span>
-                </label>
-                <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                  <input type="checkbox" className="accent-yellow-400" checked={indicators.rsi} onChange={() => toggleIndicator("rsi")} />
-                  <span className="text-yellow-400">RSI (14)</span>
-                </label>
+              <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/10 bg-white/[0.015] flex-wrap">
+                {([
+                  { key: "vol",  label: "Volume", color: "#00FF41",  active: showVolume,        onClick: () => setShowVolume((v) => !v) },
+                  { key: "sma20", label: "SMA 20", color: "#FFD700",  active: indicators.sma20,  onClick: () => toggleIndicator("sma20") },
+                  { key: "sma50", label: "SMA 50", color: "#B026FF",  active: indicators.sma50,  onClick: () => toggleIndicator("sma50") },
+                  { key: "ema20", label: "EMA 20", color: "#00BFFF",  active: indicators.ema20,  onClick: () => toggleIndicator("ema20") },
+                  { key: "rsi",  label: "RSI 14", color: "#FF9500",   active: indicators.rsi,    onClick: () => toggleIndicator("rsi") },
+                ] as { key: string; label: string; color: string; active: boolean; onClick: () => void }[]).map(({ key, label, color, active, onClick }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={onClick}
+                    className={cn(
+                      "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all duration-150 focus-visible:outline-none",
+                      active
+                        ? "border-current"
+                        : "border-white/10 text-white/35 hover:text-white/60 hover:border-white/20 hover:bg-white/[0.04]"
+                    )}
+                    style={active ? { color, borderColor: `${color}40`, background: `${color}12` } : undefined}
+                  >
+                    {active && <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />}
+                    {label}
+                  </button>
+                ))}
               </div>
             )}
 
@@ -1618,9 +1614,9 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                   {validMint && !chartLoading && (
                     <button
                       type="button"
+                      aria-label="Refresh chart data"
                       onClick={() => fetchChartTrades(mintInput.trim())}
-                      className="text-white/30 hover:text-white/60"
-                      title="Refresh"
+                      className="p-1.5 rounded text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent hover:border-white/10 transition-all duration-150"
                     >
                       <RefreshCw size={11} />
                     </button>
@@ -1630,8 +1626,8 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                       type="button"
                       disabled={syncing}
                       onClick={() => runSyncTrades(mintInput.trim())}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border border-[#00FF41]/20 text-[#00FF41]/60 hover:text-[#00FF41] hover:border-[#00FF41]/50 transition-all disabled:opacity-40"
-                      title="Sync historical trades from blockchain"
+                      className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono border border-[#00FF41]/20 text-[#00FF41]/60 hover:text-[#00FF41] hover:border-[#00FF41]/40 hover:bg-[#00FF41]/5 transition-all duration-150 disabled:opacity-40"
+                      aria-label="Sync historical trades from blockchain"
                     >
                       {syncing
                         ? <><RefreshCw size={9} className="animate-spin" /> Syncing…</>
@@ -1700,6 +1696,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                     showEma20={indicators.ema20}
                     showRsi={indicators.rsi}
                     mode={chartMode}
+                    onModeChange={(m) => setChartMode(m)}
                     timeframe={timeframe}
                     onTimeframeChange={(tf) => setTimeframe(tf as Timeframe)}
                   />
@@ -1720,15 +1717,26 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
 
               {/* Stats bar */}
               {chartDisplayTrades.length > 0 && (() => {
-                const buys = chartDisplayTrades.filter(t => t.side === "buy").length;
-                const sells = chartDisplayTrades.filter(t => t.side === "sell").length;
+                const buys     = chartDisplayTrades.filter(t => t.side === "buy").length;
+                const sells    = chartDisplayTrades.filter(t => t.side === "sell").length;
                 const totalSol = chartDisplayTrades.reduce((s, t) => s + Number(t.sol_amount), 0);
+                const buyPct   = buys + sells > 0 ? Math.round((buys / (buys + sells)) * 100) : 50;
                 return (
-                  <div className="flex items-center gap-4 text-xs border-t border-white/5 pt-2">
-                    <span className="text-[#00FF41]">▲ {buys} buys</span>
-                    <span className="text-[#FF3C6B]">▼ {sells} sells</span>
-                    <span className="text-white/40">{totalSol.toFixed(3)} SOL vol</span>
-                    <span className="text-white/25 ml-auto">{chartDisplayTrades.length} trades · auto 30s</span>
+                  <div className="flex items-center gap-3 text-xs border-t border-white/5 pt-2">
+                    <TrendingUp size={11} className="text-[#00FF41] shrink-0" />
+                    <span className="text-[#00FF41] font-medium">{buys} buys</span>
+                    <span className="text-white/20">·</span>
+                    <span className="text-[#FF3C6B] font-medium">{sells} sells</span>
+                    <span className="text-white/20">·</span>
+                    <span className="text-white/40 font-mono">{totalSol.toFixed(3)} SOL</span>
+                    {/* Buy pressure bar */}
+                    <div className="flex-1 mx-2 h-1 rounded-full bg-[#FF3C6B]/20 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-[#00FF41]/70 transition-all duration-500"
+                        style={{ width: `${buyPct}%` }}
+                      />
+                    </div>
+                    <span className="text-white/25 shrink-0 font-mono text-[10px]">{chartDisplayTrades.length} trades</span>
                   </div>
                 );
               })()}
@@ -1758,16 +1766,18 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                         return (
                           <div
                             key={trade.signature + i}
-                            className="grid grid-cols-[52px_1fr_90px_90px_70px_24px] gap-1 px-1 py-1 text-[11px] font-mono rounded hover:bg-white/[0.03] items-center"
-                            style={{ borderLeft: `2px solid ${isBuy ? "rgba(0,255,65,0.4)" : "rgba(255,60,107,0.4)"}` }}
+                            className={cn(
+                              "grid grid-cols-[52px_1fr_90px_90px_70px_24px] gap-1 px-1 py-1 text-[11px] font-mono rounded items-center transition-colors duration-100",
+                              "hover:bg-white/[0.03]",
+                              isBuy ? "border-l-2 border-[#00FF41]/35" : "border-l-2 border-[#FF3C6B]/35"
+                            )}
                           >
-                            <span
-                              className="text-[10px] font-bold px-1.5 py-0.5 rounded text-center"
-                              style={{
-                                color: isBuy ? "#00FF41" : "#FF3C6B",
-                                background: isBuy ? "rgba(0,255,65,0.1)" : "rgba(255,60,107,0.1)"
-                              }}
-                            >
+                            <span className={cn(
+                              "text-[10px] font-bold px-1.5 py-0.5 rounded text-center",
+                              isBuy
+                                ? "bg-[#00FF41]/10 text-[#00FF41]"
+                                : "bg-[#FF3C6B]/10 text-[#FF3C6B]"
+                            )}>
                               {isBuy ? "BUY" : "SELL"}
                             </span>
                             <span className="text-white/60 truncate">
@@ -1846,6 +1856,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
               </div>
             </div>
             <button
+              type="button"
               className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white/60 text-xs hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
               onClick={() => refreshReserves()}
               disabled={!validMint || reservesBusy || !canUseCurve}
@@ -1891,23 +1902,23 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                       : `${migrationState.progressPct.toFixed(1)}% — reach 100% to open Raydium CPMM pool`}
                   </div>
                   <button
+                    type="button"
                     onClick={runMigrate}
                     disabled={(!migrationState.isPrepared && migrationState.progressPct < 100) || migrationBusy || !wallet.connected}
-                    className="w-full py-2.5 rounded-lg font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{
-                      background: migrationState.isPrepared || migrationState.progressPct >= 100
-                        ? "linear-gradient(135deg, #00FF41, #00cc33)"
-                        : "rgba(255,255,255,0.05)",
-                      color: migrationState.isPrepared || migrationState.progressPct >= 100 ? "#000" : "rgba(255,255,255,0.4)",
-                      border: "1px solid rgba(255,255,255,0.1)",
-                    }}
+                    className={cn(
+                      "w-full py-2.5 rounded-lg font-semibold text-sm border transition-all duration-150 active:scale-[0.98]",
+                      "disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FF41]/50",
+                      migrationState.isPrepared || migrationState.progressPct >= 100
+                        ? "bg-[#00FF41] text-black border-[#00FF41]/50 hover:bg-[#00FF41]/90 hover:shadow-[0_0_20px_rgba(0,255,65,0.35)]"
+                        : "bg-white/[0.04] text-white/40 border-white/10"
+                    )}
                   >
                     {migrationBusy
                       ? "Migrating…"
                       : migrationState.isPrepared
-                        ? "🚀 Continue Raydium Migration"
+                        ? "Continue Raydium Migration"
                         : migrationState.progressPct >= 100
-                        ? "🚀 Trigger Migration · Earn 0.1 SOL"
+                        ? "Trigger Migration · Earn 0.1 SOL"
                         : `Needs ${((migrationState.thresholdLamports - migrationState.currentSolLamports) / LAMPORTS_PER_SOL).toFixed(2)} more SOL`}
                   </button>
                 </>
@@ -1953,6 +1964,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                       {!lpLockState.isAutoLock && (
                         <div className="flex gap-2 pt-1">
                           <button
+                            type="button"
                             onClick={runClaimLpFees}
                             disabled={lpLockBusy || !wallet.connected}
                             className="flex-1 py-2 rounded-lg bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 text-xs font-semibold hover:bg-yellow-500/25 disabled:opacity-40 transition-all"
@@ -1961,6 +1973,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                           </button>
                           {Date.now() / 1000 >= lpLockState.unlockTime && (
                             <button
+                              type="button"
                               onClick={runUnlockLp}
                               disabled={lpLockBusy || !wallet.connected}
                               className="flex-1 py-2 rounded-lg bg-[#00FF41]/15 border border-[#00FF41]/30 text-[#00FF41] text-xs font-semibold hover:bg-[#00FF41]/25 disabled:opacity-40 transition-all"
@@ -1989,6 +2002,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                         />
                       </div>
                       <button
+                        type="button"
                         onClick={runLockLp}
                         disabled={lpLockBusy || !lpLockAmt}
                         className="w-full py-2 rounded-lg bg-[#00FF41]/10 border border-[#00FF41]/30 text-[#00FF41] text-xs font-semibold hover:bg-[#00FF41]/20 disabled:opacity-40 transition-all"
@@ -2050,7 +2064,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                   <Lock size={14} className="text-purple-400" />
                   <span className="text-sm font-semibold text-purple-300">Creator Panel</span>
                   <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono">only you see this</span>
-                  <button onClick={() => refreshCreatorLockState()} className="ml-auto text-white/30 hover:text-white/60 transition-colors" title="Refresh">
+                  <button type="button" onClick={() => refreshCreatorLockState()} className="ml-auto text-white/30 hover:text-white/60 transition-colors" aria-label="Refresh creator lock state">
                     <RefreshCw size={12} />
                   </button>
                 </div>
@@ -2133,6 +2147,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                           ℹ️ Clicking unlock releases tokens to <strong>market circulation</strong> — not your wallet. This is by design to protect buyers.
                         </div>
                         <button
+                          type="button"
                           onClick={runUnlockTokens}
                           disabled={!canUnlock || creatorLockBusy}
                           className={cn(
@@ -2173,6 +2188,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                             </div>
                             {status.ready ? (
                               <button
+                                type="button"
                                 onClick={() => runVestingTranche(n)}
                                 disabled={creatorLockBusy}
                                 className="px-3 py-1 rounded-lg text-xs font-bold bg-[#00FF41]/20 hover:bg-[#00FF41]/30 text-[#00FF41] border border-[#00FF41]/30 transition-all disabled:opacity-40 shrink-0"
@@ -2229,6 +2245,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
           </div>
           {goDiscover && (
             <button
+              type="button"
               onClick={goDiscover}
               className="text-xs text-blue-400 border border-blue-400/20 bg-blue-400/5 hover:bg-blue-400/10 px-3 py-2 rounded-lg transition-all"
             >

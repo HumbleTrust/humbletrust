@@ -1,7 +1,7 @@
 import {
   Home, LayoutDashboard, Rocket, Compass, ArrowLeftRight,
-  Wallet, BarChart2, Award, Settings, Shield, MoreHorizontal, X, Info, Code2, Zap,
-  LogIn, LogOut,
+  Wallet, BarChart2, Award, Settings, MoreHorizontal, X, Info, Code2, Zap,
+  LogOut,
 } from "lucide-react";
 import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -92,13 +92,14 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
             return (
               <motion.button
                 key={id}
+                type="button"
                 onClick={() => onTabChange(id)}
                 initial={{ opacity: 0, x: -12 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: idx * 0.04, duration: 0.3 }}
                 whileHover={{ x: 3 }}
                 whileTap={{ scale: 0.97 }}
-                className="relative w-full flex items-center gap-3 px-4 py-3 rounded-lg group"
+                className="relative w-full flex items-center gap-3 px-4 py-3 rounded-lg group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FF41]/50"
               >
                 {/* Animated active background */}
                 {isActive && (
@@ -156,7 +157,7 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
                 <p className="text-xs font-medium text-white/80 truncate">{name}</p>
                 <p className="text-[10px] text-white/40 truncate">{email}</p>
               </div>
-              <button onClick={signOut} className="text-white/30 hover:text-white/70 transition-colors shrink-0" title="Sign out">
+              <button type="button" onClick={signOut} className="text-white/30 hover:text-white/70 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30 rounded" aria-label="Sign out">
                 <LogOut className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -219,15 +220,17 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
             >
               <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
                 <span className="text-xs text-white/40 font-mono uppercase tracking-widest">More</span>
-                <button onClick={() => setMoreOpen(false)} aria-label="Close menu" className="text-white/40 hover:text-white transition-colors">
+                <button type="button" onClick={() => setMoreOpen(false)} aria-label="Close menu" className="text-white/40 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30 rounded">
                   <X className="w-4 h-4" />
                 </button>
               </div>
               {/* Wallet button inside drawer */}
               <button
+                type="button"
                 onClick={() => { setMoreOpen(false); setSheetOpen(true); }}
+                aria-label={wallet.connected ? "Wallet connected" : "Connect Wallet"}
                 className={cn(
-                  "w-full flex items-center gap-3 px-5 py-3 transition-colors",
+                  "w-full flex items-center gap-3 px-5 py-3 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00FF41]/50",
                   wallet.connected ? "text-[#00FF41]" : "text-white/60 hover:text-white"
                 )}
               >

@@ -240,17 +240,22 @@ const CoinCard = memo(({
       <GlassPanel hover glow={isUp ? "green" : "none"} className="p-4 cursor-pointer relative group">
         {/* Star button */}
         <button
+          type="button"
           onClick={e => { e.stopPropagation(); onToggleStar(coin.id); }}
           aria-label={isStarred ? "Remove from watchlist" : "Add to watchlist"}
           className={cn(
-            "absolute top-3 right-3 p-1 rounded-md transition-all opacity-0 group-hover:opacity-100",
+            "absolute top-3 right-3 p-1 rounded-md transition-all opacity-0 group-hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-yellow-400/50 focus-visible:opacity-100",
             isStarred ? "opacity-100 text-yellow-400" : "text-white/20 hover:text-yellow-400"
           )}
         >
           <Star size={12} fill={isStarred ? "currentColor" : "none"} />
         </button>
 
-        <div onClick={() => onSelect(coin)}>
+        <button
+          type="button"
+          className="w-full text-left focus-visible:outline-none"
+          onClick={() => onSelect(coin)}
+        >
           {/* Header */}
           <div className="flex items-center gap-2.5 mb-3 pr-5">
             <HexAvatar src={coin.image} label={coin.symbol} size={40} />
@@ -292,7 +297,7 @@ const CoinCard = memo(({
               </div>
             </div>
           </div>
-        </div>
+        </button>
       </GlassPanel>
     </motion.div>
   );
@@ -534,7 +539,7 @@ export const MarketPage = () => {
 
           {/* All */}
           <button
-            onClick={() => { setCategory("all"); setSelectedChain(null); }}
+            type="button" onClick={() => { setCategory("all"); setSelectedChain(null); }}
             className={cn(
               "flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all",
               category === "all"
@@ -548,7 +553,7 @@ export const MarketPage = () => {
           {/* Blockchains */}
           <div className="relative">
             <button
-              onClick={() => { setCategory("blockchains"); setChainOpen(o => !o); }}
+              type="button" onClick={() => { setCategory("blockchains"); setChainOpen(o => !o); }}
               className={cn(
                 "flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all",
                 category === "blockchains"
@@ -564,7 +569,7 @@ export const MarketPage = () => {
 
           {/* New Pairs */}
           <button
-            onClick={() => setCategory("new")}
+            type="button" onClick={() => setCategory("new")}
             className={cn(
               "flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all",
               category === "new"
@@ -577,7 +582,7 @@ export const MarketPage = () => {
 
           {/* Gainers & Losers */}
           <button
-            onClick={() => setCategory("gainers_losers")}
+            type="button" onClick={() => setCategory("gainers_losers")}
             className={cn(
               "flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all",
               category === "gainers_losers"
@@ -590,7 +595,7 @@ export const MarketPage = () => {
 
           {/* WatchList */}
           <button
-            onClick={() => setCategory("watchlist")}
+            type="button" onClick={() => setCategory("watchlist")}
             className={cn(
               "flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all",
               category === "watchlist"
@@ -612,10 +617,11 @@ export const MarketPage = () => {
 
           {/* Refresh */}
           <button
+            type="button"
             disabled={isBusy}
             onClick={handleRefresh}
             aria-label="Refresh market data"
-            className="ml-auto flex items-center gap-1.5 p-2.5 rounded-full bg-white/5 border border-white/10 text-white/50 hover:bg-white/10 disabled:opacity-40 transition-all"
+            className="ml-auto flex items-center gap-1.5 p-2.5 rounded-full bg-white/5 border border-white/10 text-white/50 hover:bg-white/10 disabled:opacity-40 transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20"
           >
             <RefreshCw size={13} className={isBusy ? "animate-spin" : undefined} />
           </button>
@@ -643,7 +649,7 @@ export const MarketPage = () => {
                   autoFocus
                 />
                 {chainSearch && (
-                  <button onClick={() => setChainSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white">
+                  <button type="button" onClick={() => setChainSearch("")} aria-label="Clear chain search" className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30 rounded">
                     <X size={11} />
                   </button>
                 )}
@@ -652,6 +658,7 @@ export const MarketPage = () => {
               <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
                 {filteredChains.map(chain => (
                   <button
+                    type="button"
                     key={chain.name}
                     onClick={() => handleSelectChain(chain)}
                     className={cn(
@@ -729,8 +736,10 @@ export const MarketPage = () => {
                       </div>
                     </div>
                     <button
+                      type="button"
                       onClick={() => setSelected(null)}
-                      className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-white/50 hover:text-white transition-all"
+                      aria-label="Close chart"
+                      className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-white/50 hover:text-white transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20"
                     >
                       <X size={14} />
                     </button>
@@ -805,6 +814,7 @@ export const MarketPage = () => {
               };
               return (
                 <button
+                  type="button"
                   key={src}
                   onClick={() => setNewSource(src)}
                   className={cn(
@@ -973,8 +983,10 @@ export const MarketPage = () => {
                             </div>
                           </div>
                           <button
+                            type="button"
                             onClick={e => { e.stopPropagation(); toggleStar(coin.id); }}
-                            className={cn("p-1 ml-1 shrink-0 transition-all", watchlist.has(coin.id) ? "text-yellow-400" : "text-white/15 hover:text-yellow-400")}
+                            aria-label={watchlist.has(coin.id) ? "Remove from watchlist" : "Add to watchlist"}
+                            className={cn("p-1 ml-1 shrink-0 transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-yellow-400/50 rounded", watchlist.has(coin.id) ? "text-yellow-400" : "text-white/15 hover:text-yellow-400")}
                           >
                             <Star size={12} fill={watchlist.has(coin.id) ? "currentColor" : "none"} />
                           </button>
@@ -1019,8 +1031,10 @@ export const MarketPage = () => {
                             </div>
                           </div>
                           <button
+                            type="button"
                             onClick={e => { e.stopPropagation(); toggleStar(coin.id); }}
-                            className={cn("p-1 ml-1 shrink-0 transition-all", watchlist.has(coin.id) ? "text-yellow-400" : "text-white/15 hover:text-yellow-400")}
+                            aria-label={watchlist.has(coin.id) ? "Remove from watchlist" : "Add to watchlist"}
+                            className={cn("p-1 ml-1 shrink-0 transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-yellow-400/50 rounded", watchlist.has(coin.id) ? "text-yellow-400" : "text-white/15 hover:text-yellow-400")}
                           >
                             <Star size={12} fill={watchlist.has(coin.id) ? "currentColor" : "none"} />
                           </button>

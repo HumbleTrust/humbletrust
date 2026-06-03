@@ -35,9 +35,10 @@ function CopyBtn({ text, className }: { text: string; className?: string }) {
   const [ok, setOk] = useState(false);
   return (
     <button
+      type="button"
       onClick={() => { navigator.clipboard.writeText(text); setOk(true); setTimeout(() => setOk(false), 1500); }}
       aria-label="Copy to clipboard"
-      className={cn("p-1.5 rounded text-white/30 hover:text-white/70 transition-colors", className)}
+      className={cn("p-1.5 rounded text-white/30 hover:text-white/70 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30", className)}
     >
       {ok ? <CheckCircle2 size={13} className="text-[#00FF41]" /> : <Copy size={13} />}
     </button>
@@ -61,10 +62,11 @@ function PlanCTA({ plan, onScroll }: { plan: any; onScroll: () => void }) {
 
   return (
     <button
+      type="button"
       onClick={handle}
       disabled={busy}
       className={cn(
-        "block w-full py-2.5 rounded-lg text-sm text-center transition-all cursor-pointer disabled:opacity-50",
+        "block w-full py-2.5 rounded-lg text-sm text-center transition-all cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FF41]/50",
         plan.ctaStyle
       )}
     >
@@ -344,14 +346,16 @@ export const ApiPage = () => {
               </p>
               <div className="flex flex-wrap gap-3 justify-center lg:justify-start">
                 <button
+                  type="button"
                   onClick={scrollToForm}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#00FF41] text-black font-bold text-sm hover:bg-[#00e63a] transition-all"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#00FF41] text-black font-bold text-sm hover:bg-[#00e63a] active:scale-[0.98] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FF41]/50"
                 >
                   <Key size={14} /> Get Free Key
                 </button>
                 <button
-                  onClick={() => startCheckout("pro")}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg border border-white/20 text-white text-sm hover:border-white/40 transition-all"
+                  type="button"
+                  onClick={() => { try { startCheckout("pro"); } catch {} }}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg border border-white/20 text-white text-sm hover:border-white/40 active:scale-[0.98] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
                 >
                   <Zap size={14} /> Subscribe PRO
                 </button>
@@ -396,9 +400,10 @@ export const ApiPage = () => {
               />
             </div>
             <button
+              type="button"
               onClick={runDemo}
               disabled={demoBusy}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#00FF41]/20 border border-[#00FF41]/40 text-[#00FF41] text-sm font-medium hover:bg-[#00FF41]/30 disabled:opacity-40 transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#00FF41]/20 border border-[#00FF41]/40 text-[#00FF41] text-sm font-medium hover:bg-[#00FF41]/30 disabled:opacity-40 transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00FF41]/50"
             >
               {demoBusy ? (
                 <span className="inline-block w-3 h-3 border-2 border-[#00FF41]/30 border-t-[#00FF41] rounded-full animate-spin" />
@@ -596,10 +601,12 @@ export const ApiPage = () => {
           <div className="flex border-b border-white/10 bg-black/20">
             {CODE_TABS.map((t, i) => (
               <button
+                type="button"
                 key={t.label}
                 onClick={() => setCodeTab(i)}
+                aria-pressed={codeTab === i}
                 className={cn(
-                  "px-4 py-2.5 text-sm font-medium transition-all border-b-2 -mb-px",
+                  "px-4 py-2.5 text-sm font-medium transition-all border-b-2 -mb-px focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00FF41]/40",
                   codeTab === i
                     ? "text-[#00FF41] border-[#00FF41]"
                     : "text-white/40 border-transparent hover:text-white/60"
@@ -652,8 +659,9 @@ export const ApiPage = () => {
                     Add <code className="text-white/60">Authorization: Bearer {generatedKey.slice(0, 16)}…</code> to your requests.
                   </p>
                   <button
+                    type="button"
                     onClick={() => { setGeneratedKey(null); setEmail(""); setKeyLabel(""); }}
-                    className="mt-4 text-xs text-white/30 hover:text-white/50"
+                    className="mt-4 text-xs text-white/30 hover:text-white/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20 rounded"
                   >
                     Generate another key
                   </button>
@@ -679,9 +687,10 @@ export const ApiPage = () => {
                   </div>
                   {keyError && <p className="text-red-400 text-xs mb-3">{keyError}</p>}
                   <button
+                    type="button"
                     onClick={generateKey}
                     disabled={keyBusy}
-                    className="w-full py-3 rounded-lg bg-[#00FF41] text-black font-bold text-sm hover:bg-[#00e63a] disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-lg bg-[#00FF41] text-black font-bold text-sm hover:bg-[#00e63a] active:scale-[0.98] disabled:opacity-50 transition-all flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FF41]/50"
                   >
                     {keyBusy
                       ? <span className="inline-block w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />

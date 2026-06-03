@@ -11,11 +11,19 @@ import {
   AreaData,
   HistogramData,
 } from "lightweight-charts";
+import { BarChart2, TrendingUp, Activity } from "lucide-react";
+import { cn } from "./ui/utils";
 import type { ApiTrade } from "../../lib/solana/api";
 
-type ChartMode = "candles" | "line" | "area";
+export type ChartMode = "candles" | "line" | "area";
 
-const TF_LABELS = ["1m", "5m", "15m", "1h", "4h", "1d"] as const;
+const TF_LABELS = ["1s", "5s", "1m", "5m", "15m", "1h", "4h", "1d"] as const;
+
+const CHART_MODES: { mode: ChartMode; icon: typeof BarChart2; label: string }[] = [
+  { mode: "candles", icon: BarChart2,   label: "Candles" },
+  { mode: "line",    icon: TrendingUp,  label: "Line"    },
+  { mode: "area",    icon: Activity,    label: "Area"    },
+];
 
 interface Props {
   trades: ApiTrade[];
@@ -27,19 +35,21 @@ interface Props {
   showEma20?: boolean;
   showRsi?: boolean;
   mode?: ChartMode;
+  onModeChange?: (mode: ChartMode) => void;
   timeframe?: string;
   onTimeframeChange?: (tf: string) => void;
 }
 
 interface Bucket {
-  open: number; high: number; low: number; close: number; vol: number; buyVol: number; sellVol: number;
+  open: number; high: number; low: number; close: number;
+  vol: number; buyVol: number; sellVol: number;
 }
 
 const isValidChartTrade = (trade: ApiTrade) => {
-  const price = Number(trade.price_sol);
-  const sol = Number(trade.sol_amount);
+  const price  = Number(trade.price_sol);
+  const sol    = Number(trade.sol_amount);
   const tokens = Number(trade.token_amount);
-  const time = new Date(trade.block_time).getTime();
+  const time   = new Date(trade.block_time).getTime();
   return (
     (trade.side === "buy" || trade.side === "sell") &&
     Number.isFinite(price) && price > 0 &&
@@ -56,26 +66,22 @@ function buildBuckets(trades: ApiTrade[], periodSec: number): Map<number, Bucket
 
   const buckets = new Map<number, Bucket>();
   for (const t of sorted) {
-    const ts = Math.floor(new Date(t.block_time).getTime() / 1000);
+    const ts     = Math.floor(new Date(t.block_time).getTime() / 1000);
     const bucket = Math.floor(ts / periodSec) * periodSec;
-    const p = Number(t.price_sol);
-    const v = Number(t.sol_amount);
-    const b = buckets.get(bucket);
+    const p      = Number(t.price_sol);
+    const v      = Number(t.sol_amount);
+    const b      = buckets.get(bucket);
     if (!b) {
       buckets.set(bucket, {
-        open: p,
-        high: p,
-        low: p,
-        close: p,
-        vol: v,
-        buyVol: t.side === "buy" ? v : 0,
+        open: p, high: p, low: p, close: p, vol: v,
+        buyVol:  t.side === "buy"  ? v : 0,
         sellVol: t.side === "sell" ? v : 0,
       });
     } else {
-      b.high = Math.max(b.high, p);
-      b.low = Math.min(b.low, p);
+      b.high  = Math.max(b.high, p);
+      b.low   = Math.min(b.low, p);
       b.close = p;
-      b.vol += v;
+      b.vol  += v;
       if (t.side === "sell") b.sellVol += v;
       else b.buyVol += v;
     }
@@ -85,26 +91,22 @@ function buildBuckets(trades: ApiTrade[], periodSec: number): Map<number, Bucket
 
 function buildCandles(buckets: Map<number, Bucket>, periodSec: number): CandlestickData[] {
   let previousClose: number | null = null;
-  let previousTime: number | null = null;
+  let previousTime:  number | null = null;
   const maxCarryGap = periodSec <= 5 ? periodSec * 3 : periodSec * 2;
-
   return [...buckets.entries()]
     .sort(([a], [b]) => a - b)
     .map(([time, c]) => {
-      const carryPreviousClose =
-        previousClose !== null &&
-        previousTime !== null &&
-        time - previousTime <= maxCarryGap;
-      const open = carryPreviousClose ? previousClose : c.open;
+      const carry = previousClose !== null && previousTime !== null && time - previousTime <= maxCarryGap;
+      const open  = carry ? previousClose : c.open;
       const candle = {
         time: time as UTCTimestamp,
         open,
         high: Math.max(open, c.high, c.close),
-        low: Math.min(open, c.low, c.close),
+        low:  Math.min(open, c.low,  c.close),
         close: c.close,
       };
       previousClose = c.close;
-      previousTime = time;
+      previousTime  = time;
       return candle;
     });
 }
@@ -122,13 +124,13 @@ function buildArea(buckets: Map<number, Bucket>): AreaData[] {
 }
 
 function buildVolume(buckets: Map<number, Bucket>, candles: CandlestickData[]): HistogramData[] {
-  const directionByTime = new Map(candles.map((c) => [Number(c.time), c.close >= c.open]));
+  const dir = new Map(candles.map((c) => [Number(c.time), c.close >= c.open]));
   return [...buckets.entries()]
     .sort(([a], [b]) => a - b)
     .map(([time, b]) => ({
-      time: time as UTCTimestamp,
+      time:  time as UTCTimestamp,
       value: b.vol,
-      color: (b.sellVol > b.buyVol || directionByTime.get(time) === false)
+      color: (b.sellVol > b.buyVol || dir.get(time) === false)
         ? "rgba(255,60,107,0.32)"
         : "rgba(0,255,65,0.28)",
     }));
@@ -145,8 +147,8 @@ function calcSma(data: LineData[], period: number): LineData[] {
 
 function calcEma(data: LineData[], period: number): LineData[] {
   if (data.length < period) return [];
-  const k = 2 / (period + 1);
-  let ema = data.slice(0, period).reduce((s, c) => s + c.value, 0) / period;
+  const k   = 2 / (period + 1);
+  let ema   = data.slice(0, period).reduce((s, c) => s + c.value, 0) / period;
   const result: LineData[] = [{ time: data[period - 1].time, value: ema }];
   for (let i = period; i < data.length; i++) {
     ema = data[i].value * k + ema * (1 - k);
@@ -175,38 +177,80 @@ function calcRsi(data: LineData[], period = 14): LineData[] {
   return result;
 }
 
+// ── Reusable toolbar button ───────────────────────────────────────────────────
+function TfBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "px-2.5 py-1 rounded text-[11px] font-mono font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00FF41]/60",
+        active
+          ? "bg-[#00FF41]/15 text-[#00FF41] border border-[#00FF41]/30 shadow-[0_0_8px_rgba(0,255,65,0.15)]"
+          : "text-white/40 hover:text-white/70 hover:bg-white/5 border border-transparent"
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function ModeBtn({
+  mode, active, icon: Icon, label, onClick,
+}: { mode: ChartMode; active: boolean; icon: typeof BarChart2; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      aria-label={`${label} chart`}
+      className={cn(
+        "flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00FF41]/60",
+        active
+          ? "bg-[#00FF41]/12 text-[#00FF41] border border-[#00FF41]/25"
+          : "text-white/35 hover:text-white/65 hover:bg-white/5 border border-transparent"
+      )}
+    >
+      <Icon size={11} />
+      <span className="hidden sm:inline">{label}</span>
+    </button>
+  );
+}
+
 export function LightweightTradeChart({
   trades,
   periodSec,
-  height = 260,
+  height = 280,
   showVolume = true,
-  showSma20 = false,
-  showSma50 = false,
-  showEma20 = false,
-  showRsi = false,
-  mode = "candles",
+  showSma20  = false,
+  showSma50  = false,
+  showEma20  = false,
+  showRsi    = false,
+  mode       = "candles",
+  onModeChange,
   timeframe,
   onTimeframeChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const lineRef = useRef<ISeriesApi<"Line"> | null>(null);
-  const areaRef = useRef<ISeriesApi<"Area"> | null>(null);
-  const volRef = useRef<ISeriesApi<"Histogram"> | null>(null);
-  const sma20Ref = useRef<ISeriesApi<"Line"> | null>(null);
-  const sma50Ref = useRef<ISeriesApi<"Line"> | null>(null);
-  const ema20Ref = useRef<ISeriesApi<"Line"> | null>(null);
-  const rsiRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const chartRef     = useRef<IChartApi | null>(null);
+  const candleRef    = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const lineRef      = useRef<ISeriesApi<"Line"> | null>(null);
+  const areaRef      = useRef<ISeriesApi<"Area"> | null>(null);
+  const volRef       = useRef<ISeriesApi<"Histogram"> | null>(null);
+  const sma20Ref     = useRef<ISeriesApi<"Line"> | null>(null);
+  const sma50Ref     = useRef<ISeriesApi<"Line"> | null>(null);
+  const ema20Ref     = useRef<ISeriesApi<"Line"> | null>(null);
+  const rsiRef       = useRef<ISeriesApi<"Line"> | null>(null);
 
-  // Refs for values used inside the crosshair callback (avoids stale closure)
-  const periodSecRef = useRef(periodSec);
+  const periodSecRef  = useRef(periodSec);
   const showVolumeRef = useRef(showVolume);
-  useEffect(() => { periodSecRef.current = periodSec; }, [periodSec]);
+  useEffect(() => { periodSecRef.current  = periodSec;  }, [periodSec]);
   useEffect(() => { showVolumeRef.current = showVolume; }, [showVolume]);
 
   const [tooltip, setTooltip] = useState<{
-    price: string; time: string; open?: string; high?: string; low?: string; close: string; volume?: string; rsi?: string;
+    price: string; time: string; open?: string; high?: string; low?: string;
+    close: string; volume?: string; rsi?: string;
   } | null>(null);
 
   // Create/destroy chart when height or volume layout changes
@@ -216,68 +260,68 @@ export function LightweightTradeChart({
     const chart = createChart(containerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "rgba(255,255,255,0.4)",
-        fontFamily: "monospace",
+        textColor:  "rgba(255,255,255,0.4)",
+        fontFamily: "JetBrains Mono, monospace",
       },
       grid: {
-        vertLines: { color: "rgba(255,255,255,0.04)" },
-        horzLines: { color: "rgba(255,255,255,0.04)" },
+        vertLines: { color: "rgba(255,255,255,0.03)" },
+        horzLines: { color: "rgba(255,255,255,0.03)" },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
-        vertLine: { color: "rgba(0,255,65,0.4)", labelBackgroundColor: "#111", style: 2 },
-        horzLine: { color: "rgba(0,255,65,0.4)", labelBackgroundColor: "#111", style: 2 },
+        vertLine: { color: "rgba(0,255,65,0.45)", labelBackgroundColor: "#0a0f14", style: 2, width: 1 },
+        horzLine: { color: "rgba(0,255,65,0.45)", labelBackgroundColor: "#0a0f14", style: 2, width: 1 },
       },
       rightPriceScale: {
-        borderColor: "rgba(255,255,255,0.08)",
-        textColor: "rgba(255,255,255,0.35)",
-        scaleMargins: { top: 0.05, bottom: showVolume ? 0.28 : 0.08 },
+        borderColor:    "rgba(255,255,255,0.06)",
+        textColor:      "rgba(255,255,255,0.3)",
+        scaleMargins:   { top: 0.05, bottom: showVolume ? 0.28 : 0.08 },
       },
       timeScale: {
-        borderColor: "rgba(255,255,255,0.08)",
-        timeVisible: true,
-        secondsVisible: true,
-        barSpacing: 12,
-        minBarSpacing: 4,
-        rightOffset: 8,
+        borderColor:     "rgba(255,255,255,0.06)",
+        timeVisible:     true,
+        secondsVisible:  true,
+        barSpacing:      12,
+        minBarSpacing:   4,
+        rightOffset:     8,
       },
-      width: containerRef.current.clientWidth,
+      width:  containerRef.current.clientWidth,
       height,
     });
 
     const candle = chart.addCandlestickSeries({
-      upColor: "#00FF41",
-      downColor: "#FF3C6B",
+      upColor:       "#00FF41",
+      downColor:     "#FF3C6B",
       borderUpColor: "#00FF41",
       borderDownColor: "#FF3C6B",
-      wickUpColor: "rgba(0,255,65,0.85)",
+      wickUpColor:   "rgba(0,255,65,0.85)",
       wickDownColor: "rgba(255,60,107,0.85)",
-      priceLineColor: "rgba(0,255,65,0.35)",
+      priceLineColor: "rgba(0,255,65,0.3)",
       priceLineWidth: 1,
       priceFormat: { type: "price", precision: 12, minMove: 0.000000000001 },
     });
 
     const line = chart.addLineSeries({
-      color: "#00FF41",
-      lineWidth: 2,
-      priceLineVisible: false,
-      lastValueVisible: true,
+      color:             "#00FF41",
+      lineWidth:         2,
+      priceLineVisible:  false,
+      lastValueVisible:  true,
       priceFormat: { type: "price", precision: 12, minMove: 0.000000000001 },
     });
 
     const area = chart.addAreaSeries({
-      lineColor: "#00FF41",
-      topColor: "rgba(0,255,65,0.3)",
-      bottomColor: "rgba(0,255,65,0.02)",
-      lineWidth: 2,
+      lineColor:        "#00FF41",
+      topColor:         "rgba(0,255,65,0.28)",
+      bottomColor:      "rgba(0,255,65,0.02)",
+      lineWidth:        2,
       priceLineVisible: false,
       lastValueVisible: true,
       priceFormat: { type: "price", precision: 12, minMove: 0.000000000001 },
     });
 
     const vol = chart.addHistogramSeries({
-      priceFormat: { type: "volume" },
-      priceScaleId: "vol",
+      priceFormat:      { type: "volume" },
+      priceScaleId:     "vol",
       priceLineVisible: false,
       lastValueVisible: false,
     });
@@ -292,9 +336,9 @@ export function LightweightTradeChart({
     const ema20 = chart.addLineSeries({ color: "#00BFFF", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
 
     const rsi = chart.addLineSeries({
-      priceScaleId: "rsi",
-      color: "#FF9500",
-      lineWidth: 1,
+      priceScaleId:     "rsi",
+      color:            "#FF9500",
+      lineWidth:        1,
       priceLineVisible: false,
       lastValueVisible: false,
     });
@@ -304,25 +348,25 @@ export function LightweightTradeChart({
       borderVisible: false,
       visible: false,
     });
-    rsi.createPriceLine({ price: 70, color: "rgba(255,60,107,0.5)", lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: "" });
-    rsi.createPriceLine({ price: 30, color: "rgba(0,255,65,0.5)", lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: "" });
-    rsi.createPriceLine({ price: 50, color: "rgba(255,255,255,0.2)", lineWidth: 1, lineStyle: 3, axisLabelVisible: false, title: "" });
+    rsi.createPriceLine({ price: 70, color: "rgba(255,60,107,0.5)",  lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: "" });
+    rsi.createPriceLine({ price: 30, color: "rgba(0,255,65,0.5)",   lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: "" });
+    rsi.createPriceLine({ price: 50, color: "rgba(255,255,255,0.15)", lineWidth: 1, lineStyle: 3, axisLabelVisible: false, title: "" });
 
     chart.subscribeCrosshairMove((param) => {
       if (!param.time) { setTooltip(null); return; }
-      const fmt = (v: number) => v < 0.000001 ? v.toExponential(2) : v.toFixed(9);
-      const fmtVol = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(2)}K` : v.toFixed(4);
-      const t = new Date((param.time as number) * 1000);
-      // Show date for timeframes where a single bar spans >= 1 hour
+      const fmt     = (v: number) => v < 0.000001 ? v.toExponential(2) : v.toFixed(9);
+      const fmtVol  = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(2)}K` : v.toFixed(4);
+      const t       = new Date((param.time as number) * 1000);
       const showDate = periodSecRef.current >= 3600;
       const timeStr = showDate
-        ? t.toLocaleDateString([], { month: "short", day: "numeric" }) + " " + t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        ? t.toLocaleDateString([], { month: "short", day: "numeric" }) + " " +
+          t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         : t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
       const rsiData = param.seriesData.get(rsi) as LineData | undefined;
-      const rsiStr = rsiData ? rsiData.value.toFixed(1) : undefined;
+      const rsiStr  = rsiData ? rsiData.value.toFixed(1) : undefined;
       const volData = param.seriesData.get(vol) as HistogramData | undefined;
-      const volStr = (volData && showVolumeRef.current) ? fmtVol(volData.value) : undefined;
+      const volStr  = (volData && showVolumeRef.current) ? fmtVol(volData.value) : undefined;
 
       const cd = param.seriesData.get(candle) as CandlestickData | undefined;
       if (cd) { setTooltip({ price: fmt(cd.close), time: timeStr, open: fmt(cd.open), high: fmt(cd.high), low: fmt(cd.low), close: fmt(cd.close), volume: volStr, rsi: rsiStr }); return; }
@@ -333,15 +377,15 @@ export function LightweightTradeChart({
       setTooltip(null);
     });
 
-    chartRef.current = chart;
+    chartRef.current  = chart;
     candleRef.current = candle;
-    lineRef.current = line;
-    areaRef.current = area;
-    volRef.current = vol;
-    sma20Ref.current = sma20;
-    sma50Ref.current = sma50;
-    ema20Ref.current = ema20;
-    rsiRef.current = rsi;
+    lineRef.current   = line;
+    areaRef.current   = area;
+    volRef.current    = vol;
+    sma20Ref.current  = sma20;
+    sma50Ref.current  = sma50;
+    ema20Ref.current  = ema20;
+    rsiRef.current    = rsi;
 
     const ro = new ResizeObserver(([entry]) => {
       chartRef.current?.applyOptions({ width: entry.contentRect.width });
@@ -359,30 +403,23 @@ export function LightweightTradeChart({
   useEffect(() => {
     if (!candleRef.current || !lineRef.current || !areaRef.current) return;
 
-    const buckets = buildBuckets(trades, periodSec);
-    const candles = buildCandles(buckets, periodSec);
+    const buckets  = buildBuckets(trades, periodSec);
+    const candles  = buildCandles(buckets, periodSec);
     const lineData = buildLine(buckets);
-    const activeDataLength = Math.max(candles.length, lineData.length);
 
-    // Adjust scale margins dynamically based on active overlays
     const mainBottom = showVolume && showRsi ? 0.5 : (showVolume || showRsi) ? 0.3 : 0.08;
     chartRef.current?.applyOptions({
       rightPriceScale: { scaleMargins: { top: 0.05, bottom: mainBottom } },
-      timeScale: {
-        barSpacing: periodSec <= 5 ? 14 : 11,
-        minBarSpacing: 4,
-        rightOffset: 8,
-      },
+      timeScale: { barSpacing: periodSec <= 5 ? 14 : 11, minBarSpacing: 4, rightOffset: 8 },
     });
     if (showVolume && showRsi) {
       chartRef.current?.priceScale("vol").applyOptions({ scaleMargins: { top: 0.62, bottom: 0.22 }, visible: false });
-      chartRef.current?.priceScale("rsi").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 }, visible: true });
+      chartRef.current?.priceScale("rsi").applyOptions({ scaleMargins: { top: 0.82, bottom: 0  }, visible: true  });
     } else {
       chartRef.current?.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 }, visible: false });
       chartRef.current?.priceScale("rsi").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 }, visible: showRsi });
     }
 
-    // Show only the active series, clear others
     if (mode === "candles") {
       candleRef.current.setData(candles);
       lineRef.current.setData([]);
@@ -397,72 +434,87 @@ export function LightweightTradeChart({
       areaRef.current.setData(buildArea(buckets));
     }
 
-    if (volRef.current) {
-      volRef.current.setData(showVolume ? buildVolume(buckets, candles) : []);
-    }
+    if (volRef.current) volRef.current.setData(showVolume ? buildVolume(buckets, candles) : []);
 
-    const baseForIndicators = lineData;
-    if (sma20Ref.current) sma20Ref.current.setData(showSma20 ? calcSma(baseForIndicators, 20) : []);
-    if (sma50Ref.current) sma50Ref.current.setData(showSma50 ? calcSma(baseForIndicators, 50) : []);
-    if (ema20Ref.current) ema20Ref.current.setData(showEma20 ? calcEma(baseForIndicators, 20) : []);
-    if (rsiRef.current) rsiRef.current.setData(showRsi ? calcRsi(baseForIndicators, 14) : []);
+    const base = lineData;
+    if (sma20Ref.current) sma20Ref.current.setData(showSma20 ? calcSma(base, 20) : []);
+    if (sma50Ref.current) sma50Ref.current.setData(showSma50 ? calcSma(base, 50) : []);
+    if (ema20Ref.current) ema20Ref.current.setData(showEma20 ? calcEma(base, 20) : []);
+    if (rsiRef.current)   rsiRef.current.setData(showRsi    ? calcRsi(base, 14)  : []);
 
-    if (activeDataLength > 0) {
-      const visibleBars = Math.min(Math.max(activeDataLength + 10, 42), 90);
-      chartRef.current?.timeScale().setVisibleLogicalRange({
-        from: activeDataLength - visibleBars,
-        to: activeDataLength + 8,
-      });
+    const total = Math.max(candles.length, lineData.length);
+    if (total > 0) {
+      const visible = Math.min(Math.max(total + 10, 42), 90);
+      chartRef.current?.timeScale().setVisibleLogicalRange({ from: total - visible, to: total + 8 });
     }
   }, [trades, periodSec, mode, showVolume, showSma20, showSma50, showEma20, showRsi]);
 
   return (
     <div className="w-full">
-      {onTimeframeChange && (
-        <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-          {TF_LABELS.map(tf => (
-            <button
-              key={tf}
-              type="button"
-              onClick={() => onTimeframeChange(tf)}
-              style={{
-                padding: "2px 8px",
-                borderRadius: 4,
-                border: "none",
-                cursor: "pointer",
-                background: timeframe === tf ? "#00ff41" : "#1a2420",
-                color: timeframe === tf ? "#000" : "#aaa",
-                fontSize: 11,
-              }}
-            >
-              {tf}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* ── Toolbar ────────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-1 mb-2 flex-wrap">
+        {/* Timeframe pills */}
+        {onTimeframeChange && (
+          <div className="flex items-center gap-0.5 bg-white/[0.04] border border-white/[0.07] rounded-lg p-0.5">
+            {TF_LABELS.map((tf) => (
+              <TfBtn
+                key={tf}
+                label={tf}
+                active={timeframe === tf}
+                onClick={() => onTimeframeChange(tf)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Divider */}
+        {onModeChange && onTimeframeChange && (
+          <span className="w-px h-5 bg-white/10 mx-1 shrink-0" />
+        )}
+
+        {/* Chart mode switcher */}
+        {onModeChange && (
+          <div className="flex items-center gap-0.5 bg-white/[0.04] border border-white/[0.07] rounded-lg p-0.5">
+            {CHART_MODES.map(({ mode: m, icon, label }) => (
+              <ModeBtn
+                key={m}
+                mode={m}
+                active={mode === m}
+                icon={icon}
+                label={label}
+                onClick={() => onModeChange(m)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Chart canvas ───────────────────────────────────────────────────── */}
       <div className="relative w-full rounded-lg overflow-hidden" style={{ height }}>
         <div ref={containerRef} className="w-full h-full" />
-      {tooltip && (
-        <div className="absolute top-2 left-2 z-10 bg-black/80 border border-white/10 rounded px-2.5 py-1.5 text-[10px] font-mono text-white/70 pointer-events-none space-y-0.5">
-          {tooltip.open ? (
-            <div className="flex gap-3 flex-wrap">
-              <span className="text-white/40">O</span><span>{tooltip.open}</span>
-              <span className="text-white/40">H</span><span className="text-[#00FF41]">{tooltip.high}</span>
-              <span className="text-white/40">L</span><span className="text-[#FF3C6B]">{tooltip.low}</span>
-              <span className="text-white/40">C</span><span>{tooltip.close}</span>
-              {tooltip.volume && <><span className="text-white/40">Vol</span><span className="text-white/50">{tooltip.volume} SOL</span></>}
-              {tooltip.rsi && <><span className="text-white/40">RSI</span><span className="text-[#FF9500]">{tooltip.rsi}</span></>}
-            </div>
-          ) : (
-            <div className="flex gap-3">
-              <span className="text-white/40">P</span><span>{tooltip.close}</span>
-              {tooltip.volume && <><span className="text-white/40">Vol</span><span className="text-white/50">{tooltip.volume} SOL</span></>}
-              {tooltip.rsi && <><span className="text-white/40">RSI</span><span className="text-[#FF9500]">{tooltip.rsi}</span></>}
-            </div>
-          )}
-          <div className="text-white/30">{tooltip.time}</div>
-        </div>
-      )}
+
+        {/* Tooltip overlay */}
+        {tooltip && (
+          <div className="absolute top-2 left-2 z-10 bg-[#050a0e]/90 border border-white/[0.09] rounded-lg px-3 py-2 text-[10px] font-mono text-white/70 pointer-events-none shadow-lg backdrop-blur-sm space-y-0.5">
+            {tooltip.open ? (
+              <div className="flex gap-3 flex-wrap">
+                <span><span className="text-white/35">O</span> {tooltip.open}</span>
+                <span><span className="text-white/35">H</span> <span className="text-[#00FF41]">{tooltip.high}</span></span>
+                <span><span className="text-white/35">L</span> <span className="text-[#FF3C6B]">{tooltip.low}</span></span>
+                <span><span className="text-white/35">C</span> {tooltip.close}</span>
+                {tooltip.volume && <span><span className="text-white/35">Vol</span> <span className="text-white/50">{tooltip.volume} SOL</span></span>}
+                {tooltip.rsi    && <span><span className="text-white/35">RSI</span> <span className="text-[#FF9500]">{tooltip.rsi}</span></span>}
+              </div>
+            ) : (
+              <div className="flex gap-3">
+                <span><span className="text-white/35">P</span> {tooltip.close}</span>
+                {tooltip.volume && <span><span className="text-white/35">Vol</span> <span className="text-white/50">{tooltip.volume} SOL</span></span>}
+                {tooltip.rsi    && <span><span className="text-white/35">RSI</span> <span className="text-[#FF9500]">{tooltip.rsi}</span></span>}
+              </div>
+            )}
+            <div className="text-white/30">{tooltip.time}</div>
+          </div>
+        )}
       </div>
     </div>
   );
