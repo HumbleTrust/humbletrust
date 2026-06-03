@@ -585,6 +585,13 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
     return () => clearInterval(interval);
   }, [validMint, mintInput, fetchChartTrades]);
 
+  // Reload chart data when timeframe changes so the bucket count is appropriate
+  useEffect(() => {
+    if (!validMint) return;
+    fetchChartTrades(mintInput.trim(), true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeframe]);
+
   useEffect(() => {
     if (!validMint || !migrationState?.isMigrated) return;
     const mint = mintInput.trim();
@@ -1691,6 +1698,8 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                     showEma20={indicators.ema20}
                     showRsi={indicators.rsi}
                     mode={chartMode}
+                    timeframe={timeframe}
+                    onTimeframeChange={(tf) => setTimeframe(tf as Timeframe)}
                   />
                 );
               })()}

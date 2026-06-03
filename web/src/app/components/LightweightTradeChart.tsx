@@ -185,6 +185,8 @@ export function LightweightTradeChart({
   showEma20 = false,
   showRsi = false,
   mode = "candles",
+  timeframe,
+  onTimeframeChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -415,8 +417,31 @@ export function LightweightTradeChart({
   }, [trades, periodSec, mode, showVolume, showSma20, showSma50, showEma20, showRsi]);
 
   return (
-    <div className="relative w-full rounded-lg overflow-hidden" style={{ height }}>
-      <div ref={containerRef} className="w-full h-full" />
+    <div className="w-full">
+      {onTimeframeChange && (
+        <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+          {TF_LABELS.map(tf => (
+            <button
+              key={tf}
+              type="button"
+              onClick={() => onTimeframeChange(tf)}
+              style={{
+                padding: "2px 8px",
+                borderRadius: 4,
+                border: "none",
+                cursor: "pointer",
+                background: timeframe === tf ? "#00ff41" : "#1a2420",
+                color: timeframe === tf ? "#000" : "#aaa",
+                fontSize: 11,
+              }}
+            >
+              {tf}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="relative w-full rounded-lg overflow-hidden" style={{ height }}>
+        <div ref={containerRef} className="w-full h-full" />
       {tooltip && (
         <div className="absolute top-2 left-2 z-10 bg-black/80 border border-white/10 rounded px-2.5 py-1.5 text-[10px] font-mono text-white/70 pointer-events-none space-y-0.5">
           {tooltip.open ? (
@@ -438,6 +463,7 @@ export function LightweightTradeChart({
           <div className="text-white/30">{tooltip.time}</div>
         </div>
       )}
+      </div>
     </div>
   );
 }
