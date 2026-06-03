@@ -72,7 +72,7 @@ export function Portfolio() {
       setSolBalance(null);
       setSplTokens([]);
     }
-  }, [connected, publicKey?.toBase58()]);
+  }, [connected, publicKey?.toBase58(), loadPortfolio]);
 
   const pieItems = [
     ...(solBalance !== null && solBalance > 0 ? [{ name: "SOL", value: solBalance }] : []),

@@ -82,7 +82,7 @@ export function Dashboard({ onTabChange }: DashboardProps) {
       setSplTokens([]);
       setRecentTxs([]);
     }
-  }, [connected, publicKey?.toBase58()]);
+  }, [connected, publicKey?.toBase58(), loadWalletData]);
 
   useEffect(() => {
     if (!connected || savedTokens.length === 0) { setEarnings([]); return; }

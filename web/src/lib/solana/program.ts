@@ -962,7 +962,10 @@ export const migrateToRaydiumV2 = async (
     try {
       const meta = coder.decode("TokenMetadataV2", metaInfo.data) as any;
       lpPolicy = Number(meta.lpPolicy ?? meta.lp_policy ?? 0);
-      creator = new PublicKey((meta.creator ?? meta.creator).toBuffer());
+      const rawCreator = meta.creator;
+      if (rawCreator) {
+        creator = rawCreator instanceof PublicKey ? rawCreator : new PublicKey(rawCreator);
+      }
     } catch { /* use defaults */ }
   }
 

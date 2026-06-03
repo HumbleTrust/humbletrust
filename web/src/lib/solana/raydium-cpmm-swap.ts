@@ -64,6 +64,11 @@ export async function estimateCpmmSwap(
 
   const solReserve  = Number(wsolInfo.value.uiAmount ?? 0);
   const tokReserve  = Number(tokenInfo.value.uiAmount ?? 0);
+
+  if (solReserve <= 0 || tokReserve <= 0) {
+    throw new Error("Pool reserves empty — pool may not be initialized yet");
+  }
+
   const k = solReserve * tokReserve;
 
   let estimatedOut: number;

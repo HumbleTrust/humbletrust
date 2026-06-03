@@ -2030,22 +2030,25 @@ pub mod humbletrust_v2 {
         );
 
         let pool_lamports = ctx.accounts.lp_fee_pool.to_account_info().lamports();
-        require!(pool_lamports > 0, HumbleV2Error::InsufficientVaultBalance);
+        let pool_data_len = ctx.accounts.lp_fee_pool.to_account_info().data_len();
+        let rent_exempt = Rent::get()?.minimum_balance(pool_data_len);
+        let claimable = pool_lamports.saturating_sub(rent_exempt);
+        require!(claimable > 0, HumbleV2Error::InsufficientVaultBalance);
 
         let (creator_bps, treasury_bps) = if lp_lock.is_premium {
             (LP_FEE_CREATOR_PREMIUM_BPS, LP_FEE_TREASURY_PREMIUM_BPS)
         } else {
             (LP_FEE_CREATOR_STANDARD_BPS, LP_FEE_TREASURY_STANDARD_BPS)
         };
-        let creator_share = pool_lamports
+        let creator_share = claimable
             .checked_mul(creator_bps)
             .and_then(|v| v.checked_div(10_000))
             .ok_or(error!(HumbleV2Error::MathOverflow))?;
-        let treasury_share = pool_lamports
+        let treasury_share = claimable
             .checked_mul(treasury_bps)
             .and_then(|v| v.checked_div(10_000))
             .ok_or(error!(HumbleV2Error::MathOverflow))?;
-        let rewards_share = pool_lamports
+        let rewards_share = claimable
             .checked_sub(creator_share)
             .and_then(|v| v.checked_sub(treasury_share))
             .ok_or(error!(HumbleV2Error::MathOverflow))?;
@@ -2054,7 +2057,7 @@ pub mod humbletrust_v2 {
             .accounts
             .lp_fee_pool
             .to_account_info()
-            .try_borrow_mut_lamports()? -= pool_lamports;
+            .try_borrow_mut_lamports()? -= claimable;
         **ctx.accounts.creator.try_borrow_mut_lamports()? += creator_share;
         **ctx.accounts.fee_wallet.try_borrow_mut_lamports()? += treasury_share;
         **ctx.accounts.rewards_sol_wallet.try_borrow_mut_lamports()? += rewards_share;
@@ -2062,7 +2065,7 @@ pub mod humbletrust_v2 {
         lp_lock.last_claim_time = now;
         lp_lock.total_fees_claimed_lamports = lp_lock
             .total_fees_claimed_lamports
-            .checked_add(pool_lamports)
+            .checked_add(claimable)
             .ok_or(error!(HumbleV2Error::MathOverflow))?;
 
         emit!(LpFeesClaimedV2 {
@@ -2120,6 +2123,11 @@ pub mod humbletrust_v2 {
     }
 
     pub fn init_global_state_v2(ctx: Context<InitGlobalStateV2>) -> Result<()> {
+        require_keys_eq!(
+            ctx.accounts.authority.key(),
+            HUMBLETRUST_ADMIN,
+            HumbleV2Error::Unauthorized
+        );
         let global = &mut ctx.accounts.global_state;
         global.certificate_counter = 0;
         global.authority = ctx.accounts.authority.key();
@@ -3002,8 +3010,8 @@ pub struct ClaimLpFeesV2<'info> {
     #[account(mut, constraint = fee_wallet.key() == FEE_WALLET @ HumbleV2Error::InvalidFeeWallet)]
     pub fee_wallet: UncheckedAccount<'info>,
 
-    /// CHECK: DAO/rewards wallet, any pubkey accepted
-    #[account(mut)]
+    /// CHECK: verified against FEE_WALLET (DAO rewards share)
+    #[account(mut, constraint = rewards_sol_wallet.key() == FEE_WALLET @ HumbleV2Error::InvalidFeeWallet)]
     pub rewards_sol_wallet: UncheckedAccount<'info>,
 }
 
@@ -3982,6 +3990,10 @@ fn unpack_spl_token_account(
     account_info: &AccountInfo,
 ) -> Result<anchor_spl::token::spl_token::state::Account> {
     if account_info.data_is_empty() {
+        return err!(HumbleV2Error::InvalidTokenAccountOwner);
+    }
+    // Prevent fake migration accounts: only SPL Token program can own token accounts.
+    if account_info.owner != &anchor_spl::token::spl_token::ID {
         return err!(HumbleV2Error::InvalidTokenAccountOwner);
     }
     let data = account_info.try_borrow_data()?;

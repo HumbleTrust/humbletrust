@@ -441,7 +441,7 @@ export function LaunchPage() {
 
   // ── Launch handler ────────────────────────────────────────────────────────
   const handleLaunch = async (testLockDays?: number) => {
-    if (!anchorWallet || !wallet.connected) { alert("Connect wallet first"); return; }
+    if (!anchorWallet || !wallet.connected) { setError("Connect wallet first"); return; }
     setBusy(true); setError(null); setResult(null);
     setDbSaved(false); setDbError(null);
     setCertDone(false); setCertError(null); setCertMint(null); setCertSignature(null);

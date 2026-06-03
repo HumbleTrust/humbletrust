@@ -192,6 +192,30 @@ async function cgFetch(path: string, signal?: AbortSignal) {
   return res.json();
 }
 
+// ── CoinGrid ─────────────────────────────────────────────────────────────────
+
+const CoinGrid = memo(({
+  list, onSelect, onToggleStar, watchlist,
+}: {
+  list: CoinGeckoCoin[];
+  onSelect: (c: CoinGeckoCoin) => void;
+  onToggleStar: (id: string) => void;
+  watchlist: Set<string>;
+}) => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    {list.map((coin, i) => (
+      <CoinCard
+        key={coin.id}
+        coin={coin}
+        index={i}
+        onSelect={onSelect}
+        onToggleStar={onToggleStar}
+        isStarred={watchlist.has(coin.id)}
+      />
+    ))}
+  </div>
+));
+
 // ── CoinCard ──────────────────────────────────────────────────────────────────
 
 const CoinCard = memo(({
@@ -485,20 +509,6 @@ export const MarketPage = () => {
 
   // ── Render helpers ────────────────────────────────────────────────────────────
 
-  const CoinGrid = ({ list }: { list: CoinGeckoCoin[] }) => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-      {list.map((coin, i) => (
-        <CoinCard
-          key={coin.id}
-          coin={coin}
-          index={i}
-          onSelect={setSelected}
-          onToggleStar={toggleStar}
-          isStarred={watchlist.has(coin.id)}
-        />
-      ))}
-    </div>
-  );
 
   return (
     <div className="space-y-4">
@@ -603,6 +613,7 @@ export const MarketPage = () => {
           <button
             disabled={isBusy}
             onClick={handleRefresh}
+            aria-label="Refresh market data"
             className="ml-auto flex items-center gap-1.5 p-2.5 rounded-full bg-white/5 border border-white/10 text-white/50 hover:bg-white/10 disabled:opacity-40 transition-all"
           >
             <RefreshCw size={13} className={isBusy ? "animate-spin" : undefined} />
@@ -742,7 +753,7 @@ export const MarketPage = () => {
       {!isBusy && category === "all" && (
         filtered.length === 0
           ? <div className="text-white/30 text-sm text-center py-8">No coins match your search.</div>
-          : <CoinGrid list={filtered} />
+          : <CoinGrid list={filtered} onSelect={setSelected} onToggleStar={toggleStar} watchlist={watchlist} />
       )}
 
       {/* ── BLOCKCHAINS ── */}
@@ -771,7 +782,7 @@ export const MarketPage = () => {
                 <Layers size={11} className="text-[#00FF41]" />
                 Top tokens on <span className="text-[#00FF41] font-medium">{selectedChain.name}</span>
               </div>
-              <CoinGrid list={filtered} />
+              <CoinGrid list={filtered} onSelect={setSelected} onToggleStar={toggleStar} watchlist={watchlist} />
             </div>
           )
       )}
@@ -1042,7 +1053,7 @@ export const MarketPage = () => {
               <Star size={11} className="text-yellow-400" fill="currentColor" />
               <span>{watchlistCoins.length} coin{watchlistCoins.length !== 1 ? "s" : ""} in your watchlist</span>
             </div>
-            <CoinGrid list={watchlistCoins} />
+            <CoinGrid list={watchlistCoins} onSelect={setSelected} onToggleStar={toggleStar} watchlist={watchlist} />
           </div>
         )
       )}
