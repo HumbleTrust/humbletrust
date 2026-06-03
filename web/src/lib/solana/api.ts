@@ -268,6 +268,24 @@ export const getWalletRisk = (wallet: string) =>
 export const getTokenHealth = (mint: string) =>
   request<TokenHealth>(`/tokens/${mint}?check=health`);
 
+export const recordReputationEvent = (
+  mint: string,
+  creator: string,
+  eventType: 1 | 2 | 3 | 4,
+) =>
+  fetch(`${API_BASE}/reputation/record`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(import.meta.env.VITE_INTERNAL_SECRET
+        ? { Authorization: `Bearer ${import.meta.env.VITE_INTERNAL_SECRET}` }
+        : {}),
+    },
+    body: JSON.stringify({ mint, creator, event_type: eventType }),
+  })
+    .then((r) => readJson<{ ok?: boolean; signature?: string; error?: string }>(r))
+    .catch((e) => ({ error: e.message as string }));
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const chartWsUrl = (mint: string, timeframe: string) => {

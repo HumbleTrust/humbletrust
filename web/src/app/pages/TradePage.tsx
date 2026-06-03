@@ -19,7 +19,7 @@ import {
   Unlock,
   Zap,
 } from "lucide-react";
-import { getTokenTrades, getToken, recordTrade, syncTokenTrades, type ApiTrade, type ApiToken } from "../../lib/solana/api";
+import { getTokenTrades, getToken, recordTrade, syncTokenTrades, recordReputationEvent, type ApiTrade, type ApiToken } from "../../lib/solana/api";
 import { detectToken, fetchPumpFunTrades, type TokenInfo } from "../../lib/solana/external-trades";
 import { getJupiterQuote, executeJupiterSwap, SOL_MINT, type JupiterQuote } from "../../lib/solana/jupiter-swap";
 import { LightweightTradeChart } from "../components/LightweightTradeChart";
@@ -1031,6 +1031,8 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
       const { signature } = await unlockLockedTokensV2(program, anchorWallet.publicKey, mint);
       setTxSig(signature);
       await refreshCreatorLockState();
+      // Record unlock event on-chain via metrics authority (fire-and-forget, non-critical)
+      void recordReputationEvent(mintInput.trim(), anchorWallet.publicKey.toBase58(), 2).catch(() => {});
     } catch (e: any) {
       setCreatorLockError(friendlyError(e.message || String(e)));
     } finally {

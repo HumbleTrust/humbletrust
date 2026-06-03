@@ -19,7 +19,7 @@ import {
   mintLaunchCertificateV2,
 } from "../../lib/solana/program";
 import { fileToHexLogo, MAX_LOGO_BYTES, saveToken } from "../../lib/solana/image";
-import { registerToken } from "../../lib/solana/api";
+import { registerToken, recordReputationEvent } from "../../lib/solana/api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface LaunchResult {
@@ -521,6 +521,9 @@ export function LaunchPage() {
             setRepDone(true);
           }
         } catch { /* reputation init is non-critical */ }
+
+        // Record launch event on-chain via metrics authority (fire-and-forget, non-critical)
+        void recordReputationEvent(mintStr, anchorWallet.publicKey.toBase58(), 1).catch(() => {});
 
         const cert = await mintCertificateForMint(mintStr, name);
         if (cert && !cert.alreadyMinted) {
