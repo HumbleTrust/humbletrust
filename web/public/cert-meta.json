@@ -2,7 +2,7 @@
   "name": "HumbleTrust Launch Certificate",
   "symbol": "HTCERT",
   "description": "A soulbound (non-transferable) NFT certificate issued on-chain by the HumbleTrust protocol upon a verified token launch. Proves the creator locked liquidity, set a burn policy, and passed TrustScore validation.",
-  "image": "https://humbletrust.vercel.app/cert-badge.png",
+  "image": "https://humbletrust.vercel.app/HTlogo512.png",
   "external_url": "https://humbletrust.vercel.app",
   "attributes": [
     { "trait_type": "Protocol", "value": "HumbleTrust V2" },

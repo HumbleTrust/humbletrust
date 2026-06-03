@@ -580,9 +580,55 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
     if (!validMint) { setChartTrades([]); setChartError(null); return; }
     const mint = mintInput.trim();
     fetchChartTrades(mint);
-    const interval = setInterval(() => fetchChartTrades(mint, true), 30_000);
+    // Fallback poll every 20s (reduced from 30s)
+    const interval = setInterval(() => fetchChartTrades(mint, true), 20_000);
     return () => clearInterval(interval);
   }, [validMint, mintInput, fetchChartTrades]);
+
+  // ── Real-time on-chain subscription for devnet curve tokens ──────────────────
+  // Watches the curve treasury SOL account for balance changes (= trades).
+  // On change: wait 1.5s for indexing, then reload trades.
+  // Falls back to 5s signature poll in case ws subscription drops.
+  useEffect(() => {
+    if (!validMint || !canUseCurve || isMainnet) return;
+    let mintPk: PublicKey;
+    try { mintPk = new PublicKey(mintInput.trim()); } catch { return; }
+
+    const pdas = findV2Pdas(mintPk);
+    const mint = mintInput.trim();
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+    let lastSig: string | null = null;
+
+    const onTrade = () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(() => fetchChartTrades(mint, true), 1500);
+    };
+
+    // WebSocket account-change subscription
+    let wsSubId: number | null = null;
+    try {
+      wsSubId = connection.onAccountChange(pdas.curveTreasurySol, onTrade, "confirmed");
+    } catch {}
+
+    // Fallback: 5s signature poll (if WS is not available)
+    const sigPoll = setInterval(async () => {
+      try {
+        const sigs = await connection.getSignaturesForAddress(pdas.curveTreasurySol, { limit: 1 });
+        if (sigs.length > 0 && sigs[0].signature !== lastSig) {
+          lastSig = sigs[0].signature;
+          onTrade();
+        }
+      } catch {}
+    }, 5000);
+
+    return () => {
+      if (debounce) clearTimeout(debounce);
+      clearInterval(sigPoll);
+      if (wsSubId !== null) {
+        connection.removeAccountChangeListener(wsSubId).catch(() => {});
+      }
+    };
+  }, [validMint, mintInput, canUseCurve, isMainnet, connection, fetchChartTrades]);
 
   // Reload chart data when timeframe changes so the bucket count is appropriate
   useEffect(() => {
@@ -1604,6 +1650,9 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                 <div className="flex items-center gap-2 text-xs text-white/50">
                   <span className="w-2 h-2 rounded-full bg-[#00FF41] inline-block animate-pulse" />
                   {selectedSymbol} / SOL · {isMainnet ? (tokenInfo?.source === "pumpfun" ? "pump.fun" : "mainnet") : "devnet"}
+                  {!isMainnet && canUseCurve && validMint && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border border-[#00FF41]/20 text-[#00FF41]/50 font-mono bg-[#00FF41]/5">LIVE</span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   {chartLoading && (
@@ -1876,9 +1925,14 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                   {migrationState.isMigrated ? "Migrated to Raydium" : "Raydium Migration"}
                 </div>
                 {!migrationState.isMigrated && (
-                  <span className="text-white/40 text-xs font-mono">
-                    {(migrationState.currentSolLamports / LAMPORTS_PER_SOL).toFixed(3)} / {(migrationState.thresholdLamports / LAMPORTS_PER_SOL).toFixed(1)} SOL
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white/40 text-xs font-mono">
+                      {(migrationState.currentSolLamports / LAMPORTS_PER_SOL).toFixed(3)} / {(migrationState.thresholdLamports / LAMPORTS_PER_SOL).toFixed(1)} SOL
+                    </span>
+                    {migrationState.thresholdLamports <= 5_000_000_000 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-400/70 border border-yellow-500/20 font-mono">devnet · mainnet: 50 SOL</span>
+                    )}
+                  </div>
                 )}
               </div>
 

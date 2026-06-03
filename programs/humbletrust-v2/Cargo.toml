@@ -9,11 +9,13 @@ crate-type = ["cdylib", "lib"]
 name = "humbletrust_v2"
 
 [features]
-default = ["devnet", "test-mode"]
+# devnet build: time-compressed (60s/day) but 50 SOL graduation threshold
+# add "test-mode" to default for 5 SOL graduation (faster devnet testing)
+default = ["devnet"]
 cpi = ["no-entrypoint"]
 devnet = []
 mainnet = []
-test-mode = []
+test-mode = []  # enables: 5 SOL graduation, 60s lock-day, 5min month-unit
 no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
