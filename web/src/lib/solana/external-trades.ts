@@ -66,14 +66,20 @@ export async function detectToken(mint: string): Promise<TokenInfo | null> {
 
   // 2. DexScreener — Raydium, Orca, and all other Solana DEXes
   if (dsPair?.baseToken?.symbol) {
+    // Prefer decimals from Jupiter token list; DexScreener doesn't expose decimals
+    // so we look it up from Helius/Jupiter API, falling back to 9 for SPL tokens
+    let decimals = 9;
+    const jupMeta = await fetchJson(`https://tokens.jup.ag/token/${mint}`, 4000);
+    if (typeof jupMeta?.decimals === "number") decimals = jupMeta.decimals;
+
     return {
       mint,
       name: dsPair.baseToken.name || "Unknown",
       symbol: dsPair.baseToken.symbol || "???",
-      logoUri: dsPair.info?.imageUrl || undefined,
+      logoUri: dsPair.info?.imageUrl || jupMeta?.logoURI || undefined,
       source: "mainnet",
       network: "mainnet-beta",
-      decimals: 9,
+      decimals,
       priceUsd: dsPair.priceUsd,
       dexPairAddress: dsPair.pairAddress,
     };

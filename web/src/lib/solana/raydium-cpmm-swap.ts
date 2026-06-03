@@ -4,6 +4,7 @@ import {
 } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
   getAssociatedTokenAddressSync,
   createAssociatedTokenAccountInstruction,
   createCloseAccountInstruction,
@@ -18,6 +19,20 @@ import {
   TOKEN_2022_PROGRAM_PK,
   findRaydiumCpmmPdas,
 } from "./program";
+
+/**
+ * Detect whether a mint is a Token-2022 token by checking its owner program.
+ * Returns TOKEN_2022_PROGRAM_ID if so, otherwise TOKEN_PROGRAM_ID.
+ */
+async function detectTokenProgram(connection: Connection, mint: PublicKey): Promise<PublicKey> {
+  try {
+    const info = await connection.getAccountInfo(mint);
+    if (info?.owner.equals(TOKEN_2022_PROGRAM_ID)) return TOKEN_2022_PROGRAM_ID;
+  } catch {
+    // fallthrough to default
+  }
+  return TOKEN_PROGRAM_ID;
+}
 
 // Anchor discriminator for swap_base_input = sha256("global:swap_base_input")[0..8]
 const SWAP_BASE_INPUT_DISCM = Buffer.from([143, 190, 90, 218, 196, 30, 51, 222]);
@@ -84,6 +99,8 @@ function buildSwapIx(
   outputTokenAccount: PublicKey,
   amountInRaw: bigint,
   minAmountOutRaw: bigint,
+  inputTokenProgram: PublicKey = TOKEN_PROGRAM_ID,
+  outputTokenProgram: PublicKey = TOKEN_PROGRAM_ID,
 ): TransactionInstruction {
   const wsolIsToken0 = pdas.token0.equals(NATIVE_MINT);
   const isBuy = inputMint.equals(NATIVE_MINT);
@@ -106,8 +123,8 @@ function buildSwapIx(
     { pubkey: outputTokenAccount,     isSigner: false, isWritable: true  },
     { pubkey: inputVault,             isSigner: false, isWritable: true  },
     { pubkey: outputVault,            isSigner: false, isWritable: true  },
-    { pubkey: TOKEN_PROGRAM_ID,       isSigner: false, isWritable: false }, // input token program
-    { pubkey: TOKEN_PROGRAM_ID,       isSigner: false, isWritable: false }, // output token program
+    { pubkey: inputTokenProgram,      isSigner: false, isWritable: false }, // input token program (SPL or Token-2022)
+    { pubkey: outputTokenProgram,     isSigner: false, isWritable: false }, // output token program (SPL or Token-2022)
     { pubkey: inputMint,              isSigner: false, isWritable: false },
     { pubkey: outputMint,             isSigner: false, isWritable: false },
     { pubkey: pdas.observationState,  isSigner: false, isWritable: true  },
@@ -203,13 +220,17 @@ export async function swapOnRaydiumCpmm(
 
   const tx = new Transaction();
   tx.add(...instructions, ...cleanupIxs);
-  tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+  const latestBlockhash = await connection.getLatestBlockhash("confirmed");
+  tx.recentBlockhash = latestBlockhash.blockhash;
   tx.feePayer = payer;
 
   const signed = await wallet.signTransaction(tx);
   const raw    = signed.serialize();
   const sig    = await connection.sendRawTransaction(raw, { skipPreflight: false, maxRetries: 3 });
-  await connection.confirmTransaction(sig, "confirmed");
+  await connection.confirmTransaction(
+    { signature: sig, blockhash: latestBlockhash.blockhash, lastValidBlockHeight: latestBlockhash.lastValidBlockHeight },
+    "confirmed",
+  );
 
   return { signature: sig, amountIn, estimatedOut };
 }
