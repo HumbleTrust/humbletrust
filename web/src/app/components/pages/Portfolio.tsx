@@ -4,10 +4,10 @@ import { motion } from "motion/react";
 import { useState, useEffect, useCallback } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { TrendingUp, ExternalLink, Wallet, RefreshCw } from "lucide-react";
 import { listTokens } from "../../../lib/solana/image";
+import { fetchParsedSplTokens } from "../../../lib/solana/tokenAccounts";
 
 interface SplToken {
   mint: string;
@@ -32,32 +32,23 @@ export function Portfolio() {
     if (!publicKey) return;
     setLoading(true);
     try {
-      const [balanceLamports, parsedTokenAccounts] = await Promise.all([
+      const [balanceLamports, parsed] = await Promise.all([
         connection.getBalance(publicKey),
-        connection.getParsedTokenAccountsByOwner(publicKey, { programId: TOKEN_PROGRAM_ID }),
+        fetchParsedSplTokens(connection, publicKey),
       ]);
 
       setSolBalance(balanceLamports / LAMPORTS_PER_SOL);
 
-      const tokens: SplToken[] = [];
-      const seen = new Set<string>();
-      for (const { account } of parsedTokenAccounts.value) {
-        const info = (account.data as any).parsed?.info;
-        const amountInfo = info?.tokenAmount;
-        const mint = info?.mint as string | undefined;
-        if (!mint || !amountInfo || seen.has(mint)) continue;
-        const balance = Number(amountInfo.uiAmountString ?? amountInfo.uiAmount ?? 0);
-        if (balance <= 0) continue;
-        seen.add(mint);
+      const tokens: SplToken[] = parsed.map(({ mint, balance }) => {
         const saved = savedTokens.find(t => t.mint === mint);
-        tokens.push({
+        return {
           mint, balance,
           symbol: saved?.symbol || mint.slice(0, 4).toUpperCase(),
           name: saved?.name || "Unknown Token",
           trustScore: saved?.trustScore,
-        });
-      }
-      setSplTokens(tokens.sort((a, b) => b.balance - a.balance));
+        };
+      });
+      setSplTokens(tokens);
     } catch (e) {
       console.error("Portfolio load error", e);
     } finally {

@@ -4,8 +4,8 @@ import { GlassPanel } from "../GlassPanel";
 import { motion } from "motion/react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { listTokens } from "../../../lib/solana/image";
+import { fetchParsedSplTokens } from "../../../lib/solana/tokenAccounts";
 
 interface DashboardProps {
   onTabChange: (tab: string) => void;
@@ -39,28 +39,19 @@ export function Dashboard({ onTabChange }: DashboardProps) {
     if (!publicKey) return;
     setLoading(true);
     try {
-      const [balanceLamports, parsedTokenAccounts, signatures] = await Promise.all([
+      const [balanceLamports, parsed, signatures] = await Promise.all([
         connection.getBalance(publicKey),
-        connection.getParsedTokenAccountsByOwner(publicKey, { programId: TOKEN_PROGRAM_ID }),
+        fetchParsedSplTokens(connection, publicKey),
         connection.getSignaturesForAddress(publicKey, { limit: 8 }),
       ]);
 
       setSolBalance(balanceLamports / LAMPORTS_PER_SOL);
 
-      const tokens: SplToken[] = [];
-      const seen = new Set<string>();
-      for (const { account } of parsedTokenAccounts.value) {
-        const info = (account.data as any).parsed?.info;
-        const amountInfo = info?.tokenAmount;
-        const mint = info?.mint as string | undefined;
-        if (!mint || !amountInfo || seen.has(mint)) continue;
-        const balance = Number(amountInfo.uiAmountString ?? amountInfo.uiAmount ?? 0);
-        if (balance <= 0) continue;
-        seen.add(mint);
+      const tokens: SplToken[] = parsed.map(({ mint, balance }) => {
         const saved = savedTokens.find(t => t.mint === mint);
-        tokens.push({ mint, balance, symbol: saved?.symbol || mint.slice(0, 4).toUpperCase(), trustScore: saved?.trustScore });
-      }
-      setSplTokens(tokens.sort((a, b) => b.balance - a.balance));
+        return { mint, balance, symbol: saved?.symbol || mint.slice(0, 4).toUpperCase(), trustScore: saved?.trustScore };
+      });
+      setSplTokens(tokens);
 
       setRecentTxs(signatures.map(s => ({
         signature: s.signature,
