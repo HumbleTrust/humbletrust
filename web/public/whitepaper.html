@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HumbleTrust Protocol — Whitepaper v1.0</title>
+<style>
+  :root {
+    --green: #00FF41;
+    --purple: #B026FF;
+    --teal: #14b8a6;
+    --amber: #f59e0b;
+    --bg: #050A0E;
+    --surface: #0a0f14;
+    --border: rgba(255,255,255,0.08);
+    --text: #e2e8f0;
+    --muted: rgba(255,255,255,0.45);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    padding: 0;
+  }
+  /* ── Layout ── */
+  .page {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 48px 32px 96px;
+  }
+  @media(max-width:640px){.page{padding:32px 20px 64px;}}
+
+  /* ── Cover ── */
+  .cover {
+    text-align: center;
+    padding: 72px 0 60px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 64px;
+    position: relative;
+  }
+  .cover::before {
+    content:'';
+    position:absolute;
+    inset:0;
+    background: radial-gradient(ellipse 60% 40% at 50% 0%, rgba(0,255,65,0.07), transparent);
+    pointer-events:none;
+  }
+  .logo-wrap {
+    width: 72px; height: 72px;
+    border-radius: 18px;
+    overflow: hidden;
+    margin: 0 auto 24px;
+    box-shadow: 0 0 40px rgba(0,255,65,0.3), 0 0 80px rgba(176,38,255,0.15);
+  }
+  .logo-wrap img { width:100%; height:100%; object-fit:cover; }
+  .cover-badge {
+    display: inline-block;
+    font-family: monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: rgba(0,255,65,0.6);
+    border: 1px solid rgba(0,255,65,0.2);
+    border-radius: 4px;
+    padding: 4px 12px;
+    margin-bottom: 20px;
+  }
+  .cover h1 {
+    font-size: clamp(28px, 5vw, 48px);
+    font-weight: 900;
+    line-height: 1.1;
+    margin-bottom: 16px;
+  }
+  .cover h1 span { color: var(--green); }
+  .cover-sub {
+    font-size: 17px;
+    color: var(--muted);
+    max-width: 560px;
+    margin: 0 auto 28px;
+  }
+  .meta-row {
+    display: flex;
+    justify-content: center;
+    gap: 32px;
+    flex-wrap: wrap;
+    font-family: monospace;
+    font-size: 12px;
+    color: rgba(255,255,255,0.3);
+  }
+  .meta-row span { color: var(--green); }
+
+  /* ── TOC ── */
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 64px;
+  }
+  .toc-title {
+    font-family: monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(0,255,65,0.5);
+    margin-bottom: 16px;
+  }
+  .toc ol { padding-left: 20px; }
+  .toc li { margin: 6px 0; }
+  .toc a { color: rgba(255,255,255,0.6); text-decoration: none; font-size: 14px; }
+  .toc a:hover { color: var(--green); }
+
+  /* ── Sections ── */
+  section { margin-bottom: 72px; }
+  .section-tag {
+    font-family: monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(0,255,65,0.5);
+    margin-bottom: 8px;
+  }
+  h2 {
+    font-size: clamp(20px, 3vw, 26px);
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+  h3 {
+    font-size: 17px;
+    font-weight: 700;
+    color: #fff;
+    margin: 28px 0 10px;
+    padding-left: 12px;
+    border-left: 2px solid var(--green);
+  }
+  h4 {
+    font-size: 14px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.8);
+    margin: 20px 0 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  p { color: var(--muted); margin-bottom: 14px; }
+  strong { color: rgba(255,255,255,0.85); }
+  .lead { font-size: 16px; color: rgba(255,255,255,0.6); }
+
+  /* ── Divider ── */
+  hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+
+  /* ── Callout ── */
+  .callout {
+    background: rgba(0,255,65,0.04);
+    border: 1px solid rgba(0,255,65,0.15);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin: 24px 0;
+  }
+  .callout.purple {
+    background: rgba(176,38,255,0.04);
+    border-color: rgba(176,38,255,0.18);
+  }
+  .callout.amber {
+    background: rgba(245,158,11,0.04);
+    border-color: rgba(245,158,11,0.18);
+  }
+  .callout.red {
+    background: rgba(239,68,68,0.04);
+    border-color: rgba(239,68,68,0.18);
+  }
+  .callout-label {
+    font-family: monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--green);
+    margin-bottom: 8px;
+  }
+  .callout.purple .callout-label { color: var(--purple); }
+  .callout.amber .callout-label { color: var(--amber); }
+  .callout.red .callout-label { color: #ef4444; }
+  .callout p { margin: 0; font-size: 14px; }
+
+  /* ── Grid ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin: 20px 0; }
+  @media(max-width:600px){.grid-2,.grid-3{grid-template-columns:1fr;}}
+
+  /* ── Card ── */
+  .card {
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .card-title { font-weight: 700; color: #fff; font-size: 14px; margin-bottom: 6px; }
+  .card p { font-size: 13px; color: rgba(255,255,255,0.45); margin: 0; }
+  .card .stat { font-size: 26px; font-weight: 900; margin-bottom: 4px; }
+  .green { color: var(--green); }
+  .purple { color: var(--purple); }
+  .teal { color: var(--teal); }
+  .amber { color: var(--amber); }
+
+  /* ── Table ── */
+  table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px; }
+  th {
+    text-align: left;
+    padding: 10px 14px;
+    font-family: monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.35);
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 10px 14px;
+    color: rgba(255,255,255,0.6);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .td-green { color: var(--green); font-weight: 700; }
+  .td-purple { color: var(--purple); font-weight: 700; }
+
+  /* ── Code ── */
+  code {
+    font-family: monospace;
+    font-size: 12px;
+    background: rgba(0,255,65,0.06);
+    color: var(--green);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  pre {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(0,255,65,0.1);
+    border-radius: 8px;
+    padding: 18px 20px;
+    font-size: 12px;
+    font-family: monospace;
+    color: rgba(0,255,65,0.8);
+    overflow-x: auto;
+    margin: 20px 0;
+    line-height: 1.6;
+  }
+
+  /* ── List ── */
+  ul.check { list-style: none; padding: 0; margin: 14px 0; }
+  ul.check li {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 5px 0;
+    font-size: 14px;
+    color: rgba(255,255,255,0.55);
+  }
+  ul.check li::before {
+    content: '✓';
+    color: var(--green);
+    font-weight: 900;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  /* ── NFT Cards ── */
+  .nft-card {
+    border-radius: 12px;
+    padding: 22px 24px;
+    margin: 16px 0;
+  }
+  .nft-card.cert { background: rgba(0,255,65,0.04); border: 1px solid rgba(0,255,65,0.15); }
+  .nft-card.zodiac { background: rgba(176,38,255,0.04); border: 1px solid rgba(176,38,255,0.18); }
+  .nft-card.og { background: rgba(245,158,11,0.04); border: 1px solid rgba(245,158,11,0.18); }
+  .nft-type { font-family: monospace; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 6px; }
+  .nft-type.cert { color: var(--green); }
+  .nft-type.zodiac { color: var(--purple); }
+  .nft-type.og { color: var(--amber); }
+  .nft-title { font-size: 17px; font-weight: 800; color: #fff; margin-bottom: 8px; }
+  .nft-desc { font-size: 13px; color: rgba(255,255,255,0.5); margin-bottom: 14px; }
+  .nft-meta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .nft-pill {
+    font-family: monospace;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.5);
+  }
+
+  /* ── Timeline ── */
+  .timeline { position: relative; padding-left: 24px; }
+  .timeline::before {
+    content:'';
+    position: absolute;
+    left: 6px; top: 8px; bottom: 8px;
+    width: 1px;
+    background: linear-gradient(to bottom, var(--green), rgba(176,38,255,0.4), transparent);
+  }
+  .tl-item { position: relative; margin-bottom: 28px; }
+  .tl-dot {
+    position: absolute;
+    left: -21px;
+    top: 4px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--green);
+    background: rgba(0,255,65,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tl-dot.planned { border-color: var(--purple); background: rgba(176,38,255,0.1); }
+  .tl-dot.future { border-color: rgba(255,255,255,0.2); background: transparent; }
+  .tl-dot.done::after {
+    content:'';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+  }
+  .tl-date { font-family: monospace; font-size: 11px; color: rgba(255,255,255,0.25); margin-bottom: 3px; }
+  .tl-label { font-weight: 700; color: #fff; font-size: 14px; margin-bottom: 4px; }
+  .tl-desc { font-size: 13px; color: rgba(255,255,255,0.45); }
+
+  /* ── Footer ── */
+  .wp-footer {
+    border-top: 1px solid var(--border);
+    padding-top: 40px;
+    text-align: center;
+    font-family: monospace;
+    font-size: 12px;
+    color: rgba(255,255,255,0.2);
+  }
+  .wp-footer a { color: rgba(0,255,65,0.5); text-decoration: none; }
+  .wp-footer a:hover { color: var(--green); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ── COVER ── -->
+  <div class="cover">
+    <div class="logo-wrap">
+      <img src="/HTlogo512.png" alt="HumbleTrust" />
+    </div>
+    <div class="cover-badge">Whitepaper v1.0 · June 2026</div>
+    <h1>HumbleTrust <span>Protocol</span></h1>
+    <p class="cover-sub">
+      The First Trust Layer for Solana — enforcing token launch integrity
+      through on-chain smart contracts, algorithmic scoring, and provable creator accountability.
+    </p>
+    <div class="meta-row">
+      <div>Network: <span>Solana Devnet → Mainnet Q3 2026</span></div>
+      <div>Program: <span>FGQ16c...MGr</span></div>
+      <div>Framework: <span>Anchor 0.32.1</span></div>
+      <div>Status: <span>Devnet Alpha</span></div>
+    </div>
+  </div>
+
+  <!-- ── TOC ── -->
+  <div class="toc">
+    <div class="toc-title">Table of Contents</div>
+    <ol>
+      <li><a href="#abstract">Abstract</a></li>
+      <li><a href="#problem">The Problem — Solana's Trust Deficit</a></li>
+      <li><a href="#solution">Solution — The HumbleTrust Protocol</a></li>
+      <li><a href="#contract">V2 Smart Contract — Architecture</a></li>
+      <li><a href="#trustscore">TrustScore System</a></li>
+      <li><a href="#nfts">NFT Ecosystem — Three Distinct Types</a></li>
+      <li><a href="#reputation">Creator Reputation System</a></li>
+      <li><a href="#economics">Creator Economics</a></li>
+      <li><a href="#api">TrustScore API & Chrome Extension</a></li>
+      <li><a href="#market">Multi-Chain Market Intelligence</a></li>
+      <li><a href="#security">Security Model</a></li>
+      <li><a href="#roadmap">Roadmap</a></li>
+      <li><a href="#specs">Technical Specifications</a></li>
+    </ol>
+  </div>
+
+  <!-- ── 1. ABSTRACT ── -->
+  <section id="abstract">
+    <div class="section-tag">§ 1</div>
+    <h2>Abstract</h2>
+    <p class="lead">
+      HumbleTrust is a trust-layer protocol built on Solana that makes token launches verifiably honest
+      — before the first trade happens.
+    </p>
+    <p>
+      The Solana ecosystem has unprecedented velocity but a structural trust problem: creators can promise
+      anything in a whitepaper yet retain full control of liquidity and supply. HumbleTrust changes the
+      rules at the infrastructure level. Instead of asking for trust, the protocol enforces it on-chain.
+    </p>
+    <p>
+      The protocol consists of five components working in concert: a <strong>V2 Anchor smart contract</strong>
+      that enforces allocation, locking, and LP policy immutably; a <strong>TrustScore engine</strong> that
+      scores every token from 0–100 using on-chain and market data; a <strong>three-tier NFT ecosystem</strong>
+      (Launch Certificates, Zodiac Badges, OG Pass — each serving a distinct purpose); a <strong>Creator
+      Reputation system</strong> that tracks behaviour across all launches on-chain; and a <strong>TrustScore
+      API with Chrome Extension</strong> that brings scoring into 9 trading platforms inline.
+    </p>
+  </section>
+
+  <!-- ── 2. PROBLEM ── -->
+  <section id="problem">
+    <div class="section-tag">§ 2</div>
+    <h2>The Problem — Solana's Trust Deficit</h2>
+    <p>Solana processes tens of thousands of token launches every week. The vast majority follow the same pattern:</p>
+
+    <div class="grid-3">
+      <div class="card">
+        <div class="stat amber">73%</div>
+        <div class="card-title">LP Not Locked</div>
+        <p>Creator retains full control over pool liquidity and can remove it at any time</p>
+      </div>
+      <div class="card">
+        <div class="stat" style="color:#ef4444">~60%</div>
+        <div class="card-title">Hidden Allocations</div>
+        <p>Creator wallets hold undisclosed supply percentages enabling silent dumps</p>
+      </div>
+      <div class="card">
+        <div class="stat" style="color:#f59e0b">$2B+</div>
+        <div class="card-title">Lost to Rug Pulls</div>
+        <p>Estimated annual losses across Solana DeFi from creator-controlled exits</p>
+      </div>
+    </div>
+
+    <p>
+      Existing tools (rug checkers, LP scanners) are reactive — they report what already happened.
+      What is missing is a protocol that makes rug pulls structurally impossible before launch.
+    </p>
+
+    <div class="callout amber">
+      <div class="callout-label">Core insight</div>
+      <p>
+        "The problem is not that creators are dishonest. The problem is that the infrastructure gives
+        them the option to be. Remove the option — enforce rules in code — and the incentive to rug disappears."
+      </p>
+    </div>
+  </section>
+
+  <!-- ── 3. SOLUTION ── -->
+  <section id="solution">
+    <div class="section-tag">§ 3</div>
+    <h2>Solution — The HumbleTrust Protocol</h2>
+    <p>
+      HumbleTrust is not a launchpad in the traditional sense. It is a <strong>trust enforcement layer</strong>
+      that any creator can opt into. By choosing HumbleTrust, a creator commits on-chain — not in text — to:
+    </p>
+    <ul class="check">
+      <li>A fixed, publicly declared supply allocation across five immutable vaults</li>
+      <li>A creator allocation of 0–5% released in a time-locked vesting schedule (Day 30 / 60 / 90)</li>
+      <li>A liquidity policy: either LP tokens burned or locked in a program-derived account — never creator-controlled</li>
+      <li>A minimum lock period for any creator-held tokens (30–360 days)</li>
+      <li>An optional burn of locked tokens on unlock (0–100% of locked supply)</li>
+      <li>A transparent TrustScore calculated and published before launch</li>
+    </ul>
+    <p>
+      Every commitment is verified and enforced by the V2 Anchor smart contract.
+      No admin key, no upgrade authority with special powers, no back door.
+    </p>
+  </section>
+
+  <!-- ── 4. CONTRACT ── -->
+  <section id="contract">
+    <div class="section-tag">§ 4</div>
+    <h2>V2 Smart Contract — Architecture</h2>
+    <p>
+      The V2 program is deployed at <code>FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr</code> on Solana devnet.
+      It is written in Rust using Anchor 0.32.1.
+    </p>
+
+    <h3>Five-Vault Supply Model</h3>
+    <p>
+      At launch, the creator declares the distribution of the total token supply across five vaults.
+      All five must sum to exactly 100%. The contract validates this constraint before minting.
+    </p>
+
+    <table>
+      <thead><tr><th>Vault</th><th>Range</th><th>Behaviour</th><th>Access</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Locked Vault</strong></td>
+          <td>0–95%</td>
+          <td>Time-locked PDA. Optional burn-on-unlock (0–100% of vault)</td>
+          <td>Creator only, after lock expires</td>
+        </tr>
+        <tr>
+          <td><strong>Creator Vault</strong></td>
+          <td>0–5%</td>
+          <td>Vested in 3 tranches — Day 30, 60, 90. On-chain schedule, immutable.</td>
+          <td>Creator only, per tranche unlock</td>
+        </tr>
+        <tr>
+          <td><strong>Curve Liquidity</strong></td>
+          <td>0–95%</td>
+          <td>Provides token-side reserves for the bonding curve AMM</td>
+          <td>Automated (curve math only)</td>
+        </tr>
+        <tr>
+          <td><strong>Circulation</strong></td>
+          <td>0–95%</td>
+          <td>Tokens available to buyers on curve immediately</td>
+          <td>Public (purchaseable)</td>
+        </tr>
+        <tr>
+          <td><strong>Airdrop</strong></td>
+          <td>0–20%</td>
+          <td>Reserved for airdrops. Claimable via governance instruction</td>
+          <td>Creator controlled, time-bounded</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Bonding Curve Types</h3>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title green">CPMM — Constant Product</div>
+        <p>Price follows x·y=k. Raydium-compatible. Standard AMM curve. Price rises predictably as supply is purchased. Optimal for DeFi utility tokens.</p>
+      </div>
+      <div class="card">
+        <div class="card-title purple">Quadratic Curve</div>
+        <p>Price = k·q². Slower early price increase. More community-friendly distribution. Early buyers get a larger advantage over later buyers.</p>
+      </div>
+    </div>
+
+    <h3>Trade Fee Economics</h3>
+    <p>A flat 1% fee is charged on every buy and sell. Split is immutable in the contract:</p>
+    <pre>PLATFORM_FEE_BPS  = 50   // 0.5% → HumbleTrust treasury
+CREATOR_FEE_BPS   = 50   // 0.5% → creator wallet (automatic, no claim needed)</pre>
+
+    <h3>LP Policy — Lock or Burn</h3>
+    <p>At graduation, LP tokens are never sent to the creator wallet. The creator chooses one of two policies at launch time:</p>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title teal">Lock Policy</div>
+        <p>LP tokens go to a program-derived lock PDA. Creator can claim LP swap fee share (40% standard / 60% premium) but cannot withdraw the LP itself until the lock expires.</p>
+      </div>
+      <div class="card">
+        <div class="card-title" style="color:#ef4444">Burn Policy</div>
+        <p>LP tokens are sent to the null address on graduation. Permanently removes any possibility of LP withdrawal. Maximum trust signal — indicated in TrustScore.</p>
+      </div>
+    </div>
+
+    <h3>Raydium CPMM Graduation</h3>
+    <p>
+      When the bonding curve accumulates <strong>50 SOL</strong> in the treasury, automatic migration to
+      Raydium CPMM is triggered. Any wallet can call the migration instruction and receives
+      <strong>0.1 SOL</strong> as a migration reward.
+    </p>
+    <ul class="check">
+      <li>SOL and token reserves move to Raydium CPMM pool via on-chain CPI</li>
+      <li>LP tokens routed to lock PDA or burn address per the declared LP policy</li>
+      <li>Creator begins earning LP fee share (40% or 60%) claimable monthly</li>
+      <li>Post-graduation trading continues on Raydium — no disruption</li>
+    </ul>
+
+    <h3>Anti-Bot Delay</h3>
+    <p>
+      Creators can set a delay of 0–600 seconds after launch before curve trading opens.
+      During this window, buy instructions are rejected on-chain with error code <code>TradingNotStarted (6027)</code>.
+      Prevents sniper bots from front-running community buyers at launch.
+    </p>
+  </section>
+
+  <!-- ── 5. TRUSTSCORE ── -->
+  <section id="trustscore">
+    <div class="section-tag">§ 5</div>
+    <h2>TrustScore System</h2>
+    <p>
+      TrustScore is a 0–100 composite score calculated from on-chain data, market signals, and external
+      security APIs. It is the protocol's primary output — a single, verifiable number that summarises
+      the trust posture of any Solana token.
+    </p>
+
+    <h3>Score Categories — Native HumbleTrust Tokens</h3>
+    <table>
+      <thead><tr><th>Category</th><th>Max Pts</th><th>Key Signals</th></tr></thead>
+      <tbody>
+        <tr><td>Supply Control</td><td class="td-green">40</td><td>Mint authority revoked, freeze authority status, supply cap enforcement</td></tr>
+        <tr><td>Liquidity Safety</td><td class="td-green">25</td><td>LP burned vs locked, bonding curve integrity, pool concentration</td></tr>
+        <tr><td>Distribution</td><td class="td-green">20</td><td>Creator allocation %, vesting schedule, airdrop allocation</td></tr>
+        <tr><td>Legitimacy</td><td class="td-green">15</td><td>Metadata completeness, creator reputation, verified issuer flag</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Score Categories — External Tokens</h3>
+    <p>
+      For non-HumbleTrust tokens the scoring engine integrates data from Birdeye, DexScreener,
+      GoPlus Security, and RugCheck to score any Solana token:
+    </p>
+    <table>
+      <thead><tr><th>Category</th><th>Max Pts</th><th>Data Sources</th></tr></thead>
+      <tbody>
+        <tr><td>Supply Control</td><td class="td-green">40</td><td>On-chain mint authority, token program flags, GoPlus</td></tr>
+        <tr><td>Liquidity</td><td class="td-green">25</td><td>DexScreener LP data, Birdeye pool analysis</td></tr>
+        <tr><td>Distribution</td><td class="td-green">20</td><td>Holder concentration, top-wallet analysis, on-chain</td></tr>
+        <tr><td>Legitimacy</td><td class="td-green">15</td><td>Metadata, social links, RugCheck verification</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Token Archetypes &amp; Score Caps</h3>
+    <p>Different token types carry inherently different risk profiles. The engine applies archetype-specific caps:</p>
+    <div class="grid-2">
+      <table>
+        <thead><tr><th>Archetype</th><th>Max Score</th></tr></thead>
+        <tbody>
+          <tr><td>HumbleTrust Launch</td><td class="td-green">100</td></tr>
+          <tr><td>Protocol / DeFi</td><td class="td-green">88</td></tr>
+          <tr><td>Ecosystem Token</td><td class="td-green">85</td></tr>
+          <tr><td>Meme (Active)</td><td class="td-green">78</td></tr>
+          <tr><td>Meme (Graduated)</td><td class="td-green">72</td></tr>
+          <tr><td>Unknown</td><td class="td-green">58</td></tr>
+        </tbody>
+      </table>
+      <div>
+        <h4>Trust Levels</h4>
+        <table>
+          <thead><tr><th>Score</th><th>Level</th></tr></thead>
+          <tbody>
+            <tr><td>80–100</td><td><span class="green">ELITE</span></td></tr>
+            <tr><td>65–79</td><td><span class="green">STRONG</span></td></tr>
+            <tr><td>50–64</td><td><span class="teal">OK</span></td></tr>
+            <tr><td>35–49</td><td><span class="amber">WEAK</span></td></tr>
+            <tr><td>0–34</td><td><span style="color:#ef4444">DANGER</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <h3>Data Quality Tiers</h3>
+    <p>When data is incomplete, the engine applies a quality penalty to the final score:</p>
+    <pre>FULL        (≥75% data available)  → full score, no cap
+PARTIAL     (≥55% data available)  → score capped at 58
+INSUFFICIENT (&lt;55% data available) → score capped at 40</pre>
+
+    <h3>Rug Risk Assessment</h3>
+    <p>
+      Independently of TrustScore, the engine produces a <strong>Rug Risk score</strong> (0–100) and
+      categorises tokens as LOW / MEDIUM / HIGH / CRITICAL. Key flags include:
+    </p>
+    <ul class="check">
+      <li>Mint authority active (+40 rug risk) — new supply can be printed at any time</li>
+      <li>Freeze authority active (+30) — creator can freeze any holder wallet</li>
+      <li>Honeypot pattern detected (+critical) — sell transactions blocked</li>
+      <li>LP less than 5% of market cap (+15) — shallow liquidity enables price manipulation</li>
+      <li>Top 10 holders &gt;70% supply (+15) — extreme concentration risk</li>
+    </ul>
+  </section>
+
+  <!-- ── 6. NFTS ── -->
+  <section id="nfts">
+    <div class="section-tag">§ 6</div>
+    <h2>NFT Ecosystem — Three Distinct Types</h2>
+
+    <div class="callout">
+      <div class="callout-label">Important</div>
+      <p>
+        HumbleTrust has three entirely separate NFT types. Each serves a different purpose,
+        has a different supply, a different price, and a different eligibility requirement.
+        They are not interchangeable and should not be confused.
+      </p>
+    </div>
+
+    <!-- 6.1 Launch Certificate -->
+    <div class="nft-card cert">
+      <div class="nft-type cert">Type 1 · Automatic · Per Token Launch</div>
+      <div class="nft-title">Launch Certificate NFT (HTCERT)</div>
+      <div class="nft-desc">
+        A soulbound proof-of-launch credential minted automatically by the V2 program at the end of every
+        successful HumbleTrust V2 token launch. It proves — on-chain and permanently — that the creator
+        locked liquidity, declared a burn policy, and passed TrustScore validation.
+      </div>
+      <div class="nft-meta">
+        <span class="nft-pill">Symbol: HTCERT</span>
+        <span class="nft-pill">Standard: Token-2022 NonTransferable</span>
+        <span class="nft-pill">Supply: Unlimited (1 per launch)</span>
+        <span class="nft-pill">Price: Free (gas only)</span>
+        <span class="nft-pill">Transferable: No (Soulbound)</span>
+      </div>
+      <br>
+      <p style="font-size:13px; color:rgba(255,255,255,0.4); margin:0;">
+        <strong style="color:rgba(255,255,255,0.7)">Use case:</strong>
+        Creators accumulate certificates across launches. TrustScore engine reads certificate history
+        to compute the <code>creator_track_record</code> signal. High certificate count = verified launch history.
+        Certificates cannot be transferred, sold, or revoked — they are permanent proof of conduct.
+      </p>
+    </div>
+
+    <!-- 6.2 Zodiac Badge -->
+    <div class="nft-card zodiac">
+      <div class="nft-type zodiac">Type 2 · Collectible · Premium Tier Only</div>
+      <div class="nft-title">Zodiac Badge NFTs — Limited 444 per Sign</div>
+      <div class="nft-desc">
+        A four-tier collectible NFT system exclusively available to creators who have launched a
+        <strong style="color:#fff">Premium-tier</strong> token on HumbleTrust. Each badge is unique —
+        derived deterministically from the creator's wallet address and token launch date.
+        Supply is strictly capped at 444 editions per zodiac sign (12 signs × 444 = 5,328 total maximum supply).
+      </div>
+      <div class="nft-meta">
+        <span class="nft-pill">Supply: Max 5,328 total (444 × 12 signs)</span>
+        <span class="nft-pill">Mint price: 0.2 SOL</span>
+        <span class="nft-pill">Eligibility: Premium tier creators only</span>
+        <span class="nft-pill">Cooldown: 30 days after sale</span>
+        <span class="nft-pill">Transferable: Yes</span>
+      </div>
+      <br>
+      <h4 style="font-size:13px; color:#B026FF; margin-bottom:8px;">Four-Trait System</h4>
+      <table style="margin:0;">
+        <thead><tr><th>Trait</th><th>Values</th><th>Derivation</th></tr></thead>
+        <tbody>
+          <tr><td>Zodiac Sign</td><td>12 (Aries → Pisces)</td><td>Token creation date → calendar zodiac</td></tr>
+          <tr><td>Element</td><td>4 (Fire, Water, Earth, Air)</td><td>Tied to zodiac sign group</td></tr>
+          <tr><td>Aura Color</td><td>32 distinct hex colors</td><td>SHA hash of creator wallet → color palette</td></tr>
+          <tr><td>Edition</td><td>#001 → #444 per sign</td><td>Sequential counter per zodiac sign</td></tr>
+        </tbody>
+      </table>
+      <br>
+      <p style="font-size:13px; color:rgba(255,255,255,0.4); margin:0;">
+        <strong style="color:rgba(255,255,255,0.7)">Minting flow:</strong>
+        Prepare (30-min reservation window) → Confirm (0.2 SOL payment on-chain) → Badge minted to creator wallet.
+        Metadata served dynamically: SVG image renders zodiac constellation + element sigil + aura color inline.
+      </p>
+    </div>
+
+    <!-- 6.3 OG Pass -->
+    <div class="nft-card og">
+      <div class="nft-type og">Type 3 · Membership · 444 Total Supply</div>
+      <div class="nft-title">OG Pass — 444 Lifetime PRO Memberships</div>
+      <div class="nft-desc">
+        A limited membership NFT granting permanent PRO API access to the HumbleTrust TrustScore API.
+        Exactly 444 OG Passes exist — ever. Each costs 4 SOL. Holders receive lifetime access to
+        5,000 API requests/day, an OG badge on the platform, and priority access to all future protocol features.
+      </div>
+      <div class="nft-meta">
+        <span class="nft-pill">Total supply: Exactly 444</span>
+        <span class="nft-pill">Mint price: 4 SOL</span>
+        <span class="nft-pill">API access: 5,000 req/day · Lifetime</span>
+        <span class="nft-pill">Eligibility: Open (first-come, first-served)</span>
+        <span class="nft-pill">Transferable: Yes</span>
+      </div>
+      <br>
+      <p style="font-size:13px; color:rgba(255,255,255,0.4); margin:0;">
+        <strong style="color:rgba(255,255,255,0.7)">Use case:</strong>
+        Trading bots, analytics platforms, and power users who need sustained high-volume TrustScore
+        API access. The 444 supply cap is immutable — no additional OG Passes will ever be created.
+        Transferable, so a secondary market is expected to develop as API demand grows.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── 7. REPUTATION ── -->
+  <section id="reputation">
+    <div class="section-tag">§ 7</div>
+    <h2>Creator Reputation System</h2>
+    <p>
+      Each creator on HumbleTrust has a <strong>Creator Reputation PDA</strong> on-chain —
+      a program-derived account that accumulates a verifiable history of their behaviour across all launches.
+      This is separate from TrustScore (which scores individual tokens) and separate from NFTs.
+    </p>
+
+    <h3>Reputation Events</h3>
+    <table>
+      <thead><tr><th>Event</th><th>Type</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td>Token Launch</td><td><code>1</code></td><td>Positive — records a new launch, increments launch counter</td></tr>
+        <tr><td>Token Unlock</td><td><code>2</code></td><td>Positive — records on-schedule unlock, confirms creator kept commitment</td></tr>
+        <tr><td>Community Complaint</td><td><code>3</code></td><td>Negative — deducts reputation, triggers review flag</td></tr>
+        <tr><td>Bonus Event</td><td><code>4</code></td><td>Positive — exceptional launch (high TrustScore, graduation) earns bonus</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      Events are recorded by the protocol's <strong>metrics_authority</strong> keypair
+      via the <code>record_reputation_event_v2</code> instruction. The authority signs server-side
+      after validating the event — creators cannot self-report.
+    </p>
+
+    <h3>Reputation in TrustScore</h3>
+    <p>
+      A creator's reputation history feeds into the <code>creator_track_record</code> signal
+      in the Legitimacy category of TrustScore. Verified issuers (creators with a sustained high
+      reputation and multiple successful launches) earn the <code>verified_issuer</code> flag,
+      which is shown on their tokens and displayed in the Discover page.
+    </p>
+  </section>
+
+  <!-- ── 8. ECONOMICS ── -->
+  <section id="economics">
+    <div class="section-tag">§ 8</div>
+    <h2>Creator Economics</h2>
+    <p>Every revenue stream is enforced on-chain — no middleman, no admin wallet required.</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="stat green">0.5%</div>
+        <div class="card-title">Trade Fee</div>
+        <p>Sent automatically to creator wallet on every buy and sell. No claim button needed. Immutable in contract: <code>CREATOR_FEE_BPS = 50</code>.</p>
+      </div>
+      <div class="card">
+        <div class="stat purple">0–5%</div>
+        <div class="card-title">Creator Token Allocation</div>
+        <p>Of total supply. Released in 3 tranches — Day 30 (33%), Day 60 (33%), Day 90 (34%). Set once at launch. Immutable.</p>
+      </div>
+      <div class="card">
+        <div class="stat teal">40–60%</div>
+        <div class="card-title">LP Fee Share</div>
+        <p>After Raydium graduation. Standard: 40%. Premium (TrustScore ≥ 80): 60% of all ongoing LP swap fees. Claimable monthly.</p>
+      </div>
+      <div class="card">
+        <div class="stat amber">0.1 SOL</div>
+        <div class="card-title">Migration Reward</div>
+        <p>Paid to whoever triggers the graduation transaction at 50 SOL threshold. Community incentive to push tokens to Raydium.</p>
+      </div>
+    </div>
+
+    <h3>Worked Example — 1,000 SOL Daily Volume</h3>
+    <div class="callout">
+      <div class="callout-label">Real numbers</div>
+      <p>
+        <strong>Trade fees:</strong> 0.5% × 1,000 SOL = <span class="green">5 SOL/day</span> → ~150 SOL/month<br>
+        <strong>Creator allocation (5%):</strong> Day 30/60/90 tranches of vested supply<br>
+        <strong>Post-graduation LP fees:</strong> 40–60% of Raydium pool swap fees (passive, ongoing)<br><br>
+        Higher TrustScore → more visibility in Discover → more traders → higher volume → higher fees.
+        Creator incentives and protocol health are fully aligned.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── 9. API + EXTENSION ── -->
+  <section id="api">
+    <div class="section-tag">§ 9</div>
+    <h2>TrustScore API &amp; Chrome Extension</h2>
+
+    <h3>REST API</h3>
+    <p>The HumbleTrust TrustScore API is available at <code>humbletrust.vercel.app/api</code>.
+    It provides real-time trust scoring for any Solana token address.</p>
+
+    <table>
+      <thead><tr><th>Plan</th><th>Req/Day</th><th>Price</th><th>Access</th></tr></thead>
+      <tbody>
+        <tr><td>Free</td><td>50</td><td>Free</td><td>Public, no key required</td></tr>
+        <tr><td>PRO</td><td>10,000</td><td>Subscription</td><td>API key, all endpoints</td></tr>
+        <tr><td class="td-amber">OG Pass (444 NFT)</td><td>5,000</td><td>4 SOL (one-time)</td><td>Lifetime, non-expiring</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Chrome Extension</h3>
+    <p>
+      The HumbleTrust Chrome Extension (Manifest V3) injects TrustScore inline on
+      <strong>9 trading platforms</strong> — without the user ever leaving the page.
+    </p>
+    <div class="grid-3">
+      <div class="card"><div class="card-title">DEXScreener</div></div>
+      <div class="card"><div class="card-title">Birdeye</div></div>
+      <div class="card"><div class="card-title">Jupiter</div></div>
+      <div class="card"><div class="card-title">Raydium</div></div>
+      <div class="card"><div class="card-title">Phantom</div></div>
+      <div class="card"><div class="card-title">Solflare</div></div>
+      <div class="card"><div class="card-title">Bullx</div></div>
+      <div class="card"><div class="card-title">Trojan</div></div>
+      <div class="card"><div class="card-title">Axiom</div></div>
+    </div>
+    <p>
+      The extension reads the token address from the page URL, calls the TrustScore API,
+      and renders a colour-coded badge with the score, trust level, and rug risk inline.
+      No context switching. No new tab.
+    </p>
+  </section>
+
+  <!-- ── 10. MARKET ── -->
+  <section id="market">
+    <div class="section-tag">§ 10</div>
+    <h2>Multi-Chain Market Intelligence</h2>
+    <p>
+      The Market page aggregates token data from 60+ blockchains via DexScreener and GeckoTerminal,
+      giving users a unified view of on-chain activity across the entire crypto ecosystem.
+    </p>
+    <div class="grid-2">
+      <div>
+        <h4>Tier 1 Chains</h4>
+        <p>Solana · Ethereum · Base · BSC · Polygon · Arbitrum · Optimism · Avalanche · TON · Sui · Aptos</p>
+      </div>
+      <div>
+        <h4>Layer 2 &amp; Emerging</h4>
+        <p>Linea · Scroll · zkSync · Starknet · Hyperliquid · Beam · PulseChain · Abstract · Monad · World Chain and 40+ more</p>
+      </div>
+    </div>
+    <p>
+      Each chain's data is enriched with TrustScore where available, giving DeFi researchers
+      a single interface to assess cross-chain opportunities.
+    </p>
+  </section>
+
+  <!-- ── 11. SECURITY ── -->
+  <section id="security">
+    <div class="section-tag">§ 11</div>
+    <h2>Security Model</h2>
+
+    <h3>On-Chain Guarantees</h3>
+    <ul class="check">
+      <li>PDA-based custody — all SOL and token vaults are program-derived accounts; no private key controls them</li>
+      <li>Mint authority revoked after launch — no additional supply can be minted</li>
+      <li>LP tokens go to lock PDA or burn address — creator cannot withdraw liquidity</li>
+      <li>Supply validation: all five vault percentages must sum to 100% (checked pre-mint)</li>
+      <li>Creator allocation hard cap: 5% enforced on-chain, not just in UI</li>
+      <li>Anti-bot delay: 0–600s before curve opens, configurable by creator at launch</li>
+      <li>Overflow-safe curve math: u128 intermediates prevent integer overflow in price calculations</li>
+      <li>Owner-check validation: SPL token accounts verified against <code>spl_token::ID</code> before CPI</li>
+      <li>LP fees constrained to pre-declared <code>rewards_sol_wallet</code> — arbitrary destination blocked</li>
+    </ul>
+
+    <h3>Infrastructure Security</h3>
+    <ul class="check">
+      <li>API keys stored as SHA-256 hashes — plaintext never stored in database</li>
+      <li>Internal secrets compared via <code>crypto.timingSafeEqual</code> — timing-attack resistant</li>
+      <li>Rate limiting fail-closed — DB error blocks request, not allows it</li>
+      <li>Vercel serverless — no persistent server process to compromise</li>
+      <li>Supabase Row-Level Security on all tables</li>
+    </ul>
+
+    <div class="callout amber">
+      <div class="callout-label">Devnet Alpha — Important Disclaimer</div>
+      <p>
+        HumbleTrust is currently in devnet alpha. No real assets are at risk on the current deployment.
+        Mainnet launch requires: (1) full security audit by a qualified Solana security firm,
+        (2) Squads multisig upgrade authority migration, (3) production RPC with failover,
+        (4) signed mainnet readiness checklist. Do not use real assets on devnet.
+      </p>
+    </div>
+
+    <h3>Reporting Vulnerabilities</h3>
+    <p>
+      Security researchers are encouraged to report findings via
+      <a href="mailto:humble.trust@outlook.com" style="color:var(--green)">humble.trust@outlook.com</a>
+      or GitHub Security Advisories at
+      <a href="https://github.com/HumbleTrust/humbletrust/security/advisories/new" style="color:var(--green)" target="_blank">
+        github.com/HumbleTrust/humbletrust
+      </a>.
+    </p>
+  </section>
+
+  <!-- ── 12. ROADMAP ── -->
+  <section id="roadmap">
+    <div class="section-tag">§ 12</div>
+    <h2>Roadmap</h2>
+
+    <div class="timeline">
+      <div class="tl-item">
+        <div class="tl-dot done"></div>
+        <div class="tl-date">February 2026</div>
+        <div class="tl-label">V1 Program — First Devnet Deploy</div>
+        <div class="tl-desc">Basic token lock PDA, burn-on-unlock, TrustScore v1 from lock parameters</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot done"></div>
+        <div class="tl-date">March 2026</div>
+        <div class="tl-label">V2 Architecture Design</div>
+        <div class="tl-desc">Five-vault model, bonding curve AMM, LP Policy (Lock/Burn), Certificate NFT, TrustScore v2</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot done"></div>
+        <div class="tl-date">April 2026</div>
+        <div class="tl-label">V2 Program — Devnet Launch</div>
+        <div class="tl-desc">Full bonding curve trading, Raydium CPMM graduation (devnet), Creator Reputation PDA, Certificate NFT minting, anti-bot delay</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot done"></div>
+        <div class="tl-date">May 2026</div>
+        <div class="tl-label">Frontend &amp; Chrome Extension</div>
+        <div class="tl-desc">Full React + Vite frontend live. Launch, Trade, Discover, Market, Score, Portfolio pages. Chrome Extension on 9 platforms. Zodiac Badge NFT system. OG Pass model. Real-time charts.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot done"></div>
+        <div class="tl-date">June 2026</div>
+        <div class="tl-label">Creator Reputation API + Security Hardening</div>
+        <div class="tl-desc">POST /api/reputation/record on-chain. Full security audit cycle. Slippage auto-fix, real-time chart from chain, a11y audit. Program redeployed with 50 SOL graduation threshold.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot planned"></div>
+        <div class="tl-date">Q3 2026</div>
+        <div class="tl-label">Mainnet Launch</div>
+        <div class="tl-desc">Audited V2 program on Solana mainnet. Squads multisig authority. Production RPC with failover. Full test suite.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot planned"></div>
+        <div class="tl-date">Q4 2026</div>
+        <div class="tl-label">Raydium CPMM — Mainnet Activation</div>
+        <div class="tl-desc">LP lock/burn enforcement mainnet. OHLCV indexing, volume bars. OG Pass 444 NFT mint open. Chrome Web Store listing.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot future"></div>
+        <div class="tl-date">2027</div>
+        <div class="tl-label">Trust Layer Expansion</div>
+        <div class="tl-desc">TrustScore for all Solana tokens (not just HumbleTrust launches). Creator reputation graph. Multi-chain expansion beyond Solana.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 13. SPECS ── -->
+  <section id="specs">
+    <div class="section-tag">§ 13</div>
+    <h2>Technical Specifications</h2>
+
+    <h3>Smart Contract</h3>
+    <table>
+      <tbody>
+        <tr><td>Program ID</td><td class="td-green">FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr</td></tr>
+        <tr><td>Network</td><td>Solana Devnet (Mainnet Q3 2026)</td></tr>
+        <tr><td>Framework</td><td>Anchor 0.32.1</td></tr>
+        <tr><td>Language</td><td>Rust (edition 2021)</td></tr>
+        <tr><td>IDL Account</td><td>B6Q4opVPr6gNUr1eNRrcf3rt3bQ9Au8WF3vwotpx7bMr</td></tr>
+        <tr><td>Upgrade Authority</td><td>7iMHH7F7SqAtuRo1sC72KKgWf2vZbfsRYHrpdmS3PSW8</td></tr>
+        <tr><td>Source</td><td><a href="https://github.com/HumbleTrust/humbletrust" target="_blank" style="color:var(--green)">github.com/HumbleTrust/humbletrust</a></td></tr>
+      </tbody>
+    </table>
+
+    <h3>Frontend</h3>
+    <table>
+      <tbody>
+        <tr><td>Framework</td><td>React 19 + Vite + TypeScript</td></tr>
+        <tr><td>Styling</td><td>TailwindCSS + motion/react (Framer Motion)</td></tr>
+        <tr><td>Charts</td><td>TradingView Lightweight Charts + Recharts</td></tr>
+        <tr><td>Wallet</td><td>Solana Wallet Adapter — Phantom, Backpack, Solflare</td></tr>
+        <tr><td>Hosting</td><td>Vercel (serverless functions for API)</td></tr>
+        <tr><td>URL</td><td><a href="https://humbletrust.vercel.app" target="_blank" style="color:var(--green)">humbletrust.vercel.app</a></td></tr>
+      </tbody>
+    </table>
+
+    <h3>Backend &amp; Data</h3>
+    <table>
+      <tbody>
+        <tr><td>API runtime</td><td>Vercel Serverless (Node.js 24.x)</td></tr>
+        <tr><td>Database</td><td>Supabase (PostgreSQL)</td></tr>
+        <tr><td>External data</td><td>Birdeye, DexScreener, GeckoTerminal, GoPlus, RugCheck</td></tr>
+        <tr><td>RPC</td><td>Solana devnet public RPC + Helius enrichment</td></tr>
+        <tr><td>Price ticker</td><td>CoinGecko public API (30s refresh)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ── FOOTER ── -->
+  <div class="wp-footer">
+    <p>HumbleTrust Protocol · Whitepaper v1.0 · June 2026</p>
+    <p style="margin-top:8px;">
+      <a href="https://humbletrust.vercel.app">humbletrust.vercel.app</a>
+      · <a href="https://x.com/HumbleTrust2026">@HumbleTrust2026</a>
+      · <a href="https://github.com/HumbleTrust/humbletrust">GitHub</a>
+      · <a href="mailto:humble.trust@outlook.com">humble.trust@outlook.com</a>
+    </p>
+    <p style="margin-top:12px; font-size:11px;">
+      This document is for informational purposes only. HumbleTrust is currently in devnet alpha.
+      No real assets are at risk. Not financial advice.
+    </p>
+  </div>
+
+</div>
+</body>
+</html>

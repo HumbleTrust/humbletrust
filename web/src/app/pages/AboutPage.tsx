@@ -104,12 +104,18 @@ const LINKS = [
 // ── Main ──────────────────────────────────────────────────────────────────────
 const PITCH_URL = "/pitch.html";
 const PITCH_SHARE_URL = "https://humbletrust.vercel.app/pitch.html";
+const WHITEPAPER_URL = "/whitepaper.html";
+const WHITEPAPER_SHARE_URL = "https://humbletrust.vercel.app/whitepaper.html";
 
 export function AboutPage({ onTabChange }: AboutPageProps) {
   const [pitchOpen, setPitchOpen] = useState(false);
+  const [wpOpen, setWpOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedWp, setCopiedWp] = useState(false);
   const [pitchBlobUrl, setPitchBlobUrl] = useState<string | null>(null);
+  const [wpBlobUrl, setWpBlobUrl] = useState<string | null>(null);
   const blobRef = useRef<string | null>(null);
+  const wpBlobRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!pitchOpen || blobRef.current) return;
@@ -124,13 +130,35 @@ export function AboutPage({ onTabChange }: AboutPageProps) {
   }, [pitchOpen]);
 
   useEffect(() => {
-    return () => { if (blobRef.current) URL.revokeObjectURL(blobRef.current); };
+    if (!wpOpen || wpBlobRef.current) return;
+    fetch(WHITEPAPER_URL)
+      .then(r => r.text())
+      .then(html => {
+        const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+        wpBlobRef.current = url;
+        setWpBlobUrl(url);
+      })
+      .catch(() => setWpBlobUrl(WHITEPAPER_URL));
+  }, [wpOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (blobRef.current) URL.revokeObjectURL(blobRef.current);
+      if (wpBlobRef.current) URL.revokeObjectURL(wpBlobRef.current);
+    };
   }, []);
 
   function copyLink() {
     navigator.clipboard.writeText(PITCH_SHARE_URL).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  function copyWpLink() {
+    navigator.clipboard.writeText(WHITEPAPER_SHARE_URL).then(() => {
+      setCopiedWp(true);
+      setTimeout(() => setCopiedWp(false), 2000);
     });
   }
 
@@ -381,6 +409,107 @@ export function AboutPage({ onTabChange }: AboutPageProps) {
           </div>
         </GlassPanel>
       </motion.div>
+
+      {/* ── Whitepaper ── */}
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.13 }}>
+        <GlassPanel className="p-6 md:p-8 relative overflow-hidden">
+          <div className="absolute -top-16 -left-16 w-48 h-48 rounded-full bg-[#00FF41]/5 blur-3xl pointer-events-none" />
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="text-xs font-mono tracking-widest uppercase text-[#00FF41]/70">Whitepaper</div>
+              <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[#00FF41]/10 border border-[#00FF41]/20 text-[#00FF41]">v1.0 · June 2026</span>
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">Full Protocol Documentation</h2>
+            <p className="text-white/45 text-sm mb-5 max-w-xl">
+              Complete technical whitepaper — bonding curve architecture, TrustScore formula, all three NFT types explained accurately, Creator Reputation system, security model, and roadmap.
+            </p>
+            <div className="flex flex-wrap gap-3 mb-5">
+              <button
+                type="button"
+                onClick={() => setWpOpen(true)}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm text-black transition-all hover:opacity-90 active:scale-95"
+                style={{ background: "linear-gradient(90deg,#00FF41,#14F195)" }}
+              >
+                <FileText size={15} /> Read Whitepaper
+              </button>
+              <a
+                href={WHITEPAPER_URL}
+                download="HumbleTrust-Whitepaper-v1.html"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm text-white border border-[#00FF41]/30 bg-[#00FF41]/8 hover:bg-[#00FF41]/15 transition-all"
+              >
+                <Download size={15} /> Download
+              </a>
+              <button
+                type="button"
+                onClick={copyWpLink}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 transition-all"
+              >
+                {copiedWp ? <Check size={15} className="text-[#00FF41]" /> : <Copy size={15} />}
+                {copiedWp ? "Copied!" : "Copy link"}
+              </button>
+            </div>
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-white/[0.03] border border-white/[0.06]">
+              <span className="text-[10px] font-mono text-white/30 shrink-0">SHARE:</span>
+              <span className="text-[11px] font-mono text-[#00FF41]/70 truncate">{WHITEPAPER_SHARE_URL}</span>
+              <ExternalLink size={11} className="text-white/20 shrink-0" />
+            </div>
+          </div>
+        </GlassPanel>
+      </motion.div>
+
+      {/* ── Whitepaper Modal ── */}
+      {createPortal(
+        <AnimatePresence>
+          {wpOpen && (
+            <motion.div
+              key="wp-modal"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 flex flex-col"
+              style={{ zIndex: 9999, background: "rgba(4,4,12,0.97)", backdropFilter: "blur(12px)" }}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/8 shrink-0">
+                <div className="flex items-center gap-2">
+                  <img src="/HTlogo512.png" alt="" className="w-7 h-7 rounded-lg object-cover" />
+                  <span className="text-sm font-semibold text-white">HumbleTrust — Whitepaper v1.0</span>
+                  <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[#00FF41]/10 border border-[#00FF41]/20 text-[#00FF41] hidden sm:inline">June 2026</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={WHITEPAPER_URL}
+                    download="HumbleTrust-Whitepaper-v1.html"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-[#00FF41]/30 bg-[#00FF41]/8 text-white/60 hover:bg-[#00FF41]/15 transition-all"
+                  >
+                    <Download size={12} /> Download
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setWpOpen(false)}
+                    aria-label="Close whitepaper"
+                    className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/50 hover:bg-white/12 hover:text-white transition-all"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+              {wpBlobUrl ? (
+                <iframe
+                  src={wpBlobUrl}
+                  title="HumbleTrust Whitepaper"
+                  className="flex-1 w-full border-0"
+                  allow="fullscreen"
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-white/30 text-sm animate-pulse">Loading whitepaper…</div>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* ── Pitch Modal — portal renders in document.body, AnimatePresence lives inside ── */}
       {createPortal(
