@@ -360,6 +360,7 @@ export function LaunchPage() {
           return (2 * S_grad * 1e9) / T_grad;
         })()
       : (S_grad * S_grad * 1e9) / (T_init * S_init);
+    if (!Number.isFinite(gradPrice) || !Number.isFinite(initialPrice)) return null;
     // Convert to human-readable SOL per million tokens
     const perMillion = (p: number) => (p / 1e9) * 1e6; // SOL per 1M tokens
     return {

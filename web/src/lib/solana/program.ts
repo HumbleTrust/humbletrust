@@ -275,7 +275,7 @@ export const buyOnCurveV2 = async (
   mint: PublicKey,
   buyerTokenAccount: PublicKey,
   solIn: number,
-  minTokensOut: string | number = 0
+  minTokensOut: string | number
 ) => {
   const pdas = findV2Pdas(mint);
   const creatorFeeWallet = await getCreatorFeeWalletV2(program, mint);
@@ -308,7 +308,7 @@ export const sellOnCurveV2 = async (
   mint: PublicKey,
   sellerTokenAccount: PublicKey,
   tokensIn: string,
-  minSolOutLamports: string | number = 0
+  minSolOutLamports: string | number
 ) => {
   const pdas = findV2Pdas(mint);
   const creatorFeeWallet = await getCreatorFeeWalletV2(program, mint);

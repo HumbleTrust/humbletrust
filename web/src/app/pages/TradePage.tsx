@@ -745,6 +745,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
       const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
       const program = getProgramV2(provider);
       if (!Number.isFinite(Number(solAmount)) || Number(solAmount) <= 0) return;
+      if (estimatedTokens <= 0) throw new Error("Reserves not loaded — try again");
       const minTokensOut = rawTokenAmountFromUi(estimatedTokens * (1 - slippageBps / 10_000), selectedDecimals);
       const { signature } = await buyOnCurveV2(program, anchorWallet.publicKey, mint, ata, Number(solAmount), minTokensOut);
       setTxSig(signature);
@@ -831,6 +832,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
       const ata = getAssociatedTokenAddressSync(mint, anchorWallet.publicKey);
       const provider = new AnchorProvider(connection, anchorWallet, AnchorProvider.defaultOptions());
       const program = getProgramV2(provider);
+      if (estimatedSol <= 0) throw new Error("Reserves not loaded — try again");
       const minSolOutLamports = Math.floor(estimatedSol * LAMPORTS_PER_SOL * (1 - slippageBps / 10_000)).toString();
       const { signature } = await sellOnCurveV2(
         program, anchorWallet.publicKey, mint, ata,

@@ -38,10 +38,10 @@ async function provisionApiKey(customerId, email, plan) {
   const prefix = key.slice(0, 12);
   const limit  = PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
 
-  const { data: existing } = await db
-    .from("api_keys").select("id")
-    .eq("owner_email", email).eq("plan", plan).eq("revoked", false).maybeSingle();
-  if (existing) return null;
+  // Revoke any existing active key for this email (any plan) before issuing a new one.
+  // This prevents a customer from accumulating multiple active keys across plan changes.
+  await db.from("api_keys").update({ revoked: true })
+    .eq("owner_email", email).eq("revoked", false);
 
   const { error } = await db.from("api_keys").insert({
     key_hash: hash, key_prefix: prefix,
