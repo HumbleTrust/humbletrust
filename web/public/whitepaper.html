@@ -49,13 +49,15 @@
     pointer-events:none;
   }
   .logo-wrap {
-    width: 72px; height: 72px;
-    border-radius: 18px;
+    width: 96px; height: 96px;
+    border-radius: 22px;
     overflow: hidden;
     margin: 0 auto 24px;
-    box-shadow: 0 0 40px rgba(0,255,65,0.3), 0 0 80px rgba(176,38,255,0.15);
+    box-shadow: 0 0 40px rgba(0,255,65,0.35), 0 0 80px rgba(176,38,255,0.2);
+    background: #0a0f14;
+    display: flex; align-items: center; justify-content: center;
   }
-  .logo-wrap img { width:100%; height:100%; object-fit:cover; }
+  .logo-wrap img { width:100%; height:100%; object-fit:contain; display:block; }
   .cover-badge {
     display: inline-block;
     font-family: monospace;
@@ -345,7 +347,7 @@
   <!-- ── COVER ── -->
   <div class="cover">
     <div class="logo-wrap">
-      <img src="/HTlogo512.png" alt="HumbleTrust" />
+      <img src="https://humbletrust.vercel.app/HTlogo512.png" alt="HumbleTrust" />
     </div>
     <div class="cover-badge">Whitepaper v1.0 · June 2026</div>
     <h1>HumbleTrust <span>Protocol</span></h1>
