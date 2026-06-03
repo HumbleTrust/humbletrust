@@ -66,7 +66,7 @@ const MIGRATED_FALLBACK: import("../../lib/solana/program").MigrationState = {
 
 type TradeSide = "buy" | "sell";
 type ChartMode = "candles" | "line" | "area";
-type Timeframe = "1s" | "5s" | "1m" | "5m" | "1h";
+type Timeframe = "1s" | "5s" | "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
 
 export interface ChartIndicators {
   sma20: boolean;
@@ -84,7 +84,11 @@ interface WalletTokenOption {
   logo?: string;
 }
 
-const TIMEFRAMES: Timeframe[] = ["1s", "5s", "1m", "5m", "1h"];
+const TIMEFRAMES: Timeframe[] = ["1s", "5s", "1m", "5m", "15m", "1h", "4h", "1d"];
+
+const TIMEFRAME_SECONDS: Record<Timeframe, number> = {
+  "1s": 1, "5s": 5, "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400,
+};
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -1674,9 +1678,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                   </div>
                 );
 
-                const periodSec =
-                  timeframe === "1s" ? 1 : timeframe === "5s" ? 5 :
-                  timeframe === "5m" ? 300 : timeframe === "1h" ? 3600 : 60;
+                const periodSec = TIMEFRAME_SECONDS[timeframe];
 
                 return (
                   <LightweightTradeChart

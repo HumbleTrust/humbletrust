@@ -63,7 +63,8 @@ async function checkRateLimit(keyId, ip, dailyLimit) {
 
 async function trackUsage({ keyId, ip, mint, format, cached }) {
   const db = getClient();
-  await db.from("api_usage").insert({ key_id: keyId || null, ip, mint, format, cached });
+  const { error } = await db.from("api_usage").insert({ key_id: keyId || null, ip, mint, format, cached });
+  if (error) console.error("[trackUsage] insert failed:", error.message);
 }
 
 async function handleApiAuth(req, res) {

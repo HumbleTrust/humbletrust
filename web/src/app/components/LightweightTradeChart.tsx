@@ -15,6 +15,8 @@ import type { ApiTrade } from "../../lib/solana/api";
 
 type ChartMode = "candles" | "line" | "area";
 
+const TF_LABELS = ["1m", "5m", "15m", "1h", "4h", "1d"] as const;
+
 interface Props {
   trades: ApiTrade[];
   periodSec: number;
@@ -25,6 +27,8 @@ interface Props {
   showEma20?: boolean;
   showRsi?: boolean;
   mode?: ChartMode;
+  timeframe?: string;
+  onTimeframeChange?: (tf: string) => void;
 }
 
 interface Bucket {
@@ -193,8 +197,14 @@ export function LightweightTradeChart({
   const ema20Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const rsiRef = useRef<ISeriesApi<"Line"> | null>(null);
 
+  // Refs for values used inside the crosshair callback (avoids stale closure)
+  const periodSecRef = useRef(periodSec);
+  const showVolumeRef = useRef(showVolume);
+  useEffect(() => { periodSecRef.current = periodSec; }, [periodSec]);
+  useEffect(() => { showVolumeRef.current = showVolume; }, [showVolume]);
+
   const [tooltip, setTooltip] = useState<{
-    price: string; time: string; open?: string; high?: string; low?: string; close: string; rsi?: string;
+    price: string; time: string; open?: string; high?: string; low?: string; close: string; volume?: string; rsi?: string;
   } | null>(null);
 
   // Create/destroy chart when height or volume layout changes
@@ -299,18 +309,25 @@ export function LightweightTradeChart({
     chart.subscribeCrosshairMove((param) => {
       if (!param.time) { setTooltip(null); return; }
       const fmt = (v: number) => v < 0.000001 ? v.toExponential(2) : v.toFixed(9);
+      const fmtVol = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(2)}K` : v.toFixed(4);
       const t = new Date((param.time as number) * 1000);
-      const timeStr = t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      // Show date for timeframes where a single bar spans >= 1 hour
+      const showDate = periodSecRef.current >= 3600;
+      const timeStr = showDate
+        ? t.toLocaleDateString([], { month: "short", day: "numeric" }) + " " + t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        : t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
       const rsiData = param.seriesData.get(rsi) as LineData | undefined;
       const rsiStr = rsiData ? rsiData.value.toFixed(1) : undefined;
+      const volData = param.seriesData.get(vol) as HistogramData | undefined;
+      const volStr = (volData && showVolumeRef.current) ? fmtVol(volData.value) : undefined;
 
       const cd = param.seriesData.get(candle) as CandlestickData | undefined;
-      if (cd) { setTooltip({ price: fmt(cd.close), time: timeStr, open: fmt(cd.open), high: fmt(cd.high), low: fmt(cd.low), close: fmt(cd.close), rsi: rsiStr }); return; }
+      if (cd) { setTooltip({ price: fmt(cd.close), time: timeStr, open: fmt(cd.open), high: fmt(cd.high), low: fmt(cd.low), close: fmt(cd.close), volume: volStr, rsi: rsiStr }); return; }
       const ld = param.seriesData.get(line) as LineData | undefined;
-      if (ld) { setTooltip({ price: fmt(ld.value), time: timeStr, close: fmt(ld.value), rsi: rsiStr }); return; }
+      if (ld) { setTooltip({ price: fmt(ld.value), time: timeStr, close: fmt(ld.value), volume: volStr, rsi: rsiStr }); return; }
       const ad = param.seriesData.get(area) as AreaData | undefined;
-      if (ad) { setTooltip({ price: fmt(ad.value), time: timeStr, close: fmt(ad.value), rsi: rsiStr }); return; }
+      if (ad) { setTooltip({ price: fmt(ad.value), time: timeStr, close: fmt(ad.value), volume: volStr, rsi: rsiStr }); return; }
       setTooltip(null);
     });
 
@@ -408,11 +425,13 @@ export function LightweightTradeChart({
               <span className="text-white/40">H</span><span className="text-[#00FF41]">{tooltip.high}</span>
               <span className="text-white/40">L</span><span className="text-[#FF3C6B]">{tooltip.low}</span>
               <span className="text-white/40">C</span><span>{tooltip.close}</span>
+              {tooltip.volume && <><span className="text-white/40">Vol</span><span className="text-white/50">{tooltip.volume} SOL</span></>}
               {tooltip.rsi && <><span className="text-white/40">RSI</span><span className="text-[#FF9500]">{tooltip.rsi}</span></>}
             </div>
           ) : (
             <div className="flex gap-3">
               <span className="text-white/40">P</span><span>{tooltip.close}</span>
+              {tooltip.volume && <><span className="text-white/40">Vol</span><span className="text-white/50">{tooltip.volume} SOL</span></>}
               {tooltip.rsi && <><span className="text-white/40">RSI</span><span className="text-[#FF9500]">{tooltip.rsi}</span></>}
             </div>
           )}

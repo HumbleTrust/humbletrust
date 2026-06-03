@@ -59,9 +59,13 @@ async function revokeKeysByCustomer(customerId) {
 }
 
 // POST /api/stripe/checkout — create Stripe Checkout session
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
+
 async function handleCheckout(body, req, res) {
   const { plan, email } = body;
   if (!plan || !PRICES[plan]) return res.status(400).json({ error: "invalid_plan", valid: Object.keys(PRICES) });
+  if (email !== undefined && (typeof email !== "string" || !EMAIL_RE.test(email)))
+    return res.status(400).json({ error: "invalid_email" });
 
   const origin = isSafeOrigin(req.headers.origin) ? (req.headers.origin || SAFE_ORIGIN) : SAFE_ORIGIN;
   try {
