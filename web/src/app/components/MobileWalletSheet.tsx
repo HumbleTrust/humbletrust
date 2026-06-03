@@ -159,6 +159,7 @@ export function MobileWalletSheet({ open, onClose }: Props) {
                 </div>
                 <button
                   onClick={onClose}
+                  aria-label="Close wallet panel"
                   className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/50 hover:text-white"
                 >
                   <X size={14} />

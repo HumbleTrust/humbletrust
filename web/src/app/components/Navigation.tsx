@@ -219,7 +219,7 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
             >
               <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
                 <span className="text-xs text-white/40 font-mono uppercase tracking-widest">More</span>
-                <button onClick={() => setMoreOpen(false)} className="text-white/40 hover:text-white transition-colors">
+                <button onClick={() => setMoreOpen(false)} aria-label="Close menu" className="text-white/40 hover:text-white transition-colors">
                   <X className="w-4 h-4" />
                 </button>
               </div>

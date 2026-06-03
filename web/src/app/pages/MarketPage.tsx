@@ -241,6 +241,7 @@ const CoinCard = memo(({
         {/* Star button */}
         <button
           onClick={e => { e.stopPropagation(); onToggleStar(coin.id); }}
+          aria-label={isStarred ? "Remove from watchlist" : "Add to watchlist"}
           className={cn(
             "absolute top-3 right-3 p-1 rounded-md transition-all opacity-0 group-hover:opacity-100",
             isStarred ? "opacity-100 text-yellow-400" : "text-white/20 hover:text-yellow-400"
