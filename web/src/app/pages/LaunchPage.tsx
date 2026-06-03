@@ -512,6 +512,16 @@ export function LaunchPage() {
       await registerInNetwork();
 
       if (useV2) {
+        // Auto-initialize creator reputation PDA if not yet created (silent — no UI error if fails)
+        try {
+          const [repPda] = findCreatorReputationV2Pda(anchorWallet.publicKey);
+          const existing = await connection.getAccountInfo(repPda);
+          if (!existing) {
+            await initCreatorReputationV2(getProgramV2(provider), anchorWallet.publicKey);
+            setRepDone(true);
+          }
+        } catch { /* reputation init is non-critical */ }
+
         const cert = await mintCertificateForMint(mintStr, name);
         if (cert && !cert.alreadyMinted) {
           const certificateMint = cert.certificateMint.toString();

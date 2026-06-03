@@ -221,6 +221,12 @@ export function Portfolio() {
                           borderRadius: "8px",
                           color: "#fff",
                         }}
+                        itemStyle={{ color: "#fff" }}
+                        labelStyle={{ color: "rgba(255,255,255,0.6)" }}
+                        formatter={(value: number, name: string) => [
+                          value.toLocaleString("en-US", { maximumFractionDigits: 4 }),
+                          name,
+                        ]}
                       />
                     </PieChart>
                   </ResponsiveContainer>

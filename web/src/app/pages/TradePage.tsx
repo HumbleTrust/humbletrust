@@ -123,7 +123,9 @@ const isAmountInput = (value: string) => value === "" || /^\d*(\.\d*)?$/.test(va
 const friendlyError = (msg: string): string => {
   if (!msg) return "Unknown error";
   if (msg.includes("insufficient funds") || msg.includes("Insufficient funds")) return "Insufficient SOL balance for this trade";
-  if (msg.includes("slippage") || msg.includes("Slippage")) return "Slippage exceeded — try increasing slippage tolerance";
+  if (msg.includes("slippage") || msg.includes("Slippage")) return "Slippage exceeded — increase slippage tolerance or click 'Fetch live' to refresh reserves";
+  if (msg.includes("anti-bot") || msg.includes("TradingNotStarted") || msg.includes("Trading not started") || msg.includes("6027"))
+    return "Anti-bot delay active — wait a few seconds and try again";
   if (msg.includes("not deployed") || msg.includes("not executable")) return "Trading program is not deployed yet";
   if (msg.includes("User rejected") || msg.includes("rejected the request")) return "Transaction cancelled by user";
   if (msg.includes("blockhash") || msg.includes("BlockhashNotFound")) return "Transaction expired — please try again";
@@ -629,6 +631,15 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
       }
     };
   }, [validMint, mintInput, canUseCurve, isMainnet, connection, fetchChartTrades]);
+
+  // Auto-fetch live reserves when a valid V2 curve token is opened.
+  // Without this, minTokensOut is calculated from PREVIEW values (0.5 SOL / 350M)
+  // which may not match actual chain state, causing spurious slippage errors.
+  useEffect(() => {
+    if (!validMint || !canUseCurve || isMainnet) return;
+    void refreshReserves(mintInput.trim());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [validMint, mintInput, canUseCurve, isMainnet]);
 
   // Reload chart data when timeframe changes so the bucket count is appropriate
   useEffect(() => {
@@ -1441,7 +1452,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                 value={(slippageBps / 100).toString()}
                 onChange={(e) => {
                   const value = Number(e.target.value);
-                  if (Number.isFinite(value) && value >= 0 && value <= 25) setSlippageBps(Math.round(value * 100));
+                  if (Number.isFinite(value) && value >= 0 && value <= 50) setSlippageBps(Math.round(value * 100));
                 }}
               />
             </div>}
@@ -1472,8 +1483,19 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
 
             {/* Inline warnings */}
             {!isMainnet && !raydiumTradingActive && activeImpact > 5 && (
-              <div className="text-red-400 text-xs">
-                High price impact ({formatCompact(Math.abs(activeImpact), 1)}%). Consider reducing your trade size.
+              <div className="space-y-1.5">
+                <div className="text-red-400 text-xs">
+                  High price impact ({formatCompact(Math.abs(activeImpact), 1)}%). Reduce trade size or set higher slippage.
+                </div>
+                {activeImpact > 10 && slippageBps < Math.ceil(activeImpact) * 100 && (
+                  <button
+                    type="button"
+                    onClick={() => setSlippageBps(Math.min(5000, Math.ceil(activeImpact + 5) * 100))}
+                    className="text-[10px] px-2 py-1 rounded border border-yellow-500/30 text-yellow-400 bg-yellow-500/10 hover:bg-yellow-500/20 transition-all"
+                  >
+                    Set slippage to {Math.min(50, Math.ceil(activeImpact + 5))}%
+                  </button>
+                )}
               </div>
             )}
             {!isMainnet && sellBalanceExceeded && (
@@ -1913,6 +1935,12 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
               <RefreshCw size={12} className={reservesBusy ? "animate-spin" : undefined} />
               {reserveSource === "chain" ? "Live devnet" : "Fetch live"}
             </button>
+            {reserveSource === "preview" && !reservesBusy && validMint && (
+              <div className="mt-2 text-[11px] text-yellow-400/70 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400/70 flex-shrink-0" />
+                Estimates only — click <strong>Fetch live</strong> to load real reserves before trading (prevents slippage errors)
+              </div>
+            )}
             {reserveError && <div className="text-red-400 text-xs mt-2">{reserveError}</div>}
           </GlassPanel>}
 
