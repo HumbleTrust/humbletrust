@@ -46,7 +46,6 @@ const LP_FEE_CREATOR_STANDARD_BPS: u64 = 4_000;
 const LP_FEE_CREATOR_PREMIUM_BPS: u64 = 6_000;
 const LP_FEE_TREASURY_STANDARD_BPS: u64 = 3_500;
 const LP_FEE_TREASURY_PREMIUM_BPS: u64 = 3_000;
-const LP_CLAIM_COOLDOWN: i64 = SECONDS_PER_MONTH;
 const METAPLEX_TOKEN_METADATA_ID: Pubkey = pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 const NATIVE_SOL_MINT: Pubkey = pubkey!("So11111111111111111111111111111111111111112");
 const TOKEN_2022_PROGRAM_ID: Pubkey = pubkey!("TokenzQdBNbLqP5VEhdkAS6EPF5SJEMi4xg92qGZJzk");
@@ -229,7 +228,7 @@ pub mod humbletrust_v2 {
             meta.initial_sol_lamports = initial_sol_lamports;
             meta.is_test = is_test;
             meta.metadata_uri = metadata_uri.clone();
-            meta.migration_threshold_lamports = if is_test { 5_000_000_000u64 } else { 50_000_000_000u64 };
+            meta.migration_threshold_lamports = if is_test { 5_000_000_000u64 } else { MIGRATION_THRESHOLD_SOL_LAMPORTS };
             meta.migration_reward_lamports = MIGRATION_REWARD_LAMPORTS;
             meta.platform_fee_bps = PLATFORM_FEE_BPS;
             meta.creator_fee_bps = CREATOR_FEE_BPS;
@@ -289,7 +288,7 @@ pub mod humbletrust_v2 {
             meta.graduation_price_lamports_per_token = graduation_price_lamports_per_token_for_curve(
                 initial_sol_lamports,
                 curve_liquidity_amount,
-                if is_test { 5_000_000_000u64 } else { 50_000_000_000u64 },
+                if is_test { 5_000_000_000u64 } else { MIGRATION_THRESHOLD_SOL_LAMPORTS },
                 curve_type,
             )?;
             meta.bump = ctx.bumps.token_metadata;
@@ -3758,15 +3757,6 @@ fn seconds_per_month() -> i64 {
         300
     } else {
         SECONDS_PER_MONTH
-    }
-}
-
-// In test-mode migration threshold is 5 SOL instead of 50 SOL.
-fn migration_threshold_lamports() -> u64 {
-    if cfg!(feature = "test-mode") {
-        5_000_000_000
-    } else {
-        MIGRATION_THRESHOLD_SOL_LAMPORTS
     }
 }
 
