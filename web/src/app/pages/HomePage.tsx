@@ -121,7 +121,7 @@ export function HomePage({ onTabChange }: HomePageProps) {
                 <div className="text-xs font-mono tracking-[0.2em] text-[#00FF41]/60 uppercase mb-2">
                   First Layer · Solana · Decentralized
                 </div>
-                <h1 className="text-4xl md:text-5xl font-extrabold leading-tight mb-3">
+                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight mb-3">
                   <span
                     className="text-transparent bg-clip-text"
                     style={{
@@ -134,7 +134,7 @@ export function HomePage({ onTabChange }: HomePageProps) {
                   </span>
                   <span className="text-white"> Protocol</span>
                 </h1>
-                <p className="text-white/55 text-base md:text-lg max-w-2xl leading-relaxed">
+                <p className="text-white/55 text-sm sm:text-base md:text-lg max-w-2xl leading-relaxed">
                   The trust &amp; security layer for Solana token launches. Deploy bonding-curve tokens with
                   built-in price discovery, slippage protection, and real-time charts visible to everyone —
                   no rugs, no hidden fees, no surprises.

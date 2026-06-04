@@ -731,11 +731,11 @@ export function NftPage({ goLaunch }: { goLaunch?: () => void } = {}) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <GlassPanel className="p-8 text-center" glow="purple">
+        <GlassPanel className="px-5 py-12 md:py-20 md:px-8 text-center" glow="purple">
           <div className="text-xs font-mono tracking-widest uppercase text-[#B026FF]/70 mb-3">
             Zodiac Badge NFT
           </div>
-          <h1 className="text-4xl font-bold mb-4">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">
             <span className="text-[#B026FF]" style={{ textShadow: "0 0 40px rgba(176,38,255,0.45)" }}>
               Your on-chain identity,{" "}
             </span>
@@ -776,7 +776,7 @@ export function NftPage({ goLaunch }: { goLaunch?: () => void } = {}) {
           <h2 className="text-2xl font-bold text-white mb-1">Every zodiac, every element</h2>
           <p className="text-white/40 text-sm">Your badge zodiac is locked to the calendar date of your token launch.</p>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 justify-items-center">
+        <div className="grid grid-cols-1 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 justify-items-center overflow-hidden">
           {ZODIACS.map((z, i) => {
             const isActive = z.name === todayZodiac.name;
             return (
@@ -785,12 +785,14 @@ export function NftPage({ goLaunch }: { goLaunch?: () => void } = {}) {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 + i * 0.04 }}
+                className="w-full flex justify-center min-w-0"
               >
                 <GlassPanel
-                  className="p-2"
+                  className="p-2 w-full max-w-[220px]"
                   hover
                   glow={isActive ? "green" : "purple"}
                 >
+                  <div className="flex justify-center min-w-0 overflow-hidden">
                   <ZodiacBadgeCard
                     zodiac={z.name}
                     element={z.element}
@@ -799,9 +801,10 @@ export function NftPage({ goLaunch }: { goLaunch?: () => void } = {}) {
                     season={z.season}
                     active={isActive}
                   />
+                  </div>
                   {isActive && (
                     <div className="text-center mt-2">
-                      <span className="text-[9px] font-mono uppercase tracking-widest text-[#00FF41]">
+                      <span className="text-[11px] font-mono uppercase tracking-widest text-[#00FF41]">
                         Today's sign
                       </span>
                     </div>
@@ -850,9 +853,9 @@ export function NftPage({ goLaunch }: { goLaunch?: () => void } = {}) {
                 </span>
               </GlassPanel>
             </div>
-            <div className="flex gap-4 overflow-x-auto pb-2">
+            <div className="flex gap-4 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory">
               {row.badges.map((b, i) => (
-                <div key={i} className="flex-shrink-0">
+                <div key={i} className="flex-shrink-0 snap-center">
                   <GlassPanel className="p-2" hover glow="purple">
                     <ZodiacBadgeCard
                       zodiac={row.sign}
@@ -952,7 +955,7 @@ export function NftPage({ goLaunch }: { goLaunch?: () => void } = {}) {
             >
               <button
                 onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                className="w-full flex items-center justify-between p-5 text-left"
+                className="w-full flex items-center justify-between p-4 md:p-5 text-left"
               >
                 <span className={cn("font-semibold text-sm", openFaq === i ? "text-[#00FF41]" : "text-white")}>
                   {item.q}
@@ -975,7 +978,7 @@ export function NftPage({ goLaunch }: { goLaunch?: () => void } = {}) {
                     transition={{ duration: 0.2 }}
                     className="overflow-hidden"
                   >
-                    <p className="px-5 pb-5 text-white/50 text-sm leading-relaxed">{item.a}</p>
+                    <p className="px-4 pb-4 md:px-5 md:pb-5 text-white/50 text-sm leading-relaxed">{item.a}</p>
                   </motion.div>
                 )}
               </AnimatePresence>
