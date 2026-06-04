@@ -276,7 +276,7 @@ const CoinCard = memo(({
           onClick={e => { e.stopPropagation(); onToggleStar(coin.id); }}
           aria-label={isStarred ? "Remove from watchlist" : "Add to watchlist"}
           className={cn(
-            "absolute top-3 right-3 p-1 rounded-md transition-all opacity-0 group-hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-yellow-400/50 focus-visible:opacity-100",
+            "absolute top-2 right-2 p-2 rounded-md transition-all opacity-0 group-hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-yellow-400/50 focus-visible:opacity-100",
             isStarred ? "opacity-100 text-yellow-400" : "text-white/20 hover:text-yellow-400"
           )}
         >
@@ -998,7 +998,7 @@ export const MarketPage = () => {
       {/* ── GAINERS & LOSERS ── */}
       {!isBusy && category === "gainers_losers" && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Gainers */}
             <div>
               <div className="flex items-center gap-2 mb-3">

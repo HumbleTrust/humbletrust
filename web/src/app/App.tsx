@@ -115,7 +115,7 @@ export default function App() {
           <div className="relative z-10 md:ml-64 flex flex-col min-h-screen">
             <AnnouncementBanner />
             <TickerBar />
-            <main className="flex-1 p-4 md:p-6 pb-24 md:pb-6">
+            <main className="flex-1 p-4 md:p-6 pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-6">
               <ErrorBoundary>
                 <div className="max-w-[1400px] mx-auto">{renderPage()}</div>
               </ErrorBoundary>

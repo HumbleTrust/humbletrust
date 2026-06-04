@@ -292,8 +292,8 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
       </AnimatePresence>
 
       {/* Mobile Bottom Nav */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 backdrop-blur-xl bg-[rgba(10,10,15,0.95)] border-t border-white/10 z-30">
-        <nav className="flex justify-around items-center p-2">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 backdrop-blur-xl bg-[rgba(10,10,15,0.95)] border-t border-white/10 z-30" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <nav className="flex justify-around items-center pt-2 pb-2">
           {primaryNavItems.map(({ id, label, icon: Icon }) => {
             const isActive = activeTab === id;
             return (

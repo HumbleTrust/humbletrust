@@ -700,7 +700,7 @@ export function LaunchPage() {
                 <label className="block text-sm font-medium text-white/70 mb-2">
                   Social Links <span className="text-white/30 font-normal">(optional)</span>
                 </label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   <div className="relative">
                     <Globe size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
                     <input

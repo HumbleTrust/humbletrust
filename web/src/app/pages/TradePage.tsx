@@ -1064,28 +1064,28 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
     "text-white";
 
   return (
-    <div className="flex flex-col rounded-xl border border-white/[0.08] overflow-hidden" style={{ minHeight: "calc(100vh - 190px)", background: "rgba(5,8,15,0.97)" }}>
+    <div className="flex flex-col rounded-xl border border-white/[0.08] overflow-hidden min-h-[calc(100dvh-120px)] md:min-h-[calc(100vh-190px)]" style={{ background: "rgba(5,8,15,0.97)" }}>
 
       {/* ─── Terminal Header Bar ─── */}
       <div className="flex items-center gap-2 px-3 h-10 border-b border-white/[0.08] bg-black/40 overflow-hidden shrink-0">
         {validMint ? (
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 min-w-0">
             {tokenInfo ? <HexAvatar src={tokenInfo.logoUri} label={tokenInfo.symbol} size={22} /> : tokenDetecting ? <div className="w-[22px] h-[22px] rounded-full bg-white/10 animate-pulse" /> : null}
-            <span className="text-white font-bold font-mono text-sm">{selectedSymbol}</span>
+            <span className="text-white font-bold font-mono text-sm min-w-0 truncate max-w-[80px] sm:max-w-none">{selectedSymbol}</span>
             <span className="text-white/25 text-xs font-mono">/SOL</span>
           </div>
-        ) : <span className="text-white/20 font-mono text-[11px] shrink-0">enter token mint →</span>}
+        ) : <span className="text-white/20 font-mono text-xs shrink-0">enter token mint →</span>}
         {validMint && currentPrice > 0 && <span className="text-white font-mono text-sm shrink-0">{formatPrice(currentPrice)}</span>}
-        <span className={cn("text-[10px] font-mono px-1.5 py-px rounded border shrink-0", isMainnet ? "border-orange-500/40 text-orange-400 bg-orange-500/10" : canUseCurve ? "border-[#00FF41]/30 text-[#00FF41] bg-[#00FF41]/10" : "border-yellow-500/30 text-yellow-400 bg-yellow-500/10")}>
+        <span className={cn("text-xs font-mono px-1.5 py-px rounded border shrink-0", isMainnet ? "border-orange-500/40 text-orange-400 bg-orange-500/10" : canUseCurve ? "border-[#00FF41]/30 text-[#00FF41] bg-[#00FF41]/10" : "border-yellow-500/30 text-yellow-400 bg-yellow-500/10")}>
           {isMainnet ? "MAINNET" : canUseCurve ? "DEVNET" : "V2 PENDING"}
         </span>
         {!isMainnet && migrationState && !migrationState.isMigrated && validMint && (
-          <div className="flex items-center gap-1 shrink-0"><Rocket size={10} className="text-yellow-400" /><div className="w-14 h-1 rounded-full bg-white/10 overflow-hidden"><div className="h-full rounded-full bg-yellow-400 transition-all" style={{ width: `${migrationState.progressPct}%` }} /></div><span className="text-yellow-400 font-mono text-[9px]">{migrationState.progressPct.toFixed(0)}%</span></div>
+          <div className="flex items-center gap-1 shrink-0"><Rocket size={10} className="text-yellow-400" /><div className="w-14 h-1 rounded-full bg-white/10 overflow-hidden"><div className="h-full rounded-full bg-yellow-400 transition-all" style={{ width: `${migrationState.progressPct}%` }} /></div><span className="text-yellow-400 font-mono text-xs">{migrationState.progressPct.toFixed(0)}%</span></div>
         )}
-        {!isMainnet && migrationState?.isMigrated && <span className="text-[9px] px-1.5 py-px rounded bg-[#00FF41]/10 text-[#00FF41] border border-[#00FF41]/25 font-mono shrink-0">RAYDIUM</span>}
-        {lpLockState && <span className="flex items-center gap-0.5 text-[9px] text-yellow-400 font-mono shrink-0"><Lock size={8} />LOCKED</span>}
+        {!isMainnet && migrationState?.isMigrated && <span className="text-xs px-1.5 py-px rounded bg-[#00FF41]/10 text-[#00FF41] border border-[#00FF41]/25 font-mono shrink-0">RAYDIUM</span>}
+        {lpLockState && <span className="flex items-center gap-0.5 text-xs text-yellow-400 font-mono shrink-0"><Lock size={8} />LOCKED</span>}
         {dbTokenInfo?.trust_score != null && (
-          <span className="text-[9px] font-mono px-1.5 py-px rounded border shrink-0" style={{ color: dbTokenInfo.trust_score >= 70 ? "#00FF41" : dbTokenInfo.trust_score >= 40 ? "#F7B731" : "#FF4444", borderColor: `${dbTokenInfo.trust_score >= 70 ? "#00FF41" : dbTokenInfo.trust_score >= 40 ? "#F7B731" : "#FF4444"}40`, background: `${dbTokenInfo.trust_score >= 70 ? "#00FF41" : dbTokenInfo.trust_score >= 40 ? "#F7B731" : "#FF4444"}12` }}>TS {dbTokenInfo.trust_score}</span>
+          <span className="text-xs font-mono px-1.5 py-px rounded border shrink-0" style={{ color: dbTokenInfo.trust_score >= 70 ? "#00FF41" : dbTokenInfo.trust_score >= 40 ? "#F7B731" : "#FF4444", borderColor: `${dbTokenInfo.trust_score >= 70 ? "#00FF41" : dbTokenInfo.trust_score >= 40 ? "#F7B731" : "#FF4444"}40`, background: `${dbTokenInfo.trust_score >= 70 ? "#00FF41" : dbTokenInfo.trust_score >= 40 ? "#F7B731" : "#FF4444"}12` }}>TS {dbTokenInfo.trust_score}</span>
         )}
         <span className="flex-1 min-w-0" />
         {chartDisplayTrades.length > 0 && (() => {
@@ -1093,25 +1093,25 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
           const sells = chartDisplayTrades.filter(t => t.side === "sell").length;
           const totalSol = chartDisplayTrades.reduce((s, t) => s + Number(t.sol_amount), 0);
           const buyPct = buys + sells > 0 ? Math.round(buys / (buys + sells) * 100) : 50;
-          return (<div className="hidden lg:flex items-center gap-1.5 text-[9px] font-mono shrink-0"><span className="text-[#00FF41]">{buys}B</span><span className="text-white/15">/</span><span className="text-[#FF3C6B]">{sells}S</span><span className="text-white/15">·</span><span className="text-white/35">{totalSol.toFixed(2)}◎</span><div className="w-10 h-1 rounded-full bg-[#FF3C6B]/20 overflow-hidden ml-1"><div className="h-full rounded-full bg-[#00FF41]/60 transition-all" style={{ width: `${buyPct}%` }} /></div></div>);
+          return (<div className="flex overflow-x-auto gap-1.5 text-xs font-mono shrink-0 scrollbar-none"><span className="text-[#00FF41]">{buys}B</span><span className="text-white/15">/</span><span className="text-[#FF3C6B]">{sells}S</span><span className="text-white/15">·</span><span className="text-white/35">{totalSol.toFixed(2)}◎</span><div className="w-10 h-1 rounded-full bg-[#FF3C6B]/20 overflow-hidden ml-1 self-center"><div className="h-full rounded-full bg-[#00FF41]/60 transition-all" style={{ width: `${buyPct}%` }} /></div></div>);
         })()}
         <div className="flex items-center gap-0.5 shrink-0">
           {pumpFunUrl && <a href={pumpFunUrl} target="_blank" rel="noreferrer" title="pump.fun" className="p-1 rounded text-white/20 hover:text-[#00FF41] hover:bg-white/[0.05] transition-colors"><ExternalLink size={11} /></a>}
           {solscanUrl && <a href={solscanUrl} target="_blank" rel="noreferrer" title="Solscan" className="p-1 rounded text-white/20 hover:text-white/50 hover:bg-white/[0.05] transition-colors"><ExternalLink size={11} /></a>}
           {validMint && !isMainnet && <button type="button" disabled={syncing} title="Sync chain" onClick={() => runSyncTrades(mintInput.trim())} className="p-1 rounded text-white/20 hover:text-white/50 hover:bg-white/[0.05] disabled:opacity-40 transition-colors"><RefreshCw size={11} className={syncing ? "animate-spin" : undefined} /></button>}
         </div>
-        {wallet.connected && walletSolBalance !== null && <span className="text-[9px] text-white/25 font-mono hidden md:block shrink-0 border-l border-white/[0.08] pl-2">{walletSolBalance.toFixed(3)}◎</span>}
+        {wallet.connected && walletSolBalance !== null && <span className="text-xs text-white/25 font-mono hidden md:block shrink-0 border-l border-white/[0.08] pl-2">{walletSolBalance.toFixed(3)}◎</span>}
       </div>
 
       {/* ── Main terminal grid: chart left (dominant), swap right (compact) ── */}
-      <div className="flex-1 grid grid-cols-1 xl:grid-cols-[1fr_340px] min-h-0">
+      <div className="flex-1 grid grid-cols-1 md:grid-cols-[1fr_300px] xl:grid-cols-[1fr_340px] min-h-0">
 
         {/* ── Swap panel (right column on xl, order-2) ── */}
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.1 }}
-          className="xl:order-2 border-t xl:border-t-0 xl:border-l border-white/[0.08] overflow-y-auto"
+          className="order-2 border-t md:border-t-0 md:border-l border-white/[0.08] overflow-y-auto"
         >
           <div className="p-4 space-y-4">
             {/* Panel head */}
@@ -1121,7 +1121,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                 Swap
               </div>
               <span className={cn(
-                "text-[10px] font-mono px-2 py-0.5 rounded-full border",
+                "text-xs font-mono px-2 py-0.5 rounded-full border",
                 isMainnet
                   ? "border-orange-500/40 text-orange-400 bg-orange-500/10"
                   : canUseCurve
@@ -1181,7 +1181,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                         <HexAvatar src={token.logo} label={token.symbol} size={28} />
                         <div className="flex-1 min-w-0">
                           <div className="text-white text-xs font-semibold">{token.symbol}</div>
-                          <div className="text-white/40 text-[10px] truncate">{token.name} · {shortAddress(token.mint)}</div>
+                          <div className="text-white/40 text-xs truncate">{token.name} · {shortAddress(token.mint)}</div>
                         </div>
                         <div className="text-white/60 text-xs font-mono">{formatCompact(token.balance, 4)}</div>
                       </button>
@@ -1211,12 +1211,12 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                   </div>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     {tokenInfo.source === "pumpfun" && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#00FF41]/10 text-[#00FF41] border border-[#00FF41]/20">pump.fun</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-[#00FF41]/10 text-[#00FF41] border border-[#00FF41]/20">pump.fun</span>
                     )}
                     {tokenInfo.source === "mainnet" && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-400/20">DEX</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-400/20">DEX</span>
                     )}
-                    <span className="text-white/25 text-[10px] font-mono">{tokenInfo.mint.slice(0, 6)}...{tokenInfo.mint.slice(-4)}</span>
+                    <span className="text-white/25 text-xs font-mono">{tokenInfo.mint.slice(0, 6)}...{tokenInfo.mint.slice(-4)}</span>
                   </div>
                 </div>
                 {tokenInfo.priceUsd && (
@@ -1225,21 +1225,21 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
               </div>
             )}
             {!tokenDetecting && validMint && !tokenInfo && !isMainnet && (
-              <div className="text-[10px] text-white/30 px-1">HumbleTrust token (devnet)</div>
+              <div className="text-xs text-white/30 px-1">HumbleTrust token (devnet)</div>
             )}
 
             {/* Social links + description from HumbleTrust DB */}
             {dbTokenInfo && (dbTokenInfo.description || dbTokenInfo.website || dbTokenInfo.twitter || dbTokenInfo.telegram) && (
               <div className="px-1 space-y-1.5">
                 {dbTokenInfo.description && (
-                  <p className="text-[11px] text-white/40 leading-relaxed line-clamp-2">{dbTokenInfo.description}</p>
+                  <p className="text-xs text-white/40 leading-relaxed line-clamp-2">{dbTokenInfo.description}</p>
                 )}
                 <div className="flex flex-wrap gap-x-3 gap-y-1">
                   {dbTokenInfo.website && (
                     <a
                       href={dbTokenInfo.website.startsWith("http") ? dbTokenInfo.website : `https://${dbTokenInfo.website}`}
                       target="_blank" rel="noreferrer"
-                      className="text-[10px] text-blue-400/60 hover:text-blue-400 transition-colors"
+                      className="text-xs text-blue-400/60 hover:text-blue-400 transition-colors"
                     >
                       🌐 {dbTokenInfo.website.replace(/^https?:\/\//, "").split("/")[0]}
                     </a>
@@ -1248,7 +1248,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                     <a
                       href={`https://x.com/${dbTokenInfo.twitter.replace(/^@/, "")}`}
                       target="_blank" rel="noreferrer"
-                      className="text-[10px] text-blue-400/60 hover:text-blue-400 transition-colors"
+                      className="text-xs text-blue-400/60 hover:text-blue-400 transition-colors"
                     >
                       𝕏 @{dbTokenInfo.twitter.replace(/^@/, "")}
                     </a>
@@ -1257,7 +1257,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                     <a
                       href={dbTokenInfo.telegram.startsWith("http") ? dbTokenInfo.telegram : `https://t.me/${dbTokenInfo.telegram.replace(/^@/, "")}`}
                       target="_blank" rel="noreferrer"
-                      className="text-[10px] text-blue-400/60 hover:text-blue-400 transition-colors"
+                      className="text-xs text-blue-400/60 hover:text-blue-400 transition-colors"
                     >
                       ✈ {dbTokenInfo.telegram.replace(/^@/, "").replace(/^https?:\/\/t\.me\//, "")}
                     </a>
@@ -1332,7 +1332,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                       type="button"
                       aria-label={f === 1 ? "Use 100% of SOL balance" : `Use ${f * 100}% of SOL balance`}
                       className={cn(
-                        "py-1.5 text-[11px] font-medium rounded border transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20",
+                        "py-1.5 text-xs font-medium rounded border transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20",
                         "bg-white/[0.04] border-white/[0.08] text-white/45",
                         "hover:bg-[#00FF41]/10 hover:border-[#00FF41]/25 hover:text-[#00FF41]",
                         "active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white/[0.04] disabled:hover:text-white/45 disabled:hover:border-white/[0.08]"
@@ -1396,12 +1396,12 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                 )}
               </div>
               {isMainnet && jupiterQuote && (
-                <div className="text-white/30 text-[10px]">
+                <div className="text-white/30 text-xs">
                   impact {Number(jupiterQuote.priceImpactPct).toFixed(2)}% · via Jupiter
                 </div>
               )}
               {raydiumTradingActive && cpmmEstimate && (
-                <div className="text-white/30 text-[10px]">
+                <div className="text-white/30 text-xs">
                   impact {cpmmEstimate.impact.toFixed(2)}% · via Raydium CPMM
                 </div>
               )}
@@ -1483,7 +1483,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                   <button
                     type="button"
                     onClick={() => setSlippageBps(Math.min(5000, Math.ceil(activeImpact + 5) * 100))}
-                    className="text-[10px] px-2 py-1 rounded border border-yellow-500/30 text-yellow-400 bg-yellow-500/10 hover:bg-yellow-500/20 transition-all"
+                    className="text-xs px-2 py-1 rounded border border-yellow-500/30 text-yellow-400 bg-yellow-500/10 hover:bg-yellow-500/20 transition-all"
                   >
                     Set slippage to {Math.min(50, Math.ceil(activeImpact + 5))}%
                   </button>
@@ -1509,7 +1509,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
 
             {/* Mainnet warning */}
             {isMainnet && (
-              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-300 text-[11px] leading-relaxed">
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-300 text-xs leading-relaxed">
                 <span className="shrink-0 mt-0.5">⚠️</span>
                 <span>
                   <strong>Mainnet trade</strong> — real SOL from your mainnet wallet will be used.
@@ -1594,9 +1594,9 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.15 }}
-          className={cn("xl:order-1 flex flex-col min-h-0", fullChart && "fixed inset-1 md:inset-4 z-50 flex flex-col bg-[rgba(5,8,15,0.99)] rounded-xl border border-white/10")}
+          className={cn("order-1 flex flex-col min-h-0", fullChart && "fixed inset-1 md:inset-4 z-50 flex flex-col bg-[rgba(5,8,15,0.99)] rounded-xl border border-white/10")}
         >
-          <div className={cn("overflow-hidden flex flex-col flex-1 min-h-0 border-b border-white/[0.08]", !fullChart && "border border-white/[0.08] rounded-xl xl:rounded-none xl:border-0")}>
+          <div className={cn("overflow-hidden flex flex-col flex-1 min-h-0 border-b border-white/[0.08]", !fullChart && "border border-white/[0.08] rounded-xl md:rounded-none md:border-0")}>
             {/* Chart topbar */}
             <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-white/[0.02]">
               {!showDexChart && (
@@ -1644,7 +1644,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                     aria-pressed={active}
                     onClick={onClick}
                     className={cn(
-                      "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all duration-150 focus-visible:outline-none",
+                      "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all duration-150 focus-visible:outline-none",
                       active
                         ? "border-current"
                         : "border-white/10 text-white/35 hover:text-white/60 hover:border-white/20 hover:bg-white/[0.04]"
@@ -1665,7 +1665,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                   <span className="w-2 h-2 rounded-full bg-[#00FF41] inline-block animate-pulse" />
                   {selectedSymbol} / SOL · {isMainnet ? (tokenInfo?.source === "pumpfun" ? "pump.fun" : "mainnet") : "devnet"}
                   {!isMainnet && canUseCurve && validMint && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded border border-[#00FF41]/20 text-[#00FF41]/50 font-mono bg-[#00FF41]/5">LIVE</span>
+                    <span className="text-xs px-1.5 py-0.5 rounded border border-[#00FF41]/20 text-[#00FF41]/50 font-mono bg-[#00FF41]/5">LIVE</span>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
@@ -1689,7 +1689,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                       type="button"
                       disabled={syncing}
                       onClick={() => runSyncTrades(mintInput.trim())}
-                      className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono border border-[#00FF41]/20 text-[#00FF41]/60 hover:text-[#00FF41] hover:border-[#00FF41]/40 hover:bg-[#00FF41]/5 transition-all duration-150 disabled:opacity-40"
+                      className="flex items-center gap-1 px-2 py-1 rounded text-xs font-mono border border-[#00FF41]/20 text-[#00FF41]/60 hover:text-[#00FF41] hover:border-[#00FF41]/40 hover:bg-[#00FF41]/5 transition-all duration-150 disabled:opacity-40"
                       aria-label="Sync historical trades from blockchain"
                     >
                       {syncing
@@ -1752,7 +1752,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                   <LightweightTradeChart
                     trades={chartDisplayTrades}
                     periodSec={periodSec}
-                    height={fullChart ? Math.max(520, (typeof window !== "undefined" ? window.innerHeight - 160 : 600)) : 480}
+                    height={fullChart ? Math.max(520, (typeof window !== "undefined" ? window.innerHeight - 160 : 600)) : (typeof window !== "undefined" && window.innerWidth < 768 ? 300 : 480)}
                     showVolume={showVolume}
                     showSma20={indicators.sma20}
                     showSma50={indicators.sma50}
@@ -1769,7 +1769,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
               {/* Sync feedback */}
               {syncMsg && (
                 <div className={cn(
-                  "text-[10px] font-mono px-2 py-1 rounded",
+                  "text-xs font-mono px-2 py-1 rounded",
                   syncMsg.includes("error") || syncMsg.includes("Error")
                     ? "text-red-400 bg-red-500/10"
                     : "text-[#00FF41] bg-[#00FF41]/10"
@@ -1799,7 +1799,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                         style={{ width: `${buyPct}%` }}
                       />
                     </div>
-                    <span className="text-white/25 shrink-0 font-mono text-[10px]">{chartDisplayTrades.length} trades</span>
+                    <span className="text-white/25 shrink-0 font-mono text-xs">{chartDisplayTrades.length} trades</span>
                   </div>
                 );
               })()}
@@ -1807,9 +1807,10 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
               {/* Trade history table */}
               {chartDisplayTrades.length > 0 && (
                 <div className="border-t border-white/10 pt-3">
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-2">Trade history</p>
+                  <p className="text-xs font-mono uppercase tracking-widest text-white/30 mb-2">Trade history</p>
+                  <div className="overflow-x-auto scrollbar-none">
                   {/* Header */}
-                  <div className="grid grid-cols-[52px_1fr_90px_90px_70px_24px] gap-1 px-1 pb-1 text-[10px] font-mono text-white/25 uppercase border-b border-white/5">
+                  <div className="grid grid-cols-[52px_1fr_90px_90px_70px_24px] gap-1 px-1 pb-1 text-xs font-mono text-white/25 uppercase border-b border-white/5 min-w-[420px]">
                     <span>Side</span>
                     <span>Price (SOL)</span>
                     <span className="text-right">SOL</span>
@@ -1817,7 +1818,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                     <span className="text-right">Time</span>
                     <span />
                   </div>
-                  <div className="space-y-0 max-h-52 overflow-y-auto pr-1 mt-1">
+                  <div className="space-y-0 max-h-52 overflow-y-auto pr-1 mt-1 min-w-[420px]">
                     {[...chartDisplayTrades]
                       .sort((a, b) => new Date(b.block_time).getTime() - new Date(a.block_time).getTime())
                       .map((trade, i) => {
@@ -1830,13 +1831,13 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                           <div
                             key={trade.signature + i}
                             className={cn(
-                              "grid grid-cols-[52px_1fr_90px_90px_70px_24px] gap-1 px-1 py-1 text-[11px] font-mono rounded items-center transition-colors duration-100",
+                              "grid grid-cols-[52px_1fr_90px_90px_70px_24px] gap-1 px-1 py-1 text-xs font-mono rounded items-center transition-colors duration-100",
                               "hover:bg-white/[0.03]",
                               isBuy ? "border-l-2 border-[#00FF41]/35" : "border-l-2 border-[#FF3C6B]/35"
                             )}
                           >
                             <span className={cn(
-                              "text-[10px] font-bold px-1.5 py-0.5 rounded text-center",
+                              "text-xs font-bold px-1.5 py-0.5 rounded text-center",
                               isBuy
                                 ? "bg-[#00FF41]/10 text-[#00FF41]"
                                 : "bg-[#FF3C6B]/10 text-[#FF3C6B]"
@@ -1852,7 +1853,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                             <span className="text-white/40 text-right">
                               {tokens > 0 ? (tokens >= 1_000_000 ? `${(tokens / 1_000_000).toFixed(2)}M` : tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}K` : tokens.toFixed(2)) : "—"}
                             </span>
-                            <span className="text-white/25 text-right text-[10px]">{timeStr}</span>
+                            <span className="text-white/25 text-right text-xs">{timeStr}</span>
                             <a
                               href={isMainnet
                                 ? `https://solscan.io/tx/${trade.signature}`
@@ -1866,6 +1867,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                           </div>
                         );
                       })}
+                  </div>
                   </div>
                 </div>
               )}
