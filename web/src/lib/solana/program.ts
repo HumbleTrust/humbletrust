@@ -488,8 +488,8 @@ export const mintLaunchCertificateV2 = async (
   );
 
   const certName = tokenName ? `${tokenName} Certificate` : "HumbleTrust Launch Certificate";
-  const certSymbol = "CERT";
-  const certUri = "https://humbletrust.vercel.app/cert-meta.json";
+  const certSymbol = "HTCERT";
+  const certUri = `https://humbletrust.vercel.app/api/cert/${tokenMint.toBase58()}/metadata.json`;
 
   // ── Tx1: create and initialize the mint ────────────────────────────────────
   // Allocate ONLY the mint + MetadataPointer extension space here.
