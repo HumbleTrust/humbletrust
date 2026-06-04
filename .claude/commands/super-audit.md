@@ -1,110 +1,85 @@
-# /super-audit — HumbleTrust Security & Quality Super-Agent
+# /super-audit — HumbleTrust Security & Quality Super-Agent v2.0
 
-Запускает полный цикл аудита + исправления кодовой базы HumbleTrust до идеального состояния.
+Runs a full audit + fix cycle across the entire HumbleTrust codebase.
+Operates as: security-auditor + backend-engineer + solana-expert + qa-engineer simultaneously.
 
-## Что делает
+## Audit Angles
 
-1. **7 параллельных аудит-агентов** — каждый проверяет свой слой:
-   - Angle A: Безопасность API (auth, SQL injection, secrets, rate limits)
-   - Angle B: Frontend security (hardcoded keys, XSS, auth race conditions)
-   - Angle C: Контракт API↔Frontend (несоответствие типов, недостающие поля)
-   - Angle D: Solana/blockchain корректность (lamports, slippage, Token-2022)
-   - Angle E: Auth, API keys, trust score логика
-   - Angle F: DB schema vs code (неверные имена колонок, отсутствующие таблицы)
-   - Angle G: Silent errors, removed guards, dead code
+**A — API Security:** auth bypass, injection, secrets leak, race conditions, CORS misconfig  
+**B — Frontend Security:** hardcoded keys, XSS, wallet tx without confirmation, NaN in amounts  
+**C — API↔Frontend Contract:** fields frontend expects but API doesn't return, type mismatches  
+**D — Solana/Blockchain:** lamports vs SOL confusion, slippage, Token-2022, PDA validation, CPI  
+**E — Auth & Keys:** rate limit atomicity, key hash storage, plan enforcement, fail-closed  
+**F — DB Schema vs Code:** column names in INSERT/SELECT/UPDATE match actual migrations  
+**G — Silent Errors:** swallowed catches, removed guards, dead code, missing error propagation  
+**H — Product Quality:** broken flows, missing loading states, empty states, UX regressions  
 
-2. **Супер-агент-синтезатор** — верифицирует все находки, убирает дубли, ранжирует
-
-3. **Агент-исправитель** — применяет все фиксы, делает syntax check, пушит
-
-## Как запускать
+## Invocation
 
 ```
-/super-audit
+/super-audit              # full audit
+/super-audit security     # angles A + D + E only
+/super-audit schema       # angle F only
+/super-audit frontend     # angles B + C + G + H
+/super-audit solana       # angle D only
+/super-audit api          # angles A + C + E + F
 ```
 
-Или с конкретным фокусом:
-```
-/super-audit security    # только безопасность
-/super-audit schema      # только схема БД vs код
-/super-audit frontend    # только фронтенд
-/super-audit solana      # только Solana/blockchain
-```
+## Execution Protocol
 
-## Инструкция для агента
+### Step 1 — Launch 8 agents in parallel (background)
 
-При вызове этого скилла:
+Each agent reads its file set and returns JSON: `[{file, line, severity, summary, failure_scenario}]`
 
-### Шаг 1 — Запусти 7 агентов параллельно (все в фоне)
+**Angle A files:** `api/_lib/`, `api/tokens/[...path].js`, `api/stripe/[action].js`, `api/badges/[action].js`, `api/keys/index.js`, `api/reputation/record.js`
 
-Каждый агент читает свой набор файлов и возвращает JSON: `[{file, line, summary, failure_scenario}]`
+**Angle B files:** `web/src/lib/supabase.ts`, `web/src/lib/useAuth.ts`, `web/src/lib/solana/program.ts`, `web/src/app/pages/TradePage.tsx`, `web/src/app/pages/LaunchPage.tsx`
 
-**Angle A (API security):**
-Файлы: `api/_lib/`, `api/tokens/[...path].js`, `api/stripe/[action].js`, `api/badges/[action].js`, `api/keys/index.js`
-Проверяет: auth bypass, injection, secrets, race conditions, CORS
+**Angle C files:** `web/src/lib/solana/api.ts` + all API route handlers
 
-**Angle B (Frontend security):**
-Файлы: `web/src/lib/supabase.ts`, `web/src/lib/useAuth.ts`, `web/src/lib/solana/program.ts`, `web/src/lib/solana/rpc.ts`, `web/src/app/pages/TradePage.tsx`, `web/src/app/pages/LaunchPage.tsx`
-Проверяет: hardcoded secrets, XSS, wallet tx без подтверждения, NaN в суммах
+**Angle D files:** `web/src/lib/solana/`, `programs/humbletrust-v2/src/lib.rs`, `web/src/app/pages/TradePage.tsx`, `web/src/app/pages/LaunchPage.tsx`
 
-**Angle C (API↔Frontend contract):**
-Файлы: `web/src/lib/solana/api.ts` + все API routes
-Проверяет: поля которые фронт ожидает но API не отдаёт, неверные типы
+**Angle E files:** `api/_lib/apiKey.js`, `api/_lib/trust.js`, `api/_lib/validate.js`, `api/keys/index.js`
 
-**Angle D (Solana/blockchain):**
-Файлы: `web/src/lib/solana/`, `web/src/app/pages/TradePage.tsx`, `web/src/app/pages/LaunchPage.tsx`
-Проверяет: lamports vs SOL, slippage, Token-2022, confirmTransaction, PDA
+**Angle F files:** `supabase/migrations/` (all), `api/score/[mint].js`, `api/tokens/[...path].js`, `api/badges/[action].js`
 
-**Angle E (Auth & keys):**
-Файлы: `api/_lib/apiKey.js`, `api/_lib/trust.js`, `api/_lib/validate.js`, `api/keys/index.js`
-Проверяет: rate limit atomicity, key hash storage, plan enforcement
+**Angle G files:** `web/src/app/pages/`, `api/tokens/[...path].js`, `api/badges/[action].js`, `api/reputation/record.js`
 
-**Angle F (DB schema vs code):**
-Файлы: `supabase/migrations/` (все), `api/score/[mint].js`, `api/tokens/[...path].js`
-Проверяет: имена колонок в INSERT/SELECT/UPDATE совпадают со схемой
+**Angle H files:** `web/src/app/pages/`, `web/src/app/components/`
 
-**Angle G (Silent errors):**
-Файлы: `web/src/app/pages/`, `api/tokens/[...path].js`, `api/badges/[action].js`
-Проверяет: `.catch(() => {})`, проглоченные ошибки, удалённые guards
+### Step 2 — Synthesize (after all agents complete)
 
-### Шаг 2 — Синтез (синхронно, после получения всех результатов)
+- Deduplicate (one issue = one entry)
+- Rank: CRITICAL > HIGH > MEDIUM > LOW
+- Verify: CONFIRMED / PLAUSIBLE / REFUTED
+- Output table: severity | file:line | summary | failure scenario
 
-- Дедупликация (одна проблема = одна запись)
-- Ранжирование: CRITICAL > HIGH > MEDIUM > LOW
-- Верификация: CONFIRMED / PLAUSIBLE / REFUTED
+### Step 3 — Fix all CRITICAL and HIGH
 
-### Шаг 3 — Исправление
+For each finding:
+1. Read exact code context
+2. Apply minimal precise fix
+3. Syntax check: `node --check <file>` for JS, `npx vite build` for frontend
 
-Для каждой CRITICAL и HIGH находки:
-1. Прочитай точный код вокруг проблемы
-2. Примени минимальный точный фикс
-3. Проверь синтаксис: `node --check <file>`
-
-### Шаг 4 — Коммит и пуш
+### Step 4 — Commit and push
 
 ```bash
-cd /home/user/humbletrust
 git add -A
-git commit -m "fix(audit): [краткое описание что исправлено]
+git commit -m "fix(audit): [summary]
 
 https://claude.ai/code/session_01PQNfLMrMKaAqUwRrzeYCiY"
 git push -u origin main
 ```
 
-### Шаг 5 — Финальная проверка
+## Security Invariants (NEVER violate)
 
-После пуша запусти CI check и убедись что:
-- `api/` syntax check проходит
-- Нет новых регрессий
-
-## Известные постоянные правила (никогда не нарушать)
-
-- SUPABASE_KEY (service role) — только в env, никогда в коде
-- VITE_SUPABASE_ANON — только через Vite env, не hardcode
-- Все сравнения секретов — через `crypto.timingSafeEqual`
-- Rate limit fail-closed: при ошибке БД → blocked, не allowed
-- POST эндпоинты с записью в БД — всегда требуют auth
-- `token_health_events` колонка: `details` (не `data`)
-- `api_usage` колонка: `created_at` (не `ts`)
-- `score_history` колонки: `mint, score, trust_level, recorded_at`
-- `token_score_cache` колонка: `components` (не `score_components`)
+- `SUPABASE_KEY` service role: env only, never in code
+- `VITE_SUPABASE_ANON`: Vite env only
+- Secret comparisons: `crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b))`
+- Rate limit fail-closed: DB error → blocked (not allowed)
+- POST with DB writes: always require Bearer auth
+- `token_health_events`: column `details` (not `data`)
+- `api_usage`: column `created_at` (not `ts`)
+- `score_history`: `mint, score, trust_level, recorded_at`
+- `token_score_cache`: `components` (not `score_components`)
+- No `@coral-xyz/anchor` in `api/` directory

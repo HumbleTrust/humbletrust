@@ -1064,66 +1064,56 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
     "text-white";
 
   return (
-    <div className="space-y-6">
-      {/* ── Page header ── */}
-      <motion.div
-        initial={{ opacity: 0, y: -16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-      >
-        <GlassPanel className="p-6" glow="green">
-          <div className="text-xs font-mono tracking-widest text-[#00FF41] uppercase mb-1">Trade</div>
-          <h2 className="text-2xl font-bold text-white mb-1">
-            Trade <span className="text-[#00FF41]">protected</span> tokens
-          </h2>
-          <p className="text-white/50 text-sm">
-            {canUseCurve
-              ? "V2 devnet tokens trade on the HumbleTrust bonding curve, then continue on Raydium after migration."
-              : "V2 curve trading is waiting for the devnet program deploy."}
-          </p>
-        </GlassPanel>
-      </motion.div>
+    <div className="flex flex-col rounded-xl border border-white/[0.08] overflow-hidden" style={{ minHeight: "calc(100vh - 190px)", background: "rgba(5,8,15,0.97)" }}>
 
-      {/* ── V2 unavailable alert ── */}
-      {v2Available === false && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <GlassPanel className="p-4 border-orange-500/30 bg-orange-500/5">
-            <div className="flex gap-3">
-              <AlertTriangle size={18} className="text-orange-400 shrink-0 mt-0.5" />
-              <div>
-                <div className="font-semibold text-orange-400 text-sm mb-0.5">V2 curve deploy pending</div>
-                <div className="text-white/60 text-xs leading-relaxed">
-                  The configured v2 program ID is not executable on devnet yet — curve buy/sell is disabled.
-                </div>
-              </div>
-            </div>
-          </GlassPanel>
-        </motion.div>
-      )}
-
-      {/* ── Anti-bot alert ── */}
-      <GlassPanel className="p-4 border-orange-500/20 bg-orange-500/5">
-        <div className="flex gap-3">
-          <AlertTriangle size={18} className="text-orange-400 shrink-0 mt-0.5" />
-          <div>
-            <div className="font-semibold text-orange-400 text-sm mb-0.5">Anti-bot delay active on new tokens</div>
-            <div className="text-white/60 text-xs leading-relaxed">
-              Each token has a 0–600 second trading delay after launch. If a tx fails immediately after launch, wait for the delay to expire.
-            </div>
+      {/* ─── Terminal Header Bar ─── */}
+      <div className="flex items-center gap-2 px-3 h-10 border-b border-white/[0.08] bg-black/40 overflow-hidden shrink-0">
+        {validMint ? (
+          <div className="flex items-center gap-2 shrink-0">
+            {tokenInfo ? <HexAvatar src={tokenInfo.logoUri} label={tokenInfo.symbol} size={22} /> : tokenDetecting ? <div className="w-[22px] h-[22px] rounded-full bg-white/10 animate-pulse" /> : null}
+            <span className="text-white font-bold font-mono text-sm">{selectedSymbol}</span>
+            <span className="text-white/25 text-xs font-mono">/SOL</span>
           </div>
+        ) : <span className="text-white/20 font-mono text-[11px] shrink-0">enter token mint →</span>}
+        {validMint && currentPrice > 0 && <span className="text-white font-mono text-sm shrink-0">{formatPrice(currentPrice)}</span>}
+        <span className={cn("text-[10px] font-mono px-1.5 py-px rounded border shrink-0", isMainnet ? "border-orange-500/40 text-orange-400 bg-orange-500/10" : canUseCurve ? "border-[#00FF41]/30 text-[#00FF41] bg-[#00FF41]/10" : "border-yellow-500/30 text-yellow-400 bg-yellow-500/10")}>
+          {isMainnet ? "MAINNET" : canUseCurve ? "DEVNET" : "V2 PENDING"}
+        </span>
+        {!isMainnet && migrationState && !migrationState.isMigrated && validMint && (
+          <div className="flex items-center gap-1 shrink-0"><Rocket size={10} className="text-yellow-400" /><div className="w-14 h-1 rounded-full bg-white/10 overflow-hidden"><div className="h-full rounded-full bg-yellow-400 transition-all" style={{ width: `${migrationState.progressPct}%` }} /></div><span className="text-yellow-400 font-mono text-[9px]">{migrationState.progressPct.toFixed(0)}%</span></div>
+        )}
+        {!isMainnet && migrationState?.isMigrated && <span className="text-[9px] px-1.5 py-px rounded bg-[#00FF41]/10 text-[#00FF41] border border-[#00FF41]/25 font-mono shrink-0">RAYDIUM</span>}
+        {lpLockState && <span className="flex items-center gap-0.5 text-[9px] text-yellow-400 font-mono shrink-0"><Lock size={8} />LOCKED</span>}
+        {dbTokenInfo?.trust_score != null && (
+          <span className="text-[9px] font-mono px-1.5 py-px rounded border shrink-0" style={{ color: dbTokenInfo.trust_score >= 70 ? "#00FF41" : dbTokenInfo.trust_score >= 40 ? "#F7B731" : "#FF4444", borderColor: `${dbTokenInfo.trust_score >= 70 ? "#00FF41" : dbTokenInfo.trust_score >= 40 ? "#F7B731" : "#FF4444"}40`, background: `${dbTokenInfo.trust_score >= 70 ? "#00FF41" : dbTokenInfo.trust_score >= 40 ? "#F7B731" : "#FF4444"}12` }}>TS {dbTokenInfo.trust_score}</span>
+        )}
+        <span className="flex-1 min-w-0" />
+        {chartDisplayTrades.length > 0 && (() => {
+          const buys = chartDisplayTrades.filter(t => t.side === "buy").length;
+          const sells = chartDisplayTrades.filter(t => t.side === "sell").length;
+          const totalSol = chartDisplayTrades.reduce((s, t) => s + Number(t.sol_amount), 0);
+          const buyPct = buys + sells > 0 ? Math.round(buys / (buys + sells) * 100) : 50;
+          return (<div className="hidden lg:flex items-center gap-1.5 text-[9px] font-mono shrink-0"><span className="text-[#00FF41]">{buys}B</span><span className="text-white/15">/</span><span className="text-[#FF3C6B]">{sells}S</span><span className="text-white/15">·</span><span className="text-white/35">{totalSol.toFixed(2)}◎</span><div className="w-10 h-1 rounded-full bg-[#FF3C6B]/20 overflow-hidden ml-1"><div className="h-full rounded-full bg-[#00FF41]/60 transition-all" style={{ width: `${buyPct}%` }} /></div></div>);
+        })()}
+        <div className="flex items-center gap-0.5 shrink-0">
+          {pumpFunUrl && <a href={pumpFunUrl} target="_blank" rel="noreferrer" title="pump.fun" className="p-1 rounded text-white/20 hover:text-[#00FF41] hover:bg-white/[0.05] transition-colors"><ExternalLink size={11} /></a>}
+          {solscanUrl && <a href={solscanUrl} target="_blank" rel="noreferrer" title="Solscan" className="p-1 rounded text-white/20 hover:text-white/50 hover:bg-white/[0.05] transition-colors"><ExternalLink size={11} /></a>}
+          {validMint && !isMainnet && <button type="button" disabled={syncing} title="Sync chain" onClick={() => runSyncTrades(mintInput.trim())} className="p-1 rounded text-white/20 hover:text-white/50 hover:bg-white/[0.05] disabled:opacity-40 transition-colors"><RefreshCw size={11} className={syncing ? "animate-spin" : undefined} /></button>}
         </div>
-      </GlassPanel>
+        {wallet.connected && walletSolBalance !== null && <span className="text-[9px] text-white/25 font-mono hidden md:block shrink-0 border-l border-white/[0.08] pl-2">{walletSolBalance.toFixed(3)}◎</span>}
+      </div>
 
-      {/* ── Main trade grid ── */}
-      <div className="grid grid-cols-1 xl:grid-cols-[380px_1fr] gap-6">
+      {/* ── Main terminal grid: chart left (dominant), swap right (compact) ── */}
+      <div className="flex-1 grid grid-cols-1 xl:grid-cols-[1fr_340px] min-h-0">
 
-        {/* ── Swap panel ── */}
+        {/* ── Swap panel (right column on xl, order-2) ── */}
         <motion.div
-          initial={{ opacity: 0, x: -20 }}
+          initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.1 }}
+          className="xl:order-2 border-t xl:border-t-0 xl:border-l border-white/[0.08] overflow-y-auto"
         >
-          <GlassPanel className="p-5 space-y-4" glow="green">
+          <div className="p-4 space-y-4">
             {/* Panel head */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-white font-semibold text-sm">
@@ -1596,17 +1586,17 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
               </a>
             )}
             {tradeError && <div className="text-red-400 text-xs">{tradeError}</div>}
-          </GlassPanel>
+          </div>
         </motion.div>
 
-        {/* ── Chart panel ── */}
+        {/* ── Chart panel (left column on xl, order-1) ── */}
         <motion.div
-          initial={{ opacity: 0, x: 20 }}
+          initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.15 }}
-          className="space-y-4"
+          className={cn("xl:order-1 flex flex-col min-h-0", fullChart && "fixed inset-1 md:inset-4 z-50 flex flex-col bg-[rgba(5,8,15,0.99)] rounded-xl border border-white/10")}
         >
-          <GlassPanel className={cn("overflow-hidden", fullChart && "fixed inset-1 md:inset-4 z-50")}>
+          <div className={cn("overflow-hidden flex flex-col flex-1 min-h-0 border-b border-white/[0.08]", !fullChart && "border border-white/[0.08] rounded-xl xl:rounded-none xl:border-0")}>
             {/* Chart topbar */}
             <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-white/[0.02]">
               {!showDexChart && (
@@ -1762,7 +1752,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                   <LightweightTradeChart
                     trades={chartDisplayTrades}
                     periodSec={periodSec}
-                    height={fullChart ? 520 : 320}
+                    height={fullChart ? Math.max(520, (typeof window !== "undefined" ? window.innerHeight - 160 : 600)) : 480}
                     showVolume={showVolume}
                     showSma20={indicators.sma20}
                     showSma50={indicators.sma50}
@@ -1880,7 +1870,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                 </div>
               )}
             </div>
-          </GlassPanel>
+          </div>
 
           {/* ── Live reserves (devnet curve only) ── */}
           {!isMainnet && !raydiumTradingActive && <GlassPanel className="p-4">
@@ -2301,72 +2291,6 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
           })()}
         </motion.div>
       </div>
-
-      {/* ── TrustScore reference ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.25 }}
-      >
-        <GlassPanel className="p-5">
-          <div className="flex items-center gap-2 font-bold text-white mb-4">
-            <TrendingUp size={15} className="text-blue-400" />
-            Check TrustScore before buying
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-            {[
-              { score: "85–100", label: "ELITE", color: "text-[#00FF41]", border: "border-[#00FF41]/20", rec: "Strong lock, low creator allocation, high liquidity, burn active." },
-              { score: "70–84", label: "STRONG", color: "text-blue-400", border: "border-blue-400/20", rec: "Good fundamentals. Check vesting status, curve reserves, and votes." },
-              { score: "40–69", label: "OK", color: "text-yellow-400", border: "border-yellow-400/20", rec: "Meets minimum rules. Research creator history before buying." },
-              { score: "0–39", label: "WEAK", color: "text-orange-400", border: "border-orange-400/20", rec: "High risk. Weak distribution, low burn/liquidity, or complaints detected." },
-            ].map((t) => (
-              <div key={t.label} className={cn("rounded-lg p-3.5 bg-white/[0.03] border", t.border)}>
-                <div className={cn("font-mono font-bold text-sm mb-0.5", t.color)}>{t.score}</div>
-                <div className="font-bold text-xs text-white mb-1">{t.label}</div>
-                <div className="text-xs text-white/50 leading-relaxed">{t.rec}</div>
-              </div>
-            ))}
-          </div>
-          {goDiscover && (
-            <button
-              type="button"
-              onClick={goDiscover}
-              className="text-xs text-blue-400 border border-blue-400/20 bg-blue-400/5 hover:bg-blue-400/10 px-3 py-2 rounded-lg transition-all"
-            >
-              Browse all tokens in Discover →
-            </button>
-          )}
-        </GlassPanel>
-      </motion.div>
-
-      {/* ── Pre-trade checklist ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-      >
-        <GlassPanel className="p-5">
-          <div className="flex items-center gap-2 font-bold text-white mb-4">
-            <Clock size={15} className="text-white/40" />
-            Pre-trade checklist
-          </div>
-          <ul className="space-y-2">
-            {[
-              ["TrustScore", "Aim for 66+ before buying — check Discover"],
-              ["Lock status", "Confirm is_locked = true and unlock_time is in the future"],
-              ["Anti-bot", "Verify trading_unlock_time has passed"],
-              ["Votes", "Check positive_votes vs negative_votes ratio"],
-              ["Liquidity", "Verify curve treasury and pool vault before swapping"],
-              ["Creator", "Check creator reputation PDA for launch history"],
-            ].map(([key, val]) => (
-              <li key={key} className="flex gap-3 text-xs p-2.5 rounded-lg bg-white/[0.03]">
-                <span className="text-[#00FF41] font-mono min-w-[100px] shrink-0">{key}</span>
-                <span className="text-white/50">{val}</span>
-              </li>
-            ))}
-          </ul>
-        </GlassPanel>
-      </motion.div>
     </div>
   );
 };
