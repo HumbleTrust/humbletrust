@@ -300,14 +300,19 @@ function ZodiacBadgeCard({
       </div>
 
       {/* Shield + glyph */}
-      <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -65%)" }}>
+      <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -75%)" }}>
         <svg width="110" height="132" viewBox="0 0 90 108" fill="none">
           <path d="M45,3 L85,18 L85,58 C85,80 45,105 45,105 C45,105 5,80 5,58 L5,18 Z"
             stroke={aura} strokeWidth="2" fill={`${aura}0D`} />
           <path d="M45,13 L75,26 L75,58 C75,75 45,95 45,95 C45,95 15,75 15,58 L15,26 Z"
             stroke={aura} strokeWidth="1.2" fill="none" opacity=".55" />
           <line x1="16" y1="48" x2="74" y2="48" stroke={aura} strokeWidth="1" opacity=".28" />
-          <ShieldGlyph zodiac={zodiac} color={aura} />
+          {/* HT seal — кропнутый RGBA лого за знаком гороскопа */}
+          <image href="/HT_NFT_seal_cropped.png" x="16" y="20" width="58" height="72" opacity="0.6" preserveAspectRatio="xMidYMid meet" />
+          {/* Знак гороскопа поверх — оба видны */}
+          <g opacity="0.55">
+            <ShieldGlyph zodiac={zodiac} color={aura} />
+          </g>
           <circle cx="45" cy="3"   r="3"   fill={aura} />
           <circle cx="85" cy="18"  r="2.5" fill={aura} opacity=".8" />
           <circle cx="85" cy="58"  r="2"   fill={aura} opacity=".6" />
@@ -322,25 +327,6 @@ function ZodiacBadgeCard({
           <circle cx="86" cy="6" r="1.8" fill="#00FF94" />
         </svg>
       </div>
-
-      {/* HT logo — certificate seal, HTML img for correct mix-blend-mode */}
-      <img
-        src="/HTlogo512.png"
-        alt=""
-        draggable={false}
-        style={{
-          position: "absolute",
-          width: 34,
-          height: 34,
-          top: "38%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          opacity: 0.13,
-          mixBlendMode: "screen",
-          pointerEvents: "none",
-          userSelect: "none",
-        }}
-      />
 
       {/* Element sigil */}
       <div style={{ position: "absolute", top: 14, right: 14 }}>
