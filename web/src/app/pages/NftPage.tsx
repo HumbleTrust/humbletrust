@@ -307,8 +307,6 @@ function ZodiacBadgeCard({
           <path d="M45,13 L75,26 L75,58 C75,75 45,95 45,95 C45,95 15,75 15,58 L15,26 Z"
             stroke={aura} strokeWidth="1.2" fill="none" opacity=".55" />
           <line x1="16" y1="48" x2="74" y2="48" stroke={aura} strokeWidth="1" opacity=".28" />
-          {/* HT logo — certificate seal watermark */}
-          <image href="/HTlogo512.png" x="27" y="33" width="36" height="36" opacity="0.22" style={{ mixBlendMode: "screen" as const }} />
           <ShieldGlyph zodiac={zodiac} color={aura} />
           <circle cx="45" cy="3"   r="3"   fill={aura} />
           <circle cx="85" cy="18"  r="2.5" fill={aura} opacity=".8" />
@@ -324,6 +322,25 @@ function ZodiacBadgeCard({
           <circle cx="86" cy="6" r="1.8" fill="#00FF94" />
         </svg>
       </div>
+
+      {/* HT logo — certificate seal, HTML img for correct mix-blend-mode */}
+      <img
+        src="/HTlogo512.png"
+        alt=""
+        draggable={false}
+        style={{
+          position: "absolute",
+          width: 34,
+          height: 34,
+          top: "38%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          opacity: 0.13,
+          mixBlendMode: "screen",
+          pointerEvents: "none",
+          userSelect: "none",
+        }}
+      />
 
       {/* Element sigil */}
       <div style={{ position: "absolute", top: 14, right: 14 }}>
