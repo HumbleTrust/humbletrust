@@ -118,7 +118,6 @@ pub mod humbletrust_v2 {
         ctx: Context<CreateTokenWithLockV2>,
         name: String,
         symbol: String,
-        metadata_uri: String,
         lock_days: u16,
         burn_option: u8,
         lock_percent: u8,
@@ -396,13 +395,13 @@ pub mod humbletrust_v2 {
             data: MetaplexDataV2 {
                 name: name.clone(),
                 symbol: symbol.clone(),
-                uri: metadata_uri.clone(),
+                uri: String::new(),
                 seller_fee_basis_points: 0,
                 creators: None,
                 collection: None,
                 uses: None,
             },
-            is_mutable: true,
+            is_mutable: false,
             collection_details: None,
         }
         .serialize(&mut metaplex_data)?;

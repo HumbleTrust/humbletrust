@@ -1050,10 +1050,6 @@
           "type": "string"
         },
         {
-          "name": "metadata_uri",
-          "type": "string"
-        },
-        {
           "name": "lock_days",
           "type": "u16"
         },

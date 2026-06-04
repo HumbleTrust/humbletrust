@@ -225,13 +225,11 @@ export const launchTokenV2 = async (
   const mintKp = Keypair.generate();
   const pdas = findV2Pdas(mintKp.publicKey);
   const initialSolLamports = Math.floor(params.initialSol * LAMPORTS_PER_SOL);
-  const metadataUri = `https://humbletrust.vercel.app/api/tokens/${mintKp.publicKey.toBase58()}/metadata.json`;
 
   const tx = await program.methods
     .createTokenWithLockV2(
       params.name,
       params.symbol,
-      metadataUri,
       params.lockDays,
       params.burnOption,
       params.lockPercent,
