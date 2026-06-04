@@ -79,6 +79,7 @@ const ARCH_STEPS = [
 export function HomePage({ onTabChange }: HomePageProps) {
   const [activeInfoTab, setActiveInfoTab] = useState<InfoTabId>("how");
   const [tokenCount, setTokenCount] = useState<number | null>(null);
+  const [hoveredModule, setHoveredModule] = useState<string | null>(null);
 
   useEffect(() => {
     getTokens(200)
@@ -86,10 +87,10 @@ export function HomePage({ onTabChange }: HomePageProps) {
       .catch(() => {});
   }, []);
 
-  const stats = [
+  const stats: { label: string; value: string | number | null; sub: string; green: boolean }[] = [
     { label: "Protocol",       value: "V2 Curve",  sub: "Solana Devnet",   green: false },
     { label: "Fee",            value: "1%",         sub: "Per trade",       green: false },
-    { label: "Active Tokens",  value: tokenCount !== null ? String(tokenCount) : "—", sub: "Indexed on-chain", green: false },
+    { label: "Active Tokens",  value: tokenCount,   sub: "Indexed on-chain", green: false },
     { label: "Status",         value: "Live",       sub: "Devnet active",   green: true  },
   ];
 
@@ -183,9 +184,11 @@ export function HomePage({ onTabChange }: HomePageProps) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 + i * 0.06 }}
           >
-            <GlassPanel className="p-4 text-center">
+            <GlassPanel className="p-4 text-center border-[#1A2332]">
               <p className={`text-2xl font-bold font-mono mb-1 ${green ? "text-[#00FF41]" : "text-white"}`}>
-                {value}
+                {value === null
+                  ? <span className="inline-block h-5 w-8 bg-white/10 rounded animate-pulse align-middle" />
+                  : typeof value === "number" ? String(value) : value}
                 {green && <span className="inline-block w-2 h-2 rounded-full bg-[#00FF41] ml-2 animate-pulse align-middle" />}
               </p>
               <p className="text-xs text-white/40">{label}</p>
@@ -207,12 +210,18 @@ export function HomePage({ onTabChange }: HomePageProps) {
               <motion.button
                 key={tab}
                 onClick={() => onTabChange(tab)}
+                onMouseEnter={() => setHoveredModule(tab)}
+                onMouseLeave={() => setHoveredModule(null)}
                 initial={{ opacity: 0, scale: 0.92 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.2 + i * 0.04 }}
                 whileHover={{ scale: 1.05, y: -3 }}
                 whileTap={{ scale: 0.97 }}
-                className="flex flex-col items-center gap-3 p-4 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:border-white/20 transition-all group text-center"
+                className="flex flex-col items-center gap-3 p-4 rounded-xl bg-white/[0.04] transition-all group text-center"
+                style={{
+                  border: `1px solid ${color}20`,
+                  ...(hoveredModule === tab ? { boxShadow: `0 0 20px ${color}15` } : {}),
+                }}
               >
                 <div
                   className="w-11 h-11 rounded-xl flex items-center justify-center"

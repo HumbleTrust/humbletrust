@@ -85,7 +85,7 @@ function HexLogo({
 
 // ── Input shared style ────────────────────────────────────────────────────────
 const inputCls =
-  "w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#00FF41]/50";
+  "w-full bg-white/5 border border-[#1A2332] rounded-lg px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#00FF41]/50";
 
 const V2_MIN_LOCK_UNITS = 30;
 const v2LockUnit = "d";
@@ -617,7 +617,7 @@ export function LaunchPage() {
         <p className="text-white/50 mt-1">All rules enforced on-chain. Trust Score updates in real time.</p>
       </motion.div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
         {/* ── Left: form ── */}
         <div className="space-y-4">
           {/* Token basics */}
@@ -1040,8 +1040,8 @@ export function LaunchPage() {
           )}
 
           {isV2Launch && validDistribution && validCombinedLiquidity && curveLiquidity + circulation < 55 && (
-            <GlassPanel className="p-4 border-yellow-500/30 bg-yellow-500/5">
-              <p className="text-yellow-400 text-sm">
+            <GlassPanel className="p-4 border-[#FFDB2B]/30 bg-[#FFDB2B]/5">
+              <p className="text-[#FFDB2B] text-sm">
                 For higher TrustScore, recommended liquidity is at least 55%.
               </p>
             </GlassPanel>
@@ -1077,7 +1077,7 @@ export function LaunchPage() {
                   <p className="text-[#00FF41] text-xs mt-3">✓ Indexed in the network database</p>
                 )}
                 {dbError && (
-                  <p className="text-yellow-400 text-xs mt-3 break-words">
+                  <p className="text-[#FFDB2B] text-xs mt-3 break-words">
                     Network database index failed: {dbError}
                   </p>
                 )}
@@ -1270,7 +1270,7 @@ export function LaunchPage() {
         </div>
 
         {/* ── Right: preview pane ── */}
-        <div className="space-y-4 hidden xl:block">
+        <div className="space-y-4 hidden lg:block">
           {/* Token preview card */}
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
             <GlassPanel className="p-6" glow="purple">

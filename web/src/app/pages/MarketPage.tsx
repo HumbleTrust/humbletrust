@@ -298,7 +298,7 @@ const CoinCard = memo(({
             <div className={cn(
               "px-2 py-1 rounded-lg text-xs font-mono font-semibold shrink-0",
               isUp   ? "bg-[#00FF41]/10 text-[#00FF41]" :
-              isDown ? "bg-red-500/10 text-red-400" :
+              isDown ? "bg-[#FF4444]/10 text-[#FF4444]" :
                        "bg-white/5 text-white/40"
             )}>
               {isUp ? <TrendingUp size={10} className="inline mr-0.5" /> : isDown ? <TrendingDown size={10} className="inline mr-0.5" /> : null}
@@ -581,7 +581,7 @@ export const MarketPage = () => {
               "flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all",
               category === "all"
                 ? "bg-[#00FF41]/15 border-[#00FF41]/50 text-[#00FF41]"
-                : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white"
+                : "bg-white/5 border-[#1A2332] text-white/50 hover:bg-white/10 hover:text-white"
             )}
           >
             <Globe size={13} /> All
@@ -595,7 +595,7 @@ export const MarketPage = () => {
                 "flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all",
                 category === "blockchains"
                   ? "bg-[#00FF41]/15 border-[#00FF41]/50 text-[#00FF41]"
-                  : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white"
+                  : "bg-white/5 border-[#1A2332] text-white/50 hover:bg-white/10 hover:text-white"
               )}
             >
               {selectedChain ? <ChainIcon chain={selectedChain} size={14} /> : <Layers size={13} />}
@@ -611,7 +611,7 @@ export const MarketPage = () => {
               "flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all",
               category === "new"
                 ? "bg-[#00FF41]/15 border-[#00FF41]/50 text-[#00FF41]"
-                : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white"
+                : "bg-white/5 border-[#1A2332] text-white/50 hover:bg-white/10 hover:text-white"
             )}
           >
             <Zap size={13} /> New Pairs
@@ -624,7 +624,7 @@ export const MarketPage = () => {
               "flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all",
               category === "gainers_losers"
                 ? "bg-[#00FF41]/15 border-[#00FF41]/50 text-[#00FF41]"
-                : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white"
+                : "bg-white/5 border-[#1A2332] text-white/50 hover:bg-white/10 hover:text-white"
             )}
           >
             <TrendingUp size={13} /> Gainers &amp; Losers
@@ -637,7 +637,7 @@ export const MarketPage = () => {
               "flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all",
               category === "watchlist"
                 ? "bg-yellow-400/15 border-yellow-400/50 text-yellow-400"
-                : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white"
+                : "bg-white/5 border-[#1A2332] text-white/50 hover:bg-white/10 hover:text-white"
             )}
           >
             <Star size={13} fill={category === "watchlist" ? "currentColor" : "none"} />
@@ -703,7 +703,7 @@ export const MarketPage = () => {
                       selectedChain?.name === chain.name
                         ? "bg-[#00FF41]/15 border-[#00FF41]/50 text-[#00FF41]"
                         : chain.category
-                          ? "bg-white/5 border-white/10 text-white/70 hover:bg-white/10 hover:text-white"
+                          ? "bg-white/5 border-[#1A2332] text-white/70 hover:bg-white/10 hover:text-white"
                           : "bg-white/3 border-white/6 text-white/30 hover:bg-white/8 hover:text-white/50"
                     )}
                   >
@@ -738,7 +738,7 @@ export const MarketPage = () => {
         )}
       </AnimatePresence>
 
-      {error && <div className="text-red-400 text-sm px-1">{error}</div>}
+      {error && <div className="text-[#FF4444] text-sm px-1">{error}</div>}
 
       {/* ── TradingView modal ── */}
       <AnimatePresence>
@@ -768,7 +768,7 @@ export const MarketPage = () => {
                   <div className="flex items-center gap-3">
                     <div className="text-right hidden sm:block">
                       <div className="text-white font-mono font-bold">{fmtPrice(selected.current_price)}</div>
-                      <div className={cn("text-xs font-mono", (selected.price_change_percentage_24h ?? 0) >= 0 ? "text-[#00FF41]" : "text-red-400")}>
+                      <div className={cn("text-xs font-mono", (selected.price_change_percentage_24h ?? 0) >= 0 ? "text-[#00FF41]" : "text-[#FF4444]")}>
                         {(selected.price_change_percentage_24h ?? 0) >= 0 ? "▲" : "▼"} {Math.abs(selected.price_change_percentage_24h ?? 0).toFixed(2)}% 24h
                       </div>
                     </div>
@@ -791,9 +791,21 @@ export const MarketPage = () => {
 
       {/* ── Loading ── */}
       {isBusy && (
-        <GlassPanel className="py-10 text-center">
-          <div className="text-white/30 text-sm">Loading market data...</div>
-        </GlassPanel>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {Array.from({length: 8}).map((_, i) => (
+            <div key={i} className="rounded-xl border border-[#1A2332] bg-[#0F1923] p-4 animate-pulse h-32">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-white/10" />
+                <div>
+                  <div className="h-4 bg-white/10 rounded w-16 mb-1" />
+                  <div className="h-3 bg-white/10 rounded w-10" />
+                </div>
+              </div>
+              <div className="h-5 bg-white/10 rounded w-24 mb-1" />
+              <div className="h-3 bg-white/10 rounded w-16" />
+            </div>
+          ))}
+        </div>
       )}
 
       {/* ── ALL ── */}
@@ -858,7 +870,7 @@ export const MarketPage = () => {
                     "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
                     newSource === src
                       ? "bg-[#00FF41]/15 border-[#00FF41]/50 text-[#00FF41]"
-                      : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white"
+                      : "bg-white/5 border-[#1A2332] text-white/50 hover:bg-white/10 hover:text-white"
                   )}
                 >
                   {labels[src]}
@@ -893,7 +905,7 @@ export const MarketPage = () => {
                           </div>
                           {change !== null && (
                             <div className={cn("px-2 py-1 rounded-lg text-xs font-mono font-semibold",
-                              isUp ? "bg-[#00FF41]/10 text-[#00FF41]" : isDown ? "bg-red-500/10 text-red-400" : "bg-white/5 text-white/40")}>
+                              isUp ? "bg-[#00FF41]/10 text-[#00FF41]" : isDown ? "bg-[#FF4444]/10 text-[#FF4444]" : "bg-white/5 text-white/40")}>
                               {isUp ? <TrendingUp size={10} className="inline mr-0.5" /> : isDown ? <TrendingDown size={10} className="inline mr-0.5" /> : null}
                               {Math.abs(change).toFixed(2)}%
                             </div>
@@ -954,7 +966,7 @@ export const MarketPage = () => {
                           {coin.complete && <span className="px-1.5 py-0.5 rounded text-[9px] bg-[#00FF41]/10 text-[#00FF41] border border-[#00FF41]/20">bonded</span>}
                           {!coin.complete && coin.change_24h !== null && coin.change_24h !== undefined && (
                             <div className={cn("px-2 py-1 rounded-lg text-xs font-mono font-semibold",
-                              isUp ? "bg-[#00FF41]/10 text-[#00FF41]" : isDown ? "bg-red-500/10 text-red-400" : "bg-white/5 text-white/40")}>
+                              isUp ? "bg-[#00FF41]/10 text-[#00FF41]" : isDown ? "bg-[#FF4444]/10 text-[#FF4444]" : "bg-white/5 text-white/40")}>
                               {isUp ? <TrendingUp size={10} className="inline mr-0.5" /> : isDown ? <TrendingDown size={10} className="inline mr-0.5" /> : null}
                               {Math.abs(coin.change_24h).toFixed(2)}%
                             </div>
@@ -1038,7 +1050,7 @@ export const MarketPage = () => {
             {/* Losers */}
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <TrendingDown size={14} className="text-red-400" />
+                <TrendingDown size={14} className="text-[#FF4444]" />
                 <span className="text-sm font-semibold text-white">Top Losers</span>
                 <span className="text-xs text-white/30">24h</span>
               </div>
@@ -1063,7 +1075,7 @@ export const MarketPage = () => {
                           {cgScoreId(coin.id) && <TrustScoreBadge mint={cgScoreId(coin.id)!} />}
                           <div className="text-right shrink-0">
                             <div className="text-white font-mono text-sm">{fmtPrice(coin.current_price)}</div>
-                            <div className="text-red-400 text-xs font-mono font-bold">
+                            <div className="text-[#FF4444] text-xs font-mono font-bold">
                               <TrendingDown size={9} className="inline mr-0.5" />{change.toFixed(2)}%
                             </div>
                           </div>

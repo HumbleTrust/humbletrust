@@ -99,10 +99,10 @@ export function TickerBar() {
   const doubled = [...items, ...items];
 
   return (
-    <div className="overflow-hidden border-b border-white/[0.06] bg-black/60 backdrop-blur-sm h-8 flex items-center select-none">
+    <div className="overflow-hidden border-b border-[#1A2332] bg-black/60 backdrop-blur-sm h-8 flex items-center select-none">
       <div
         className="flex gap-10 items-center px-4 whitespace-nowrap"
-        style={{ animation: "ticker-scroll 80s linear infinite" }}
+        style={{ animation: "ticker-scroll 120s linear infinite" }}
       >
         {doubled.map(({ symbol, price, change24h }, i) => {
           const up = change24h >= 0;
@@ -110,7 +110,7 @@ export function TickerBar() {
             <span key={i} className="inline-flex items-center gap-1.5 text-[11px] font-mono">
               <span className="text-white/40 font-bold tracking-widest">{symbol}</span>
               <span className="text-white/80">${fmt(price, symbol)}</span>
-              <span className="flex items-center gap-0.5" style={{ color: up ? "#00FF41" : "#f87171" }}>
+              <span className="flex items-center gap-0.5" style={{ color: up ? "#00FF41" : "#FF4444" }}>
                 {up ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
                 {Math.abs(change24h).toFixed(2)}%
               </span>

@@ -1,7 +1,7 @@
 import {
   Home, LayoutDashboard, Rocket, Compass, ArrowLeftRight,
   Wallet, BarChart2, Award, Settings, MoreHorizontal, X, Info, Code2, Zap,
-  LogOut,
+  LogOut, User,
 } from "lucide-react";
 import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -46,6 +46,7 @@ const moreNavItems = [
   { id: "api",       label: "API Plans",  icon: Zap },
   { id: "about",     label: "About",      icon: Info },
   { id: "settings",  label: "Settings",   icon: Settings },
+  { id: "creator",   label: "My Profile", icon: User },
 ];
 
 export function Navigation({ activeTab, onTabChange }: NavigationProps) {
@@ -201,7 +202,7 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => window.dispatchEvent(new CustomEvent("ht:open-creator", { detail: wallet.publicKey!.toBase58() }))}
-              className="w-full px-4 py-2 rounded-lg text-xs font-medium text-white/50 hover:text-[#00FF41] border border-white/10 hover:border-[#00FF41]/30 bg-white/[0.03] hover:bg-[#00FF41]/5 transition-all flex items-center justify-center gap-1.5"
+              className="w-full px-4 py-2 rounded-lg text-xs font-medium text-[#00FF41]/70 hover:text-[#00FF41] border border-[#00FF41]/20 hover:border-[#00FF41]/40 bg-[#00FF41]/[0.04] hover:bg-[#00FF41]/8 transition-all flex items-center justify-center gap-1.5"
             >
               <span>View Creator Profile</span>
             </motion.button>
@@ -263,7 +264,14 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
                     <motion.button
                       key={id}
                       whileTap={{ scale: 0.93 }}
-                      onClick={() => { onTabChange(id); setMoreOpen(false); }}
+                      onClick={() => {
+                        if (id === "creator" && wallet.connected && wallet.publicKey) {
+                          window.dispatchEvent(new CustomEvent("ht:open-creator", { detail: wallet.publicKey.toBase58() }));
+                        } else {
+                          onTabChange(id);
+                        }
+                        setMoreOpen(false);
+                      }}
                       className={cn(
                         "flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all",
                         isActive ? "bg-[#00FF41]/10 border border-[#00FF41]/20" : "bg-white/[0.03] border border-white/5 hover:bg-white/[0.06]"

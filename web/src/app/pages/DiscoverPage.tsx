@@ -407,7 +407,7 @@ export const DiscoverPage = ({ onOpenToken, initialMint, onBack }: DiscoverPageP
         {/* Page header */}
         <GlassPanel className="p-6" glow="green">
           <div className="text-xs font-mono tracking-widest text-[#00FF41] uppercase mb-1">Discover</div>
-          <h2 className="text-2xl font-bold text-white mb-1">
+          <h2 className="text-2xl font-bold text-white mb-1 font-[Orbitron]">
             Trust Layer <span className="text-[#00FF41]">registry</span>
           </h2>
           <p className="text-white/50 text-sm">
@@ -480,6 +480,15 @@ export const DiscoverPage = ({ onOpenToken, initialMint, onBack }: DiscoverPageP
 
         {/* Token grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {busy && tokens.length === 0 && Array.from({length: 8}).map((_, i) => (
+            <div key={i} className="rounded-xl border border-[#1A2332] bg-[#0F1923] p-4 animate-pulse">
+              <div className="w-12 h-12 rounded-xl bg-white/10 mb-3" />
+              <div className="h-4 bg-white/10 rounded w-3/4 mb-2" />
+              <div className="h-3 bg-white/10 rounded w-1/2 mb-3" />
+              <div className="h-3 bg-white/10 rounded w-full mb-1" />
+              <div className="h-3 bg-white/10 rounded w-2/3" />
+            </div>
+          ))}
           {sorted.map((t, i) => {
             const score = Number(t.trust_score);
             const isLocal = !apiOk && localTokens.some(l => l.mint === t.mint);
@@ -518,7 +527,7 @@ export const DiscoverPage = ({ onOpenToken, initialMint, onBack }: DiscoverPageP
                           "text-[9px] font-mono px-1.5 py-0.5 rounded-full border",
                           t.status === "migrated"
                             ? "border-[#B026FF]/40 text-[#B026FF] bg-[#B026FF]/10"
-                            : "border-white/15 text-white/40 bg-white/5"
+                            : "border-[#1A2332] text-white/40 bg-white/5"
                         )}>
                           {t.status}
                         </span>
