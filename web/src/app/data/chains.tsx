@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { cn } from "../components/ui/utils";
 
-export interface Chain { name: string; category: string; logo?: string; }
+export interface Chain { name: string; category: string; logo?: string; gtNetwork?: string; }
 
 const TW = (k: string) =>
   `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${k}/info/logo.png`;
@@ -61,33 +61,33 @@ export const CHAINS: Chain[] = [
   { name: "Sonic",         category: "sonic-ecosystem",        logo: LL("sonic") },
   { name: "Hyperliquid",   category: "hyperliquid-ecosystem",  logo: LL("hyperliquid") },
   { name: "Beam",          category: "beam",                   logo: LL("beam") },
-  { name: "PulseChain",    category: "",                       logo: LL("pulse") },
-  { name: "HyperEVM",      category: "" },
-  { name: "Monad",         category: "",                       logo: LL("monad") },
-  { name: "World Chain",   category: "",                       logo: LL("worldchain") },
-  { name: "Abstract",      category: "",                       logo: LL("abstract") },
-  { name: "MegaETH",       category: "",                       logo: LL("megaeth") },
-  { name: "Ink",           category: "",                       logo: LL("ink") },
-  { name: "Plasma",        category: "" },
-  { name: "Soneium",       category: "",                       logo: LL("soneium") },
-  { name: "ApeChain",      category: "",                       logo: LL("apechain") },
-  { name: "Dogechain",     category: "",                       logo: LL("dogechain") },
-  { name: "Unichain",      category: "",                       logo: LL("unichain") },
-  { name: "Story",         category: "",                       logo: LL("story") },
+  { name: "PulseChain",    category: "",    gtNetwork: "pulsechain",      logo: LL("pulse") },
+  { name: "HyperEVM",      category: "",    gtNetwork: "hyperliquid" },
+  { name: "Monad",         category: "",    gtNetwork: "monad",           logo: LL("monad") },
+  { name: "World Chain",   category: "worldchain-ecosystem",   logo: LL("worldchain") },
+  { name: "Abstract",      category: "abstract-ecosystem",     logo: LL("abstract") },
+  { name: "MegaETH",       category: "",    gtNetwork: "megaeth",         logo: LL("megaeth") },
+  { name: "Ink",           category: "",    gtNetwork: "ink",             logo: LL("ink") },
+  { name: "Plasma",        category: "",    gtNetwork: "plasma" },
+  { name: "Soneium",       category: "soneium-ecosystem",      logo: LL("soneium") },
+  { name: "ApeChain",      category: "apechain-ecosystem",     logo: LL("apechain") },
+  { name: "Dogechain",     category: "",    gtNetwork: "dogechain",       logo: LL("dogechain") },
+  { name: "Unichain",      category: "unichain-ecosystem",     logo: LL("unichain") },
+  { name: "Story",         category: "story-ecosystem",        logo: LL("story") },
   { name: "Katana",        category: "" },
-  { name: "EthereumPoW",   category: "",                       logo: LL("ethereumpow") },
-  { name: "Merlin Chain",  category: "",                       logo: LL("merlin") },
-  { name: "Vana",          category: "",                       logo: LL("vana") },
+  { name: "EthereumPoW",   category: "",    gtNetwork: "ethereum-pow",    logo: LL("ethereumpow") },
+  { name: "Merlin Chain",  category: "",    gtNetwork: "merlin-chain",    logo: LL("merlin") },
+  { name: "Vana",          category: "",    gtNetwork: "vana",            logo: LL("vana") },
   { name: "Fogo",          category: "" },
   { name: "Venom",         category: "" },
-  { name: "Elastos",       category: "",                       logo: LL("elastos") },
-  { name: "Neon EVM",      category: "",                       logo: LL("neon evm") },
-  { name: "Oasis Sapphire",category: "",                       logo: LL("oasis sapphire") },
-  { name: "Fuse",          category: "",                       logo: LL("fuse") },
-  { name: "Zircuit",       category: "",                       logo: LL("zircuit") },
-  { name: "Oasis Emerald", category: "",                       logo: LL("oasis emerald") },
-  { name: "ZKFair",        category: "",                       logo: LL("zkfair") },
-  { name: "Step Network",  category: "",                       logo: LL("step") },
+  { name: "Elastos",       category: "",    gtNetwork: "elastos",         logo: LL("elastos") },
+  { name: "Neon EVM",      category: "",    gtNetwork: "neon-evm",        logo: LL("neon evm") },
+  { name: "Oasis Sapphire",category: "",    gtNetwork: "oasis-sapphire",  logo: LL("oasis sapphire") },
+  { name: "Fuse",          category: "",    gtNetwork: "fuse",            logo: LL("fuse") },
+  { name: "Zircuit",       category: "zircuit-ecosystem",      logo: LL("zircuit") },
+  { name: "Oasis Emerald", category: "",    gtNetwork: "oasis-emerald",   logo: LL("oasis emerald") },
+  { name: "ZKFair",        category: "",    gtNetwork: "zkfair",          logo: LL("zkfair") },
+  { name: "Step Network",  category: "",    gtNetwork: "step-network",    logo: LL("step") },
 ];
 
 const LETTER_COLORS = [

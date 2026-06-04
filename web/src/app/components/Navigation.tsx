@@ -193,6 +193,19 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
             {wallet.connected && <span className="w-2 h-2 rounded-full bg-[#00FF41] inline-block shrink-0" />}
             {walletLabel}
           </motion.button>
+
+          {/* View Profile (wallet connected) */}
+          {wallet.connected && wallet.publicKey && (
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => window.dispatchEvent(new CustomEvent("ht:open-creator", { detail: wallet.publicKey!.toBase58() }))}
+              className="w-full px-4 py-2 rounded-lg text-xs font-medium text-white/50 hover:text-[#00FF41] border border-white/10 hover:border-[#00FF41]/30 bg-white/[0.03] hover:bg-[#00FF41]/5 transition-all flex items-center justify-center gap-1.5"
+            >
+              <span>View Creator Profile</span>
+            </motion.button>
+          )}
         </div>
       </motion.div>
 

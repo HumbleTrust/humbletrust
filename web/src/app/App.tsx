@@ -40,30 +40,39 @@ import { NftPage } from "./pages/NftPage";
 import { AboutPage } from "./pages/AboutPage";
 import { ScorePage } from "./pages/ScorePage";
 import { ApiPage } from "./pages/ApiPage";
+import { CreatorPage } from "./pages/CreatorPage";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("home");
   const [openMint, setOpenMint] = useState<string | null>(null);
   const [tradeMint, setTradeMint] = useState<string | null>(null);
+  const [creatorWallet, setCreatorWallet] = useState<string | null>(null);
 
   useEffect(() => {
     const handler = (e: Event) => {
       const tab = (e as CustomEvent<string>).detail;
-      if (tab) { setActiveTab(tab); setOpenMint(null); }
+      if (tab) { setActiveTab(tab); setOpenMint(null); setCreatorWallet(null); }
     };
     const tradeHandler = (e: Event) => {
       const mint = (e as CustomEvent<string>).detail;
-      if (mint) { setTradeMint(mint); setActiveTab("trade"); setOpenMint(null); }
+      if (mint) { setTradeMint(mint); setActiveTab("trade"); setOpenMint(null); setCreatorWallet(null); }
+    };
+    const creatorHandler = (e: Event) => {
+      const wallet = (e as CustomEvent<string>).detail;
+      if (wallet) { setCreatorWallet(wallet); setOpenMint(null); }
     };
     window.addEventListener("ht:navigate", handler);
     window.addEventListener("ht:open-trade", tradeHandler);
+    window.addEventListener("ht:open-creator", creatorHandler);
     return () => {
       window.removeEventListener("ht:navigate", handler);
       window.removeEventListener("ht:open-trade", tradeHandler);
+      window.removeEventListener("ht:open-creator", creatorHandler);
     };
   }, []);
 
   const renderPage = () => {
+    if (creatorWallet) return <CreatorPage wallet={creatorWallet} onBack={() => setCreatorWallet(null)} />;
     if (openMint) return <DiscoverPage initialMint={openMint} onBack={() => setOpenMint(null)} />;
     switch (activeTab) {
       case "home":      return <HomePage onTabChange={setActiveTab} />;

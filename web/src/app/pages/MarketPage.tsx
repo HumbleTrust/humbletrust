@@ -179,6 +179,8 @@ const TradingViewChart = memo(({ symbol }: { symbol: string }) => {
 
 const CG_BASE = "https://api.coingecko.com/api/v3";
 const CG_KEY  = import.meta.env.VITE_COINGECKO_API_KEY as string | undefined;
+const GT_BASE = "https://api.geckoterminal.com/api/v2";
+const GT_HEADERS = { "Accept": "application/json;version=20230302" };
 
 const DEX_URL_WHITELIST = /^https:\/\/(dexscreener\.com|birdeye\.so|raydium\.io|pump\.fun|jup\.ag|orca\.so|meteora\.ag|solscan\.io)\//;
 const safeDexUrl = (url: string | undefined) => (url && DEX_URL_WHITELIST.test(url) ? url : undefined);
@@ -190,6 +192,36 @@ async function cgFetch(path: string, signal?: AbortSignal) {
   });
   if (!res.ok) throw new Error(`CoinGecko HTTP ${res.status}`);
   return res.json();
+}
+
+async function gtFetch(network: string, signal?: AbortSignal): Promise<CoinGeckoCoin[]> {
+  const res = await fetch(
+    `${GT_BASE}/networks/${network}/trending_pools?include=base_token&page=1`,
+    { signal, headers: GT_HEADERS }
+  );
+  if (!res.ok) throw new Error(`GeckoTerminal HTTP ${res.status}`);
+  const json = await res.json();
+  const tokenMap = new Map<string, any>();
+  for (const item of json.included || []) {
+    if (item.type === "token") tokenMap.set(item.id, item);
+  }
+  return (json.data || []).slice(0, 20).map((pool: any) => {
+    const baseId = pool.relationships?.base_token?.data?.id;
+    const tok = baseId ? tokenMap.get(baseId) : null;
+    const a = pool.attributes || {};
+    const ta = tok?.attributes || {};
+    return {
+      id: pool.id,
+      symbol: (ta.symbol || a.name?.split(" / ")?.[0] || "").trim(),
+      name:   (ta.name   || a.name?.split(" / ")?.[0] || "").trim(),
+      image:  ta.image_url || "",
+      current_price: Number(a.base_token_price_usd ?? 0),
+      market_cap: Number(a.market_cap_usd ?? a.fdv_usd ?? ta.market_cap_usd ?? 0),
+      market_cap_rank: null,
+      total_volume: Number(a.volume_usd?.h24 ?? 0),
+      price_change_percentage_24h: Number(a.price_change_percentage?.h24 ?? 0),
+    } as CoinGeckoCoin;
+  });
 }
 
 // ── CoinGrid ─────────────────────────────────────────────────────────────────
@@ -372,16 +404,21 @@ export const MarketPage = () => {
   }, []);
 
   const fetchChainCoins = useCallback(async (chain: Chain) => {
-    if (!chain.category) { setChainCoins([]); return; }
+    if (!chain.category && !chain.gtNetwork) { setChainCoins([]); return; }
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setChainBusy(true); setError(null);
     try {
-      const data: CoinGeckoCoin[] = await cgFetch(
-        `/coins/markets?vs_currency=usd&category=${chain.category}&order=market_cap_desc&per_page=20&page=1&price_change_percentage=24h&sparkline=false`,
-        ctrl.signal,
-      );
+      let data: CoinGeckoCoin[] = [];
+      if (chain.category) {
+        data = await cgFetch(
+          `/coins/markets?vs_currency=usd&category=${chain.category}&order=market_cap_desc&per_page=20&page=1&price_change_percentage=24h&sparkline=false`,
+          ctrl.signal,
+        );
+      } else if (chain.gtNetwork) {
+        data = await gtFetch(chain.gtNetwork, ctrl.signal);
+      }
       setChainCoins(data);
     } catch (e: any) {
       if (e.name !== "AbortError") setError("Failed to load chain data.");
@@ -775,11 +812,11 @@ export const MarketPage = () => {
         </GlassPanel>
       )}
 
-      {!isBusy && category === "blockchains" && selectedChain && !selectedChain.category && (
+      {!isBusy && category === "blockchains" && selectedChain && !selectedChain.category && !selectedChain.gtNetwork && (
         <GlassPanel className="py-12 text-center">
           <Layers size={28} className="mx-auto text-white/20 mb-3" />
-          <div className="text-white/50 text-sm mb-1">{selectedChain.name} ecosystem data coming soon</div>
-          <div className="text-white/25 text-xs">CoinGecko category not yet available for this chain</div>
+          <div className="text-white/50 text-sm mb-1">{selectedChain.name} — no market data yet</div>
+          <div className="text-white/25 text-xs">Chain is too new or not listed on CoinGecko / GeckoTerminal</div>
         </GlassPanel>
       )}
 

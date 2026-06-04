@@ -428,7 +428,10 @@ module.exports = async (req, res) => {
 
     if (req.method === "GET") {
       const limit = Math.min(Number(req.query.limit) || 100, 200);
-      const { data, error } = await getClient().from("tokens").select("*").order("created_at", { ascending: false }).limit(limit);
+      const creator = req.query.creator;
+      let q = getClient().from("tokens").select("*").order("created_at", { ascending: false }).limit(limit);
+      if (creator && isValidWallet(creator)) q = q.eq("creator", creator);
+      const { data, error } = await q;
       if (error) throw error;
       return res.json({ tokens: data });
     }
