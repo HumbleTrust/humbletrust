@@ -1050,6 +1050,10 @@
           "type": "string"
         },
         {
+          "name": "metadata_uri",
+          "type": "string"
+        },
+        {
           "name": "lock_days",
           "type": "u16"
         },
@@ -1100,6 +1104,10 @@
         {
           "name": "lp_policy",
           "type": "u8"
+        },
+        {
+          "name": "is_test",
+          "type": "bool"
         }
       ]
     },

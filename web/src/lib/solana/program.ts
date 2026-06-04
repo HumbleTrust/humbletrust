@@ -169,6 +169,8 @@ export interface LaunchV2Params {
   curveType?: 0 | 1;
   /** 0 = Lock (default/recommended), 1 = Burn, 2 = ToCreator */
   lpPolicy?: 0 | 1 | 2;
+  /** true = 1-day min lock, 5 SOL threshold (devnet testing only) */
+  isTest?: boolean;
 }
 
 export const launchToken = async (
@@ -225,11 +227,13 @@ export const launchTokenV2 = async (
   const mintKp = Keypair.generate();
   const pdas = findV2Pdas(mintKp.publicKey);
   const initialSolLamports = Math.floor(params.initialSol * LAMPORTS_PER_SOL);
+  const metadataUri = `https://humbletrust.vercel.app/api/tokens/${mintKp.publicKey.toBase58()}/metadata.json`;
 
   const tx = await program.methods
     .createTokenWithLockV2(
       params.name,
       params.symbol,
+      metadataUri,
       params.lockDays,
       params.burnOption,
       params.lockPercent,
@@ -242,7 +246,8 @@ export const launchTokenV2 = async (
       params.tier,
       params.antiBotSeconds,
       params.curveType ?? 0,
-      params.lpPolicy ?? 0
+      params.lpPolicy ?? 0,
+      params.isTest ?? false
     )
     .accounts({
       creator,

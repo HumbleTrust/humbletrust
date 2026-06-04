@@ -450,6 +450,7 @@ export function LaunchPage() {
       const v2Available = await isProgramExecutable(connection, PROGRAM_ID_V2_PK).catch(() => false);
       const useV2 = isV2Launch && v2Available;
       setLaunchMode(v2Available ? "v2" : "v1");
+      const isTestLaunch = testLockDays !== undefined;
       const { signature, mint } = useV2
         ? await launchTokenV2(getProgramV2(provider), anchorWallet.publicKey, {
             name, symbol,
@@ -461,6 +462,7 @@ export function LaunchPage() {
             initialSol: initialSolNum,
             tier, antiBotSeconds: antiBot,
             curveType, lpPolicy,
+            isTest: isTestLaunch,
           })
         : await launchToken(getProgram(provider), anchorWallet.publicKey, {
             name, symbol, totalSupply: V1_SUPPLY,

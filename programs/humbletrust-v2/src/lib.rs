@@ -118,6 +118,7 @@ pub mod humbletrust_v2 {
         ctx: Context<CreateTokenWithLockV2>,
         name: String,
         symbol: String,
+        metadata_uri: String,
         lock_days: u16,
         burn_option: u8,
         lock_percent: u8,
@@ -131,6 +132,7 @@ pub mod humbletrust_v2 {
         anti_bot_seconds: u16,
         curve_type: u8,
         lp_policy: u8,
+        is_test: bool,
     ) -> Result<()> {
         require!(
             !ctx.accounts.global_state.is_launches_paused,
@@ -151,6 +153,7 @@ pub mod humbletrust_v2 {
             anti_bot_seconds,
             curve_type,
             lp_policy,
+            is_test,
         )?;
         require_keys_eq!(
             ctx.accounts.fee_wallet.key(),
@@ -224,7 +227,9 @@ pub mod humbletrust_v2 {
             meta.planned_burn_amount = planned_burn_amount;
             meta.total_burned = planned_burn_amount;
             meta.initial_sol_lamports = initial_sol_lamports;
-            meta.migration_threshold_lamports = migration_threshold_lamports();
+            meta.is_test = is_test;
+            meta.metadata_uri = metadata_uri.clone();
+            meta.migration_threshold_lamports = if is_test { 5_000_000_000u64 } else { 50_000_000_000u64 };
             meta.migration_reward_lamports = MIGRATION_REWARD_LAMPORTS;
             meta.platform_fee_bps = PLATFORM_FEE_BPS;
             meta.creator_fee_bps = CREATOR_FEE_BPS;
@@ -284,7 +289,7 @@ pub mod humbletrust_v2 {
             meta.graduation_price_lamports_per_token = graduation_price_lamports_per_token_for_curve(
                 initial_sol_lamports,
                 curve_liquidity_amount,
-                migration_threshold_lamports(),
+                if is_test { 5_000_000_000u64 } else { 50_000_000_000u64 },
                 curve_type,
             )?;
             meta.bump = ctx.bumps.token_metadata;
@@ -395,13 +400,13 @@ pub mod humbletrust_v2 {
             data: MetaplexDataV2 {
                 name: name.clone(),
                 symbol: symbol.clone(),
-                uri: String::new(),
+                uri: metadata_uri.clone(),
                 seller_fee_basis_points: 0,
                 creators: None,
                 collection: None,
                 uses: None,
             },
-            is_mutable: false,
+            is_mutable: true,
             collection_details: None,
         }
         .serialize(&mut metaplex_data)?;
@@ -1940,12 +1945,9 @@ pub mod humbletrust_v2 {
         lock_days: u16,
     ) -> Result<()> {
         require!(lp_amount > 0, HumbleV2Error::InvalidAmount);
+        let is_test = ctx.accounts.token_metadata.is_test;
         require!(
-            if cfg!(feature = "test-mode") {
-                lock_days >= 1
-            } else {
-                lock_days >= 30
-            },
+            if is_test { lock_days >= 1 } else { lock_days >= 30 },
             HumbleV2Error::InvalidLockDays
         );
         require!(
@@ -3193,6 +3195,9 @@ pub struct TokenMetadataV2 {
     pub airdrop_vault_bump: u8,
     pub curve_treasury_sol_bump: u8,
     pub lp_lock_vault_bump: u8,
+    pub is_test: bool,
+    #[max_len(200)]
+    pub metadata_uri: String,
 }
 
 #[account]
@@ -3649,13 +3654,14 @@ fn validate_launch_inputs(
     anti_bot_seconds: u16,
     curve_type: u8,
     lp_policy: u8,
+    is_test: bool,
 ) -> Result<()> {
     require!(!name.is_empty(), HumbleV2Error::NameTooShort);
     require!(name.len() <= 16, HumbleV2Error::NameTooLong);
     require!(!symbol.is_empty(), HumbleV2Error::SymbolTooShort);
     require!(symbol.len() <= 5, HumbleV2Error::SymbolTooLong);
     require!(
-        if cfg!(feature = "test-mode") {
+        if is_test {
             (1..=360).contains(&lock_days)
         } else {
             (30..=360).contains(&lock_days)
