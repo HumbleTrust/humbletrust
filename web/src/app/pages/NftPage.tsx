@@ -307,6 +307,8 @@ function ZodiacBadgeCard({
           <path d="M45,13 L75,26 L75,58 C75,75 45,95 45,95 C45,95 15,75 15,58 L15,26 Z"
             stroke={aura} strokeWidth="1.2" fill="none" opacity=".55" />
           <line x1="16" y1="48" x2="74" y2="48" stroke={aura} strokeWidth="1" opacity=".28" />
+          {/* HT logo — certificate seal watermark */}
+          <image href="/HTlogo512.png" x="27" y="33" width="36" height="36" opacity="0.22" style={{ mixBlendMode: "screen" as const }} />
           <ShieldGlyph zodiac={zodiac} color={aura} />
           <circle cx="45" cy="3"   r="3"   fill={aura} />
           <circle cx="85" cy="18"  r="2.5" fill={aura} opacity=".8" />
