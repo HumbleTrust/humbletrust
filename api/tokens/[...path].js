@@ -370,6 +370,45 @@ async function handleSyncTrades(mint, req, res) {
   return res.json({ synced: validRows.length, total_sigs: sigs.length, curve_sigs: curveSigs.length, raydium_sigs: raydiumSigs.length });
 }
 
+// ── Metaplex-compatible metadata JSON ────────────────────────────────────────
+
+async function handleMetadataJson(mint, res) {
+  const { data, error } = await getClient()
+    .from("tokens")
+    .select("name, symbol, logo_uri, description, website, twitter, telegram")
+    .eq("mint", mint)
+    .single();
+  if (error || !data) return res.status(404).json({ error: "not found" });
+
+  const baseUrl = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "https://humbletrust.vercel.app";
+
+  const image = data.logo_uri || `${baseUrl}/HTlogo512.png`;
+
+  const metadata = {
+    name: data.name || "Unknown Token",
+    symbol: data.symbol || "???",
+    description: data.description || `${data.name || "Token"} launched on HumbleTrust — the trust-layer for Solana tokens.`,
+    image,
+    external_url: `${baseUrl}/token/${mint}`,
+    attributes: [
+      { trait_type: "Platform", value: "HumbleTrust" },
+      { trait_type: "Chain", value: "Solana" },
+    ],
+    properties: {
+      files: image ? [{ uri: image, type: "image/png" }] : [],
+      category: "token",
+    },
+  };
+  if (data.twitter) metadata.attributes.push({ trait_type: "Twitter", value: data.twitter });
+  if (data.website) metadata.attributes.push({ trait_type: "Website", value: data.website });
+
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  return res.json(metadata);
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 module.exports = async (req, res) => {
@@ -434,6 +473,12 @@ module.exports = async (req, res) => {
   if (!isValidWallet(mint)) return res.status(400).json({ error: "invalid mint address" });
 
   try {
+    if (subpath === "metadata.json") {
+      res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+      if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
+      return await handleMetadataJson(mint, res);
+    }
+
     if (subpath === "trades") {
       res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
       if (req.method === "GET") {
