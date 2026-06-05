@@ -1,18 +1,14 @@
 /**
- * Unified tokens endpoint:
- *   GET  /api/tokens/:mint            — token info
- *   GET  /api/tokens/:mint?check=health — health metrics
- *   GET  /api/tokens/:mint/trades     — list trades
- *   GET  /api/tokens/:mint/trades?format=ohlcv — OHLCV candles
- *   POST /api/tokens/:mint/trades     — record a trade
- *   POST /api/tokens/:mint/trades?action=sync  — backfill from RPC
+ * GET  /api/tokens/:mint/trades           — list trades
+ * GET  /api/tokens/:mint/trades?format=ohlcv — OHLCV candles
+ * POST /api/tokens/:mint/trades?action=sync  — backfill from RPC
+ * POST /api/tokens/:mint/trades              — record a single trade (auth required)
  */
 
 const crypto = require("crypto");
-const { getClient } = require("../_lib/db");
-const { isValidWallet, setCors } = require("../_lib/validate");
-const { parseCurveTradeEvents } = require("../_lib/curve-events");
-const { getTrustLevel } = require("../_lib/trust");
+const { getClient } = require("../../_lib/db");
+const { isValidWallet, setCors } = require("../../_lib/validate");
+const { parseCurveTradeEvents } = require("../../_lib/curve-events");
 
 const PROGRAM_ID_V2       = "FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr";
 const RAYDIUM_CPMM_DEVNET = "DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb";
@@ -137,99 +133,6 @@ async function fetchTransactionsBatch(conn, batch) {
   }
 }
 
-// ── Token info handlers ───────────────────────────────────────────────────────
-
-async function handleTokenInfo(mint, res) {
-  const { data, error } = await getClient().from("tokens").select("*").eq("mint", mint).single();
-  if (error) return res.status(404).json({ error: "not found" });
-  return res.json({ token: data });
-}
-
-async function handleHealth(mint, req, res) {
-  const db = getClient();
-  const now = new Date();
-  const h24ago = new Date(now - 24 * 60 * 60 * 1000).toISOString();
-  const h1ago  = new Date(now - 60 * 60 * 1000).toISOString();
-
-  const { data: token } = await db.from("tokens")
-    .select("name, symbol, trust_score, status, created_at, raydium_pool, last_trade_at, volume_sol, trades_count")
-    .eq("mint", mint).single();
-  if (!token) return res.status(404).json({ error: "Token not found" });
-
-  const [{ data: trades24h }, { data: trades1h }, { data: lastTrade }] = await Promise.all([
-    db.from("trades").select("side, sol_amount, price_sol, block_time, trader").eq("mint", mint).gte("block_time", h24ago).order("block_time", { ascending: false }),
-    db.from("trades").select("side, sol_amount, price_sol, block_time").eq("mint", mint).gte("block_time", h1ago).order("block_time", { ascending: false }),
-    db.from("trades").select("price_sol, block_time, side").eq("mint", mint).order("block_time", { ascending: false }).limit(1).single(),
-  ]);
-
-  const t24 = trades24h || [];
-  const t1  = trades1h  || [];
-  const buys24  = t24.filter(t => t.side === "buy");
-  const sells24 = t24.filter(t => t.side === "sell");
-  const vol24Sol  = t24.reduce((s, t) => s + Number(t.sol_amount || 0), 0);
-  const vol1hSol  = t1.reduce((s,  t) => s + Number(t.sol_amount || 0), 0);
-  const prices24  = t24.map(t => Number(t.price_sol)).filter(Boolean);
-  const firstPrice = prices24[prices24.length - 1] || 0;
-  const lastPrice  = Number(lastTrade?.price_sol || 0);
-  const priceChange24h = firstPrice > 0 ? ((lastPrice - firstPrice) / firstPrice) * 100 : 0;
-  const uniqueTraders  = new Set(t24.map(t => t.trader)).size;
-
-  let health = 50;
-  const signals = [];
-  if (t24.length >= 20)      { health += 15; signals.push({ type: "active_trading",    delta: +15, msg: "High trade activity (20+ trades/24h)" }); }
-  else if (t24.length >= 5)  { health += 8;  signals.push({ type: "moderate_trading", delta: +8,  msg: "Moderate activity (5-20 trades/24h)" }); }
-  else if (t24.length === 0) { health -= 15; signals.push({ type: "no_activity",      delta: -15, msg: "No trades in last 24h" }); }
-  const ratio = t24.length > 0 ? buys24.length / t24.length : 0.5;
-  if (ratio >= 0.45 && ratio <= 0.65)    { health += 10; signals.push({ type: "balanced_flow",  delta: +10, msg: "Balanced buy/sell ratio" }); }
-  else if (ratio < 0.2 && t24.length > 5)  { health -= 15; signals.push({ type: "heavy_selling", delta: -15, msg: "Heavy sell pressure (>80% sells)" }); }
-  else if (ratio > 0.85 && t24.length > 5) { health += 5;  signals.push({ type: "strong_buying", delta: +5,  msg: "Strong buy pressure" }); }
-  if (priceChange24h >= 5)        { health += 10; signals.push({ type: "price_up",    delta: +10, msg: `Price +${priceChange24h.toFixed(1)}% in 24h` }); }
-  else if (priceChange24h <= -20) { health -= 15; signals.push({ type: "price_crash", delta: -15, msg: `Price ${priceChange24h.toFixed(1)}% in 24h` }); }
-  else if (priceChange24h <= -10) { health -= 8;  signals.push({ type: "price_down",  delta: -8,  msg: `Price ${priceChange24h.toFixed(1)}% in 24h` }); }
-  if (uniqueTraders >= 10)                        { health += 10; signals.push({ type: "diverse_traders", delta: +10, msg: `${uniqueTraders} unique traders in 24h` }); }
-  else if (uniqueTraders <= 2 && t24.length > 5)  { health -= 10; signals.push({ type: "concentrated",   delta: -10, msg: "Very few unique traders (possible wash trading)" }); }
-  if (token.status === "migrated") { health += 5; signals.push({ type: "graduated", delta: +5, msg: "Token graduated to Raydium CPMM" }); }
-  const maxSell = Math.max(...sells24.map(t => Number(t.sol_amount || 0)), 0);
-  if (vol24Sol > 0 && maxSell / vol24Sol > 0.3 && t24.length > 3) {
-    health -= 12;
-    signals.push({ type: "large_dump", delta: -12, msg: `Large single sell detected (${((maxSell / vol24Sol) * 100).toFixed(0)}% of 24h volume)` });
-  }
-  health = Math.max(0, Math.min(100, Math.round(health)));
-  const healthLevel = health >= 75 ? "HEALTHY" : health >= 50 ? "NORMAL" : health >= 25 ? "WARNING" : "CRITICAL";
-
-  const criticalSignals = signals.filter(s => s.delta <= -12);
-  if (criticalSignals.length > 0) {
-    await db.from("token_health_events").insert(criticalSignals.map(s => ({
-      mint, event_type: s.type,
-      severity: s.delta <= -15 ? "critical" : "warning",
-      details: { msg: s.msg, delta: s.delta, health_score: health },
-    }))).catch(() => {});
-  }
-  await db.from("tokens").update({
-    volume_sol: Math.round(vol24Sol * 1e6) / 1e6,
-    trades_count: t24.length,
-    last_trade_at: lastTrade?.block_time || null,
-    updated_at: now.toISOString(),
-  }).eq("mint", mint).catch(() => {});
-
-  return res.json({
-    mint, name: token.name, symbol: token.symbol,
-    health_score: health, health_level: healthLevel,
-    metrics: {
-      trades_24h: t24.length, buys_24h: buys24.length, sells_24h: sells24.length,
-      volume_sol_24h: Math.round(vol24Sol * 1e4) / 1e4,
-      volume_sol_1h:  Math.round(vol1hSol * 1e4) / 1e4,
-      price_change_24h: Math.round(priceChange24h * 100) / 100,
-      current_price: lastPrice, unique_traders: uniqueTraders,
-      buy_sell_ratio: t24.length > 0 ? Math.round(ratio * 100) / 100 : null,
-    },
-    signals, trust_score: token.trust_score, status: token.status,
-    computed_at: now.toISOString(),
-  });
-}
-
-// ── Trades handlers ───────────────────────────────────────────────────────────
-
 async function handleGetTrades(mint, req, res) {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   const limit = Math.min(Number(req.query.limit) || 100, 500);
@@ -238,7 +141,7 @@ async function handleGetTrades(mint, req, res) {
     .gt("price_sol", 0).gt("token_amount", 0).gt("sol_amount", 0)
     .order("block_time", { ascending: false }).limit(limit);
   if (error) {
-    console.warn("[handleGetTrades] %s error: %s", mint.slice(0, 8), error.message);
+    console.warn("[trades] %s error: %s", mint.slice(0, 8), error.message);
     return res.status(500).json({ error: "database_error" });
   }
   return res.json({ trades: data || [] });
@@ -338,7 +241,10 @@ async function handleSyncTrades(mint, req, res) {
 
       const event = parseCurveTradeEvents(tx.meta?.logMessages || [], mint)[0];
       if (event) {
-        rowsBySignature.set(sig.signature, { signature: sig.signature, ...event, block_time: sig.blockTime ? new Date(sig.blockTime * 1000).toISOString() : event.block_time });
+        rowsBySignature.set(sig.signature, {
+          signature: sig.signature, ...event,
+          block_time: sig.blockTime ? new Date(sig.blockTime * 1000).toISOString() : event.block_time,
+        });
         continue;
       }
 
@@ -377,80 +283,29 @@ async function handleSyncTrades(mint, req, res) {
   return res.json({ synced: validRows.length, total_sigs: sigs.length, curve_sigs: curveSigs.length, raydium_sigs: raydiumSigs.length });
 }
 
-// ── Metaplex-compatible metadata JSON ────────────────────────────────────────
-
-async function handleMetadataJson(mint, res) {
-  const { data, error } = await getClient()
-    .from("tokens")
-    .select("name, symbol, logo_uri, description, website, twitter, telegram")
-    .eq("mint", mint)
-    .single();
-  if (error || !data) return res.status(404).json({ error: "not found" });
-
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "https://humbletrust.vercel.app";
-
-  const image = data.logo_uri || `${baseUrl}/HTlogo512.png`;
-
-  const metadata = {
-    name: data.name || "Unknown Token",
-    symbol: data.symbol || "???",
-    description: data.description || `${data.name || "Token"} launched on HumbleTrust — the trust-layer for Solana tokens.`,
-    image,
-    external_url: `${baseUrl}/token/${mint}`,
-    attributes: [
-      { trait_type: "Platform", value: "HumbleTrust" },
-      { trait_type: "Chain", value: "Solana" },
-    ],
-    properties: {
-      files: image ? [{ uri: image, type: "image/png" }] : [],
-      category: "token",
-    },
-  };
-  if (data.twitter) metadata.attributes.push({ trait_type: "Twitter", value: data.twitter });
-  if (data.website) metadata.attributes.push({ trait_type: "Website", value: data.website });
-
-  res.setHeader("Content-Type", "application/json");
-  res.setHeader("Cache-Control", "public, max-age=3600");
-  return res.json(metadata);
-}
-
-// ── Main handler ──────────────────────────────────────────────────────────────
-
 module.exports = async (req, res) => {
   setCors(req, res);
   if (req.method === "OPTIONS") return res.status(204).end();
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY)
     return res.status(503).json({ error: "Supabase not configured" });
 
-  // Vercel non-Next.js may not populate req.query.path for catch-alls; parse from URL as fallback
-  let pathParts = Array.isArray(req.query.path) ? req.query.path : [req.query.path].filter(Boolean);
-  if (!pathParts.length && req.url) {
-    const urlPath = req.url.split("?")[0]; // strip query string
-    const parts   = urlPath.split("/").filter(Boolean); // ['api', 'tokens', 'mint', ...]
-    const tokIdx  = parts.findIndex(p => p === "tokens");
-    if (tokIdx >= 0) pathParts = parts.slice(tokIdx + 1);
-  }
-  const mint    = pathParts[0];
-  const subpath = pathParts[1];
+  const mint = req.query.mint;
+  if (!mint || !isValidWallet(mint)) return res.status(400).json({ error: "invalid mint address" });
 
-  // ── Root /api/tokens — list (GET) or upsert (POST) ────────────────────────
-  if (!mint) {
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
+  try {
     if (req.method === "GET") {
-      const limit = Math.min(Number(req.query.limit) || 100, 200);
-      const creator = req.query.creator;
-      let q = getClient().from("tokens").select("*").order("created_at", { ascending: false }).limit(limit);
-      if (creator && isValidWallet(creator)) q = q.eq("creator", creator);
-      const { data, error } = await q;
-      if (error) throw error;
-      return res.json({ tokens: data });
+      if (req.query.format === "ohlcv") return await handleGetOhlcv(mint, req, res);
+      return await handleGetTrades(mint, req, res);
     }
 
     if (req.method === "POST") {
+      // Sync reads public on-chain data — no auth needed
+      if (req.query.action === "sync") return await handleSyncTrades(mint, req, res);
+
+      // Direct record requires auth
       const internalSecret = process.env.INTERNAL_API_SECRET;
       if (!internalSecret) return res.status(503).json({ error: "auth_not_configured" });
       const authHeader = req.headers["authorization"] || "";
@@ -461,73 +316,12 @@ module.exports = async (req, res) => {
         authorized = a.length === b.length && crypto.timingSafeEqual(a, b);
       } catch { authorized = false; }
       if (!authorized) return res.status(401).json({ error: "unauthorized" });
-      const { mint: m, creator, name, symbol, signature, launchScore, lockPercent, burnOption, certificateMint, tier, logoUri, logo_uri, raydium_pool, description, website, twitter, telegram } = req.body || {};
-      if (!m || !creator) return res.status(400).json({ error: "mint and creator required" });
-      if (!isValidWallet(m)) return res.status(400).json({ error: "invalid mint address" });
-      if (!isValidWallet(creator)) return res.status(400).json({ error: "invalid creator address" });
-      if (name && typeof name === "string" && name.length > 64) return res.status(400).json({ error: "name too long (max 64)" });
-      if (symbol && typeof symbol === "string" && symbol.length > 10) return res.status(400).json({ error: "symbol too long (max 10)" });
-      const score = Math.min(100, Math.max(0, Number(launchScore) || 0));
-      const { error } = await getClient().from("tokens").upsert({
-        mint: m, creator, name: name || null, symbol: symbol || null, launch_tx: signature || null,
-        launch_score: score, trust_score: score, trust_level: getTrustLevel(score),
-        lock_percent: lockPercent || null, burn_option: burnOption || null, certificate_mint: certificateMint || null,
-        logo_uri: logoUri || logo_uri || null, tier: tier === 1 ? "premium" : "standard",
-        description: (description && typeof description === "string") ? description.slice(0, 200) : null,
-        website: (website && typeof website === "string") ? website.slice(0, 255) : null,
-        twitter: (twitter && typeof twitter === "string") ? twitter.slice(0, 100) : null,
-        telegram: (telegram && typeof telegram === "string") ? telegram.slice(0, 255) : null,
-        ...(raydium_pool ? { raydium_pool, status: "migrated" } : {}),
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "mint", ignoreDuplicates: false });
-      if (error) throw error;
-      return res.json({ ok: true });
+      return await handleRecordTrade(mint, req, res);
     }
 
     return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  if (!isValidWallet(mint)) return res.status(400).json({ error: "invalid mint address" });
-
-  try {
-    if (subpath === "metadata.json") {
-      res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-      if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
-      return await handleMetadataJson(mint, res);
-    }
-
-    if (subpath === "trades") {
-      res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-      if (req.method === "GET") {
-        if (req.query.format === "ohlcv") return await handleGetOhlcv(mint, req, res);
-        return await handleGetTrades(mint, req, res);
-      }
-      if (req.method === "POST") {
-        // Sync reads public on-chain data — no auth needed; rate-limited by RPC
-        if (req.query.action === "sync") return await handleSyncTrades(mint, req, res);
-        // Direct record injects arbitrary data — requires auth
-        const internalSecret2 = process.env.INTERNAL_API_SECRET;
-        if (!internalSecret2) return res.status(503).json({ error: "auth_not_configured" });
-        const authHeader2 = req.headers["authorization"] || "";
-        const token2 = authHeader2.startsWith("Bearer ") ? authHeader2.slice(7) : "";
-        let authorized2 = false;
-        try {
-          const a2 = Buffer.from(token2), b2 = Buffer.from(internalSecret2);
-          authorized2 = a2.length === b2.length && crypto.timingSafeEqual(a2, b2);
-        } catch { authorized2 = false; }
-        if (!authorized2) return res.status(401).json({ error: "unauthorized" });
-        return await handleRecordTrade(mint, req, res);
-      }
-      return res.status(405).json({ error: "Method not allowed" });
-    }
-
-    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-    if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
-    if (req.query.check === "health") return await handleHealth(mint, req, res);
-    return await handleTokenInfo(mint, res);
-
   } catch (e) {
-    console.error("[api/tokens/[...path]]", e.message);
+    console.error("[trades] %s %s: %s", req.method, mint?.slice(0, 8), e.message);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
