@@ -489,6 +489,9 @@ module.exports = async (req, res) => {
         return await handleGetTrades(mint, req, res);
       }
       if (req.method === "POST") {
+        // Sync reads public on-chain data — no auth needed; rate-limited by RPC
+        if (req.query.action === "sync") return await handleSyncTrades(mint, req, res);
+        // Direct record injects arbitrary data — requires auth
         const internalSecret2 = process.env.INTERNAL_API_SECRET;
         if (!internalSecret2) return res.status(503).json({ error: "auth_not_configured" });
         const authHeader2 = req.headers["authorization"] || "";
@@ -499,7 +502,6 @@ module.exports = async (req, res) => {
           authorized2 = a2.length === b2.length && crypto.timingSafeEqual(a2, b2);
         } catch { authorized2 = false; }
         if (!authorized2) return res.status(401).json({ error: "unauthorized" });
-        if (req.query.action === "sync") return await handleSyncTrades(mint, req, res);
         return await handleRecordTrade(mint, req, res);
       }
       return res.status(405).json({ error: "Method not allowed" });

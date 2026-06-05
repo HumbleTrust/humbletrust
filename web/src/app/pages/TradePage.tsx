@@ -820,21 +820,28 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
       // Optimistic: show trade in chart immediately without waiting for backend
       setChartError(null);
       setChartTrades(prev => [tradePayload as ApiTrade, ...prev.slice(0, 499)]);
-      // Try direct record first; if it fails, fall back to full chain sync
       const _mint = mintInput.trim();
-      recordTrade(_mint, tradePayload).then(r => {
-        if (r?.error) {
-          console.warn("[recordTrade:buy] failed:", r.error, "— syncing from chain");
-          syncTokenTrades(_mint, 10).then(s => {
-            if (!s?.error) setTimeout(() => fetchChartTrades(_mint, true), 1000);
-          }).catch(() => {});
-        }
-      }).catch(() => {});
+      // Persist to DB: direct record first, fallback to chain sync.
+      // Reload chart ONLY after save confirmed so optimistic state isn't wiped by an empty DB fetch.
+      recordTrade(_mint, tradePayload)
+        .then(r => {
+          if (r?.error) {
+            syncTokenTrades(_mint, 10)
+              .then(s => { if (!s?.error) setTimeout(() => fetchChartTrades(_mint, true), 800); })
+              .catch(() => {});
+          } else {
+            setTimeout(() => fetchChartTrades(_mint, true), 800);
+          }
+        })
+        .catch(() => {
+          syncTokenTrades(_mint, 10)
+            .then(s => { if (!s?.error) setTimeout(() => fetchChartTrades(_mint, true), 800); })
+            .catch(() => {});
+        });
       await Promise.all([
         refreshReserves(),
         loadWalletTokens(),
       ]);
-      fetchChartTrades(_mint, true);
     } catch (e: any) {
       const errMsg = e.message || String(e);
       if (errMsg.includes("AlreadyMigrated") || errMsg.includes("6037")) {
@@ -910,19 +917,25 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
       setChartError(null);
       setChartTrades(prev => [tradePayload as ApiTrade, ...prev.slice(0, 499)]);
       const _mint = mintInput.trim();
-      recordTrade(_mint, tradePayload).then(r => {
-        if (r?.error) {
-          console.warn("[recordTrade:sell] failed:", r.error, "— syncing from chain");
-          syncTokenTrades(_mint, 10).then(s => {
-            if (!s?.error) setTimeout(() => fetchChartTrades(_mint, true), 1000);
-          }).catch(() => {});
-        }
-      }).catch(() => {});
+      recordTrade(_mint, tradePayload)
+        .then(r => {
+          if (r?.error) {
+            syncTokenTrades(_mint, 10)
+              .then(s => { if (!s?.error) setTimeout(() => fetchChartTrades(_mint, true), 800); })
+              .catch(() => {});
+          } else {
+            setTimeout(() => fetchChartTrades(_mint, true), 800);
+          }
+        })
+        .catch(() => {
+          syncTokenTrades(_mint, 10)
+            .then(s => { if (!s?.error) setTimeout(() => fetchChartTrades(_mint, true), 800); })
+            .catch(() => {});
+        });
       await Promise.all([
         refreshReserves(),
         loadWalletTokens(),
       ]);
-      fetchChartTrades(_mint, true);
     } catch (e: any) {
       const errMsg = e.message || String(e);
       if (errMsg.includes("AlreadyMigrated") || errMsg.includes("6037")) {

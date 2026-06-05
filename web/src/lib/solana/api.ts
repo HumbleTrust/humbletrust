@@ -153,7 +153,10 @@ export const recordTrade = (
 ) =>
   fetch(`${API_BASE}/tokens/${mint}/trades`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(import.meta.env.VITE_INTERNAL_SECRET ? { Authorization: `Bearer ${import.meta.env.VITE_INTERNAL_SECRET}` } : {}),
+    },
     body: JSON.stringify(data),
   })
     .then((r) => readJson<{ ok?: boolean; error?: string }>(r))
