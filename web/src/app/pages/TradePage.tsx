@@ -73,6 +73,7 @@ export interface ChartIndicators {
   sma50: boolean;
   ema20: boolean;
   rsi: boolean;
+  macd: boolean;
 }
 
 interface WalletTokenOption {
@@ -258,7 +259,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
   const [showVolume, setShowVolume] = useState(true);
   const [showIndicators, setShowIndicators] = useState(false);
   const [fullChart, setFullChart] = useState(false);
-  const [indicators, setIndicators] = useState<ChartIndicators>({ sma20: false, sma50: false, ema20: false, rsi: false });
+  const [indicators, setIndicators] = useState<ChartIndicators>({ sma20: false, sma50: false, ema20: false, rsi: false, macd: false });
   const toggleIndicator = (key: keyof ChartIndicators) =>
     setIndicators(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -581,10 +582,25 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
   useEffect(() => {
     if (!validMint) { setChartTrades([]); setChartError(null); return; }
     const mint = mintInput.trim();
+    let mounted = true;
+    // Load from DB first; auto-sync from chain if empty
     fetchChartTrades(mint);
-    // Fallback poll every 20s (reduced from 30s)
+    const tryAutoSync = async () => {
+      await new Promise(r => setTimeout(r, 1200));
+      if (!mounted) return;
+      setChartTrades(prev => {
+        if (prev.length === 0) {
+          syncTokenTrades(mint, 100)
+            .then(s => { if (mounted && (s.synced ?? 0) > 0) fetchChartTrades(mint, true); })
+            .catch(() => {});
+        }
+        return prev;
+      });
+    };
+    void tryAutoSync();
+    // Fallback poll every 20s
     const interval = setInterval(() => fetchChartTrades(mint, true), 20_000);
-    return () => clearInterval(interval);
+    return () => { mounted = false; clearInterval(interval); };
   }, [validMint, mintInput, fetchChartTrades]);
 
   // ── Real-time on-chain subscription for devnet curve tokens ──────────────────
@@ -1650,6 +1666,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                   { key: "sma50", label: "SMA 50", color: "#B026FF",  active: indicators.sma50,  onClick: () => toggleIndicator("sma50") },
                   { key: "ema20", label: "EMA 20", color: "#00BFFF",  active: indicators.ema20,  onClick: () => toggleIndicator("ema20") },
                   { key: "rsi",  label: "RSI 14", color: "#FF9500",   active: indicators.rsi,    onClick: () => toggleIndicator("rsi") },
+                  { key: "macd", label: "MACD",   color: "#00BFFF",  active: indicators.macd,   onClick: () => toggleIndicator("macd") },
                 ] as { key: string; label: string; color: string; active: boolean; onClick: () => void }[]).map(({ key, label, color, active, onClick }) => (
                   <button
                     key={key}
@@ -1771,6 +1788,7 @@ export const TradePage = ({ goDiscover, initialMint }: { goDiscover?: () => void
                     showSma50={indicators.sma50}
                     showEma20={indicators.ema20}
                     showRsi={indicators.rsi}
+                    showMacd={indicators.macd}
                     mode={chartMode}
                     onModeChange={(m) => setChartMode(m)}
                     timeframe={timeframe}

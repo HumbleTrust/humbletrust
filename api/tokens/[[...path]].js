@@ -249,7 +249,7 @@ async function handleGetOhlcv(mint, req, res) {
   const periodSec = TF_SECONDS[tf];
   const tradeFetch = Math.min(Math.max(1, Number(req.query.limit) || 500), 1000);
   const { data, error } = await getClient().from("trades")
-    .select("price_sol, sol_amount, block_time").eq("mint", mint)
+    .select("price_sol, sol_amount, token_amount, side, block_time").eq("mint", mint)
     .in("side", ["buy", "sell"]).gt("price_sol", 0).gt("token_amount", 0).gt("sol_amount", 0)
     .order("block_time", { ascending: true }).limit(tradeFetch);
   if (error) throw error;
@@ -264,8 +264,15 @@ async function handleGetOhlcv(mint, req, res) {
     const price  = Number(row.price_sol);
     const vol    = Number(row.sol_amount);
     const b = buckets.get(bucket);
-    if (!b) buckets.set(bucket, { time: bucket, open: price, high: price, low: price, close: price, volume: vol });
-    else { b.high = Math.max(b.high, price); b.low = Math.min(b.low, price); b.close = price; b.volume += vol; }
+    if (!b) {
+      buckets.set(bucket, {
+        time: bucket, open: price, high: price, low: price, close: price, volume: vol,
+        buy_volume: row.side === "buy" ? vol : 0, sell_volume: row.side === "sell" ? vol : 0,
+      });
+    } else {
+      b.high = Math.max(b.high, price); b.low = Math.min(b.low, price); b.close = price; b.volume += vol;
+      if (row.side === "buy") b.buy_volume += vol; else b.sell_volume += vol;
+    }
   }
   const candles = [...buckets.entries()].sort(([a], [b]) => a - b).slice(-500).map(([, c]) => c);
   res.setHeader("Cache-Control", "public, max-age=10, stale-while-revalidate=30");

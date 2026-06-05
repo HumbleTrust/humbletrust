@@ -34,6 +34,7 @@ interface Props {
   showSma50?: boolean;
   showEma20?: boolean;
   showRsi?: boolean;
+  showMacd?: boolean;
   mode?: ChartMode;
   onModeChange?: (mode: ChartMode) => void;
   timeframe?: string;
@@ -177,6 +178,27 @@ function calcRsi(data: LineData[], period = 14): LineData[] {
   return result;
 }
 
+function calcMacd(data: LineData[], fast = 12, slow = 26, signal = 9): { macd: LineData[]; signal: LineData[]; hist: HistogramData[] } {
+  const emaFast = calcEma(data, fast);
+  const emaSlow = calcEma(data, slow);
+  if (emaFast.length === 0 || emaSlow.length === 0) return { macd: [], signal: [], hist: [] };
+  const fastMap = new Map(emaFast.map(d => [Number(d.time), d.value]));
+  const slowMap = new Map(emaSlow.map(d => [Number(d.time), d.value]));
+  const macdLine: LineData[] = [];
+  for (const [t, sv] of slowMap) {
+    const fv = fastMap.get(t);
+    if (fv !== undefined) macdLine.push({ time: t as UTCTimestamp, value: fv - sv });
+  }
+  const signalLine = calcEma(macdLine, signal);
+  const sigMap = new Map(signalLine.map(d => [Number(d.time), d.value]));
+  const hist: HistogramData[] = macdLine.map(d => {
+    const sv = sigMap.get(Number(d.time)) ?? d.value;
+    const val = d.value - sv;
+    return { time: d.time, value: val, color: val >= 0 ? "rgba(0,255,65,0.45)" : "rgba(255,60,107,0.45)" };
+  });
+  return { macd: macdLine, signal: signalLine, hist };
+}
+
 // ── Reusable toolbar button ───────────────────────────────────────────────────
 function TfBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
@@ -227,6 +249,7 @@ export function LightweightTradeChart({
   showSma50  = false,
   showEma20  = false,
   showRsi    = false,
+  showMacd   = false,
   mode       = "candles",
   onModeChange,
   timeframe,
@@ -242,6 +265,9 @@ export function LightweightTradeChart({
   const sma50Ref     = useRef<ISeriesApi<"Line"> | null>(null);
   const ema20Ref     = useRef<ISeriesApi<"Line"> | null>(null);
   const rsiRef       = useRef<ISeriesApi<"Line"> | null>(null);
+  const macdLineRef  = useRef<ISeriesApi<"Line"> | null>(null);
+  const macdSigRef   = useRef<ISeriesApi<"Line"> | null>(null);
+  const macdHistRef  = useRef<ISeriesApi<"Histogram"> | null>(null);
 
   const periodSecRef  = useRef(periodSec);
   const showVolumeRef = useRef(showVolume);
@@ -352,6 +378,26 @@ export function LightweightTradeChart({
     rsi.createPriceLine({ price: 30, color: "rgba(0,255,65,0.5)",   lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: "" });
     rsi.createPriceLine({ price: 50, color: "rgba(255,255,255,0.15)", lineWidth: 1, lineStyle: 3, axisLabelVisible: false, title: "" });
 
+    const macdLine = chart.addLineSeries({
+      priceScaleId: "macd", color: "#00BFFF", lineWidth: 1,
+      priceLineVisible: false, lastValueVisible: false,
+    });
+    const macdSig = chart.addLineSeries({
+      priceScaleId: "macd", color: "#FF9500", lineWidth: 1,
+      priceLineVisible: false, lastValueVisible: false,
+    });
+    const macdHist = chart.addHistogramSeries({
+      priceScaleId: "macd", priceLineVisible: false, lastValueVisible: false,
+    });
+    chart.priceScale("macd").applyOptions({
+      scaleMargins: { top: 0.80, bottom: 0 },
+      borderVisible: false,
+      visible: false,
+    });
+    macdLineRef.current = macdLine;
+    macdSigRef.current  = macdSig;
+    macdHistRef.current = macdHist;
+
     chart.subscribeCrosshairMove((param) => {
       if (!param.time) { setTooltip(null); return; }
       const fmt     = (v: number) => v < 0.000001 ? v.toExponential(2) : v.toFixed(9);
@@ -386,6 +432,7 @@ export function LightweightTradeChart({
     sma50Ref.current  = sma50;
     ema20Ref.current  = ema20;
     rsiRef.current    = rsi;
+    // macd refs assigned above inline
 
     const ro = new ResizeObserver(([entry]) => {
       chartRef.current?.applyOptions({ width: entry.contentRect.width });
@@ -407,18 +454,27 @@ export function LightweightTradeChart({
     const candles  = buildCandles(buckets, periodSec);
     const lineData = buildLine(buckets);
 
-    const mainBottom = showVolume && showRsi ? 0.5 : (showVolume || showRsi) ? 0.3 : 0.08;
+    const panelCount = [showVolume, showRsi, showMacd].filter(Boolean).length;
+    const mainBottom = panelCount >= 2 ? 0.5 : panelCount === 1 ? 0.28 : 0.08;
     chartRef.current?.applyOptions({
       rightPriceScale: { scaleMargins: { top: 0.05, bottom: mainBottom } },
       timeScale: { barSpacing: periodSec <= 5 ? 14 : 11, minBarSpacing: 4, rightOffset: 8 },
     });
-    if (showVolume && showRsi) {
-      chartRef.current?.priceScale("vol").applyOptions({ scaleMargins: { top: 0.62, bottom: 0.22 }, visible: false });
-      chartRef.current?.priceScale("rsi").applyOptions({ scaleMargins: { top: 0.82, bottom: 0  }, visible: true  });
+
+    // Pane layout: vol top=0.73, rsi top=0.83, macd top=0.83 (stacked)
+    if (showVolume && (showRsi || showMacd)) {
+      chartRef.current?.priceScale("vol").applyOptions({ scaleMargins: { top: 0.72, bottom: 0.28 }, visible: false });
     } else {
       chartRef.current?.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 }, visible: false });
-      chartRef.current?.priceScale("rsi").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 }, visible: showRsi });
     }
+    chartRef.current?.priceScale("rsi").applyOptions({
+      scaleMargins: showMacd ? { top: 0.82, bottom: 0.1 } : { top: 0.82, bottom: 0 },
+      visible: showRsi,
+    });
+    chartRef.current?.priceScale("macd").applyOptions({
+      scaleMargins: { top: 0.88, bottom: 0 },
+      visible: showMacd,
+    });
 
     if (mode === "candles") {
       candleRef.current.setData(candles);
@@ -442,12 +498,23 @@ export function LightweightTradeChart({
     if (ema20Ref.current) ema20Ref.current.setData(showEma20 ? calcEma(base, 20) : []);
     if (rsiRef.current)   rsiRef.current.setData(showRsi    ? calcRsi(base, 14)  : []);
 
+    if (showMacd) {
+      const { macd, signal, hist } = calcMacd(base);
+      macdLineRef.current?.setData(macd);
+      macdSigRef.current?.setData(signal);
+      macdHistRef.current?.setData(hist);
+    } else {
+      macdLineRef.current?.setData([]);
+      macdSigRef.current?.setData([]);
+      macdHistRef.current?.setData([]);
+    }
+
     const total = Math.max(candles.length, lineData.length);
     if (total > 0) {
       const visible = Math.min(Math.max(total + 10, 42), 90);
       chartRef.current?.timeScale().setVisibleLogicalRange({ from: total - visible, to: total + 8 });
     }
-  }, [trades, periodSec, mode, showVolume, showSma20, showSma50, showEma20, showRsi]);
+  }, [trades, periodSec, mode, showVolume, showSma20, showSma50, showEma20, showRsi, showMacd]);
 
   return (
     <div className="w-full">
@@ -492,6 +559,13 @@ export function LightweightTradeChart({
       {/* ── Chart canvas ───────────────────────────────────────────────────── */}
       <div className="relative w-full rounded-lg overflow-hidden" style={{ height }}>
         <div ref={containerRef} className="w-full h-full" />
+        {/* Empty state overlay */}
+        {trades.filter(t => Number(t.price_sol) > 0 && Number(t.sol_amount) > 0).length === 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none gap-2">
+            <div className="text-white/20 font-mono text-xs tracking-widest">NO CHART DATA</div>
+            <div className="text-white/12 font-mono text-[10px]">Click Sync to load from blockchain</div>
+          </div>
+        )}
 
         {/* Tooltip overlay */}
         {tooltip && (

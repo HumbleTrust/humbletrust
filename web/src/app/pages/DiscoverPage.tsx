@@ -5,8 +5,13 @@ import { motion, AnimatePresence } from "motion/react";
 import { ApiToken, ApiTrade, getToken, getTokens, getTokenTrades, syncTokenTrades } from "../../lib/solana/api";
 import { listTokens, SavedToken } from "../../lib/solana/image";
 import { GlassPanel } from "../components/GlassPanel";
-import { LightweightTradeChart } from "../components/LightweightTradeChart";
+import { LightweightTradeChart, type ChartMode } from "../components/LightweightTradeChart";
 import { cn } from "../components/ui/utils";
+
+type Timeframe = "1s" | "5s" | "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
+const TIMEFRAME_SECONDS: Record<Timeframe, number> = {
+  "1s": 1, "5s": 5, "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400,
+};
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -77,6 +82,9 @@ const TokenDetailView = ({ mint, onBack }: TokenDetailViewProps) => {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [timeframe, setTimeframe] = useState<Timeframe>("1m");
+  const [chartMode, setChartMode] = useState<ChartMode>("candles");
+  const [showVolume, setShowVolume] = useState(true);
 
   const loadTrades = useCallback(async () => {
     const result = await getTokenTrades(mint, 500).catch(() => ({ trades: [] as ApiTrade[] }));
@@ -189,36 +197,56 @@ const TokenDetailView = ({ mint, onBack }: TokenDetailViewProps) => {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
         {/* Chart area */}
         <GlassPanel className="overflow-hidden">
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-white/[0.02]">
-            <span className="text-xs text-[#00FF41] font-mono px-2 py-0.5 rounded bg-[#00FF41]/10">1m</span>
-            <span className="w-px h-4 bg-white/10 mx-1" />
-            <span className="text-xs text-white/40 flex-1">Real OHLCV</span>
-            {syncMsg && (
-              <span className="text-xs text-white/50 font-mono">{syncMsg}</span>
-            )}
+          {/* Chart toolbar */}
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.07] bg-black/20">
+            {/* Trade stats pill */}
+            {trades.length > 0 && (() => {
+              const buys = trades.filter(t => t.side === "buy").length;
+              const sells = trades.filter(t => t.side === "sell").length;
+              const vol = trades.reduce((s, t) => s + Number(t.sol_amount), 0);
+              const buyPct = buys + sells > 0 ? Math.round(buys / (buys + sells) * 100) : 50;
+              return (
+                <div className="flex items-center gap-1.5 text-[10px] font-mono shrink-0">
+                  <span className="text-[#00FF41]">{buys}B</span>
+                  <span className="text-white/15">/</span>
+                  <span className="text-[#FF3C6B]">{sells}S</span>
+                  <div className="w-10 h-1 rounded-full bg-[#FF3C6B]/20 overflow-hidden">
+                    <div className="h-full rounded-full bg-[#00FF41]/60 transition-all" style={{ width: `${buyPct}%` }} />
+                  </div>
+                  <span className="text-white/30">{vol.toFixed(2)}◎</span>
+                </div>
+              );
+            })()}
+            <span className="flex-1" />
+            {syncMsg && <span className="text-[10px] text-white/40 font-mono">{syncMsg}</span>}
             <button
               type="button"
               title="Sync trades from blockchain"
               disabled={syncing || loading}
               onClick={() => runSync()}
-              className="flex items-center gap-1 text-xs text-white/40 hover:text-[#00FF41] disabled:opacity-40 transition-colors"
+              className="flex items-center gap-1 text-[10px] text-white/35 hover:text-[#00FF41] disabled:opacity-40 transition-colors"
             >
-              <RefreshCw size={11} className={syncing ? "animate-spin" : ""} />
+              <RefreshCw size={10} className={syncing ? "animate-spin" : ""} />
               {syncing ? "Syncing…" : "Sync"}
             </button>
           </div>
           {(loading || syncing) && trades.length === 0 ? (
-            <div className="flex items-center justify-center h-[288px] text-white/30 text-sm">
-              {syncing ? "Syncing transactions from blockchain…" : "Loading…"}
+            <div className="flex items-center justify-center h-[320px] text-white/30 text-sm font-mono">
+              {syncing ? "Syncing from blockchain…" : "Loading…"}
             </div>
           ) : (
-            <LightweightTradeChart
-              trades={trades}
-              periodSec={60}
-              height={288}
-              showVolume={true}
-              mode="candles"
-            />
+            <div className="p-3">
+              <LightweightTradeChart
+                trades={trades}
+                periodSec={TIMEFRAME_SECONDS[timeframe]}
+                height={300}
+                showVolume={showVolume}
+                mode={chartMode}
+                timeframe={timeframe}
+                onTimeframeChange={(tf) => setTimeframe(tf as Timeframe)}
+                onModeChange={setChartMode}
+              />
+            </div>
           )}
         </GlassPanel>
 
@@ -276,43 +304,81 @@ const TokenDetailView = ({ mint, onBack }: TokenDetailViewProps) => {
 
       {/* Trades table */}
       <GlassPanel className="overflow-hidden">
-        <div className="px-4 py-3 border-b border-white/10 font-semibold text-sm text-white">
-          Recent trades
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.07]">
+          <span className="font-semibold text-sm text-white">Recent trades</span>
+          {trades.length > 0 && (
+            <span className="text-xs text-white/30 font-mono">{trades.length} records</span>
+          )}
         </div>
+        {/* Column headers */}
+        {trades.length > 0 && (
+          <div className="flex items-center gap-3 px-4 py-1.5 text-[10px] font-mono text-white/25 border-b border-white/[0.04] bg-white/[0.01]">
+            <span className="w-8">SIDE</span>
+            <span className="w-20">PRICE</span>
+            <span className="w-16">SOL</span>
+            <span className="flex-1">TOKENS</span>
+            <span className="hidden sm:block w-16 text-right">TIME</span>
+            <span className="w-16 text-right">TX</span>
+          </div>
+        )}
         {trades.length === 0 && !loading && !syncing && (
-          <div className="px-4 py-6 text-center text-white/30 text-sm">No trades found on-chain.</div>
+          <div className="px-4 py-8 text-center">
+            <div className="text-white/25 text-sm font-mono mb-2">No trades found on-chain.</div>
+            <button
+              type="button"
+              onClick={() => runSync()}
+              className="text-xs text-[#00FF41]/60 hover:text-[#00FF41] font-mono border border-[#00FF41]/20 hover:border-[#00FF41]/40 px-3 py-1 rounded transition-colors"
+            >
+              Sync from blockchain
+            </button>
+          </div>
         )}
         {(loading || syncing) && trades.length === 0 && (
-          <div className="px-4 py-6 text-center text-white/30 text-sm">
+          <div className="px-4 py-6 text-center text-white/30 text-sm font-mono">
             {syncing ? "Fetching transactions from blockchain…" : "Loading…"}
           </div>
         )}
-        <div className="divide-y divide-white/5">
-          {trades.map((trade) => (
-            <div
-              key={`${trade.signature}-${trade.block_time}`}
-              className="flex items-center gap-3 px-4 py-2.5 text-xs hover:bg-white/[0.02]"
-            >
-              <span className={cn(
-                "w-8 font-semibold font-mono uppercase",
-                trade.side === "sell" ? "text-red-400" : "text-[#00FF41]"
-              )}>
-                {trade.side}
-              </span>
-              <span className="text-white/70 font-mono">{Number(trade.sol_amount).toFixed(5)} SOL</span>
-              <span className="text-white/50 font-mono flex-1">
-                {Number(trade.token_amount).toLocaleString("en-US", { maximumFractionDigits: 2 })} token
-              </span>
-              <a
-                href={`https://solscan.io/tx/${trade.signature}?cluster=devnet`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[#00FF41]/60 hover:text-[#00FF41] font-mono"
+        <div className="divide-y divide-white/[0.04] max-h-[360px] overflow-y-auto">
+          {trades.slice(0, 50).map((trade) => {
+            const price = Number(trade.price_sol);
+            const sol = Number(trade.sol_amount);
+            const tokens = Number(trade.token_amount);
+            const priceStr = price < 0.000001 ? price.toExponential(2) : price.toFixed(9);
+            const solStr = sol >= 1 ? sol.toFixed(3) : sol.toFixed(5);
+            const tokensStr = tokens >= 1_000_000 ? `${(tokens / 1_000_000).toFixed(2)}M`
+              : tokens >= 1_000 ? `${(tokens / 1_000).toFixed(1)}K`
+              : tokens.toFixed(0);
+            const t = new Date(trade.block_time);
+            const timeStr = t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+            const isBuy = trade.side === "buy";
+            return (
+              <div
+                key={`${trade.signature}-${trade.block_time}`}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-2 text-xs font-mono hover:bg-white/[0.02] transition-colors",
+                  isBuy ? "hover:bg-[#00FF41]/[0.02]" : "hover:bg-[#FF3C6B]/[0.02]"
+                )}
               >
-                {trade.signature.slice(0, 8)}...
-              </a>
-            </div>
-          ))}
+                <span className={cn("w-8 font-bold uppercase text-[11px]", isBuy ? "text-[#00FF41]" : "text-[#FF3C6B]")}>
+                  {trade.side}
+                </span>
+                <span className="w-20 text-white/60">{priceStr}</span>
+                <span className={cn("w-16", isBuy ? "text-[#00FF41]/80" : "text-[#FF3C6B]/80")}>
+                  {isBuy ? "+" : "-"}{solStr}◎
+                </span>
+                <span className="flex-1 text-white/40">{tokensStr}</span>
+                <span className="hidden sm:block w-16 text-right text-white/25">{timeStr}</span>
+                <a
+                  href={`https://solscan.io/tx/${trade.signature}?cluster=devnet`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-16 text-right text-white/30 hover:text-[#00FF41] transition-colors"
+                >
+                  {trade.signature.slice(0, 6)}…
+                </a>
+              </div>
+            );
+          })}
         </div>
       </GlassPanel>
     </motion.div>
