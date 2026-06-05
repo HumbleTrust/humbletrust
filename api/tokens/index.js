@@ -47,11 +47,20 @@ module.exports = async (req, res) => {
       if (name && typeof name === "string" && name.length > 64) return res.status(400).json({ error: "name too long (max 64)" });
       if (symbol && typeof symbol === "string" && symbol.length > 10) return res.status(400).json({ error: "symbol too long (max 10)" });
       const score = Math.min(100, Math.max(0, Number(launchScore) || 0));
-      const { error } = await getClient().from("tokens").upsert({
+      // Reject base64 data URLs — they can be hundreds of KB and cause DB issues
+      const rawLogo = logoUri || logo_uri || null;
+      const resolvedLogo = (rawLogo && typeof rawLogo === "string" && !rawLogo.startsWith("data:"))
+        ? rawLogo.slice(0, 500)
+        : null;
+
+      const { error: upsertError } = await getClient().from("tokens").upsert({
         mint, creator, name: name || null, symbol: symbol || null, launch_tx: signature || null,
         launch_score: score, trust_score: score, trust_level: getTrustLevel(score),
-        lock_percent: lockPercent || null, burn_option: burnOption || null, certificate_mint: certificateMint || null,
-        logo_uri: logoUri || logo_uri || null, tier: tier === 1 ? "premium" : "standard",
+        lock_percent: lockPercent != null ? Number(lockPercent) : null,
+        burn_option: burnOption != null ? Number(burnOption) : null,
+        certificate_mint: certificateMint || null,
+        logo_uri: resolvedLogo,
+        tier: tier === 1 ? "premium" : "standard",
         description: (description && typeof description === "string") ? description.slice(0, 200) : null,
         website: (website && typeof website === "string") ? website.slice(0, 255) : null,
         twitter: (twitter && typeof twitter === "string") ? twitter.slice(0, 100) : null,
@@ -59,13 +68,16 @@ module.exports = async (req, res) => {
         ...(raydium_pool ? { raydium_pool, status: "migrated" } : {}),
         updated_at: new Date().toISOString(),
       }, { onConflict: "mint", ignoreDuplicates: false });
-      if (error) throw error;
+      if (upsertError) {
+        console.error("[api/tokens/index] upsert:", upsertError.message, upsertError.code, upsertError.details);
+        return res.status(500).json({ error: upsertError.message || "db_error" });
+      }
       return res.json({ ok: true });
     }
 
     return res.status(405).json({ error: "Method not allowed" });
   } catch (e) {
-    console.error("[api/tokens/index]", e.message);
-    return res.status(500).json({ error: "Internal server error" });
+    console.error("[api/tokens/index] catch:", e.message);
+    return res.status(500).json({ error: e.message || "Internal server error" });
   }
 };

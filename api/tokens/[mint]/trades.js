@@ -195,7 +195,8 @@ async function handleRecordTrade(mint, req, res) {
 }
 
 async function handleSyncTrades(mint, req, res) {
-  const limit = Math.min(Number(req.query.limit) || 100, 500);
+  const limit    = Math.min(Number(req.query.limit) || 30, 200);
+  const deadline = Date.now() + 8_000; // stay within Vercel's 10s function limit
   const conn  = new Connection(RPC_ENDPOINT, "confirmed");
   const pdas  = deriveCurvePdas(mint);
   const { curveTreasurySol, curvePoolVault, raydiumPoolState } = pdas;
@@ -218,9 +219,10 @@ async function handleSyncTrades(mint, req, res) {
   const treasuryStr = curveTreasurySol.toBase58();
   const vaultStr    = curvePoolVault.toBase58();
 
-  for (let i = 0; i < sigs.length; i += 20) {
-    if (i > 0) await sleep(150);
-    const batch = sigs.slice(i, i + 20);
+  for (let i = 0; i < sigs.length; i += 10) {
+    if (Date.now() > deadline) break; // stop before Vercel timeout
+    if (i > 0) await sleep(100);
+    const batch = sigs.slice(i, i + 10);
     const txs   = await fetchTransactionsBatch(conn, batch);
     for (let j = 0; j < txs.length; j++) {
       const tx  = txs[j];
