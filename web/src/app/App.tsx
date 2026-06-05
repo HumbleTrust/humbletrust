@@ -1,4 +1,4 @@
-import { useState, useEffect, Component, type ReactNode, type ErrorInfo } from "react";
+import { useState, useEffect, useCallback, useRef, Component, type ReactNode, type ErrorInfo } from "react";
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null };
@@ -41,12 +41,67 @@ import { AboutPage } from "./pages/AboutPage";
 import { ScorePage } from "./pages/ScorePage";
 import { ApiPage } from "./pages/ApiPage";
 import { CreatorPage } from "./pages/CreatorPage";
+import { TokenPage } from "./pages/TokenPage";
+
+// Validate Solana base58 address (32-44 chars, base58 alphabet)
+const SOLANA_ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
+function parseMintFromPath(path: string): string | null {
+  const m = path.match(/^\/token\/([^/?#]+)/);
+  if (m && SOLANA_ADDR_RE.test(m[1])) return m[1];
+  return null;
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("home");
-  const [openMint, setOpenMint] = useState<string | null>(null);
+  // If we land on /token/:mint directly, parse it from the pathname
+  const initialMintFromUrl = parseMintFromPath(window.location.pathname);
+  const [openMint, setOpenMint] = useState<string | null>(initialMintFromUrl);
   const [tradeMint, setTradeMint] = useState<string | null>(null);
   const [creatorWallet, setCreatorWallet] = useState<string | null>(null);
+  // Track whether the current token page was opened via SPA navigation (shows back button)
+  const mintViaSpa = useRef<boolean>(!initialMintFromUrl);
+
+  // Keep URL in sync with openMint state
+  useEffect(() => {
+    if (openMint) {
+      const target = `/token/${openMint}`;
+      if (window.location.pathname !== target) {
+        history.pushState({ mint: openMint }, "", target);
+      }
+    } else {
+      if (window.location.pathname !== "/" && window.location.pathname !== "") {
+        history.pushState({}, "", "/");
+      }
+    }
+  }, [openMint]);
+
+  const clearMint = useCallback(() => {
+    mintViaSpa.current = true;
+    setOpenMint(null);
+  }, []);
+
+  const openMintSpa = useCallback((mint: string) => {
+    mintViaSpa.current = true;
+    setOpenMint(mint);
+  }, []);
+
+  useEffect(() => {
+    // Handle browser back/forward
+    const popHandler = (e: PopStateEvent) => {
+      const mint = parseMintFromPath(window.location.pathname);
+      if (mint) {
+        // Navigated forward to a token URL via browser history
+        mintViaSpa.current = false;
+        setOpenMint(mint);
+      } else {
+        setOpenMint(null);
+        if (e.state?.tab) setActiveTab(e.state.tab as string);
+      }
+    };
+    window.addEventListener("popstate", popHandler);
+    return () => window.removeEventListener("popstate", popHandler);
+  }, []);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -61,24 +116,32 @@ export default function App() {
       const wallet = (e as CustomEvent<string>).detail;
       if (wallet) { setCreatorWallet(wallet); setOpenMint(null); }
     };
+    const tokenHandler = (e: Event) => {
+      const mint = (e as CustomEvent<{ mint: string }>).detail?.mint;
+      if (mint && SOLANA_ADDR_RE.test(mint)) { openMintSpa(mint); setCreatorWallet(null); }
+    };
     window.addEventListener("ht:navigate", handler);
     window.addEventListener("ht:open-trade", tradeHandler);
     window.addEventListener("ht:open-creator", creatorHandler);
+    window.addEventListener("ht:open-token", tokenHandler);
     return () => {
       window.removeEventListener("ht:navigate", handler);
       window.removeEventListener("ht:open-trade", tradeHandler);
       window.removeEventListener("ht:open-creator", creatorHandler);
+      window.removeEventListener("ht:open-token", tokenHandler);
     };
-  }, []);
+  }, [openMintSpa]);
 
   const renderPage = () => {
     if (creatorWallet) return <CreatorPage wallet={creatorWallet} onBack={() => setCreatorWallet(null)} />;
-    if (openMint) return <DiscoverPage initialMint={openMint} onBack={() => setOpenMint(null)} />;
+    if (openMint) {
+      return <TokenPage mint={openMint} onBack={mintViaSpa.current ? clearMint : undefined} />;
+    }
     switch (activeTab) {
       case "home":      return <HomePage onTabChange={setActiveTab} />;
       case "dashboard": return <Dashboard onTabChange={setActiveTab} />;
       case "launch":    return <LaunchPage />;
-      case "discover":  return <DiscoverPage onOpenToken={(m) => setOpenMint(m)} />;
+      case "discover":  return <DiscoverPage onOpenToken={openMintSpa} />;
       case "trade":     return <TradePage goDiscover={() => setActiveTab("discover")} initialMint={tradeMint ?? undefined} />;
       case "portfolio": return <Portfolio />;
       case "market":    return <MarketPage />;
