@@ -6,6 +6,7 @@
  */
 
 const crypto = require("crypto");
+const { Connection, PublicKey } = require("@solana/web3.js");
 const { getClient } = require("../../_lib/db");
 const { isValidWallet, setCors } = require("../../_lib/validate");
 const { parseCurveTradeEvents } = require("../../_lib/curve-events");
@@ -22,14 +23,7 @@ const TF_SECONDS = {
 };
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-let web3;
-function getWeb3() {
-  if (!web3) web3 = require("@solana/web3.js");
-  return web3;
-}
-
 function deriveCurvePdas(mint) {
-  const { PublicKey } = getWeb3();
   const mintPk    = new PublicKey(mint);
   const programPk = new PublicKey(PROGRAM_ID_V2);
   const raydiumPk = new PublicKey(RAYDIUM_CPMM_DEVNET);
@@ -201,7 +195,6 @@ async function handleRecordTrade(mint, req, res) {
 }
 
 async function handleSyncTrades(mint, req, res) {
-  const { Connection } = getWeb3();
   const limit = Math.min(Number(req.query.limit) || 100, 500);
   const conn  = new Connection(RPC_ENDPOINT, "confirmed");
   const pdas  = deriveCurvePdas(mint);
