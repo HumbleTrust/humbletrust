@@ -432,8 +432,11 @@ async function computeScore(mint, mintInfo, ep, db) {
   } else if (meta?.updateAuthority
              && !KNOWN_PROGRAMS.has(meta.updateAuthority)
              && meta.updateAuthority !== NULL_ADDR
-             && meta.updateAuthority !== BURN_ADDRESS) {
-    // Metadata update authority (works for graduated tokens & most others)
+             && meta.updateAuthority !== BURN_ADDRESS
+             && isWalletAddress(meta.updateAuthority)) {
+    // Metadata update authority — only use if it's a real wallet (not a PDA).
+    // Bonding curve programs (HumbleTrust, etc.) set a PDA as update authority,
+    // which would otherwise cause the entire vault balance to count as "creator".
     creator = meta.updateAuthority;
   } else if (mintInfo?.mintAuthority !== PUMP_FUN_PROGRAM
              && mintInfo?.mintAuthority !== PUMP_FUN_MIGRATION) {

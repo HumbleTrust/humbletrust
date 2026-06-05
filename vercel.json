@@ -6,6 +6,7 @@
   "rewrites": [
     { "source": "/api/badges", "destination": "/api/badges/list" },
     { "source": "/api/badges/confirm", "destination": "/api/badges/prepare" },
+    { "source": "/cert-meta.json", "destination": "/api/cert/generic/metadata.json" },
     { "source": "/((?!api|pitch\\.html).*)", "destination": "/" }
   ],
   "headers": [

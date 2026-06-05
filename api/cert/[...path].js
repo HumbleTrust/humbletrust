@@ -220,20 +220,22 @@ async function handleMetadata(req, res, mint) {
   let tokenName = 'HumbleTrust Token', tokenSymbol = 'HT', edition = 1;
   let createdAt = new Date().toISOString();
 
-  try {
-    const token = await getTokenData(mint);
-    if (token) {
-      tokenName  = token.name    || tokenName;
-      tokenSymbol = token.symbol || tokenSymbol;
-      createdAt  = token.created_at || createdAt;
-      const z    = getZodiac(new Date(createdAt));
-      zodiac     = z.name;
-      element    = z.element;
-      aura       = getAuraColor(token.creator || '');
-      edition    = await getTokenEdition(mint, createdAt);
+  if (mint && mint !== 'generic') {
+    try {
+      const token = await getTokenData(mint);
+      if (token) {
+        tokenName   = token.name    || tokenName;
+        tokenSymbol = token.symbol  || tokenSymbol;
+        createdAt   = token.created_at || createdAt;
+        const z     = getZodiac(new Date(createdAt));
+        zodiac      = z.name;
+        element     = z.element;
+        aura        = getAuraColor(token.creator || '');
+        edition     = await getTokenEdition(mint, createdAt);
+      }
+    } catch (e) {
+      console.error('[api/cert/metadata]', e.message);
     }
-  } catch (e) {
-    console.error('[api/cert/metadata]', e.message);
   }
 
   const origin   = process.env.VERCEL_URL
@@ -291,7 +293,7 @@ async function handleImage(req, res, mint) {
     || !VALID_ELEMENT_SET.has(element)
     || !/^#[0-9A-Fa-f]{6}$/.test(aura);
 
-  if (needsLookup) {
+  if (needsLookup && mint && mint !== 'generic') {
     try {
       const token = await getTokenData(mint);
       if (token) {
@@ -305,6 +307,8 @@ async function handleImage(req, res, mint) {
     } catch (e) {
       console.error('[api/cert/image]', e.message);
     }
+  }
+  if (needsLookup) {
     zodiac  = zodiac  || 'Capricorn';
     element = element || 'Earth';
     aura    = aura    || '#9945FF';
@@ -328,7 +332,9 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: 'Path must be /api/cert/:mint/metadata.json or /api/cert/:mint/image.svg' });
 
   const [mint, filepart] = parts;
-  if (!mint || !SOLANA_ADDR_RE.test(mint))
+  if (!mint) return res.status(400).json({ error: 'Missing mint' });
+  // Allow 'generic' for old certs that used the hardcoded cert-meta.json URI
+  if (mint !== 'generic' && !SOLANA_ADDR_RE.test(mint))
     return res.status(400).json({ error: 'Invalid mint address' });
 
   if (filepart === 'metadata.json') return handleMetadata(req, res, mint);
