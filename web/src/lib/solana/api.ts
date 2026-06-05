@@ -88,6 +88,20 @@ const readJson = async <T>(response: Response): Promise<T> => {
   return body as T;
 };
 
+export const uploadLogo = async (dataUrl: string): Promise<string> => {
+  const r = await fetch(`${API_BASE}/upload/logo`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(import.meta.env.VITE_INTERNAL_SECRET ? { Authorization: `Bearer ${import.meta.env.VITE_INTERNAL_SECRET}` } : {}),
+    },
+    body: JSON.stringify({ data: dataUrl }),
+  });
+  const body = await readJson<{ url?: string; error?: string }>(r);
+  if (!body.url) throw new Error(body.error || "Upload failed");
+  return body.url;
+};
+
 export const registerToken = (data: {
   mint: string;
   creator: string;

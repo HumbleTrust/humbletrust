@@ -19,7 +19,7 @@ import {
   mintLaunchCertificateV2,
 } from "../../lib/solana/program";
 import { fileToHexLogo, MAX_LOGO_BYTES, saveToken } from "../../lib/solana/image";
-import { registerToken, recordReputationEvent } from "../../lib/solana/api";
+import { registerToken, recordReputationEvent, uploadLogo } from "../../lib/solana/api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface LaunchResult {
@@ -483,6 +483,15 @@ export function LaunchPage() {
 
       const registerInNetwork = async (certificateMint?: string | null) => {
         try {
+          // Upload logo to CDN before registering; fall back to base64 if upload fails
+          let resolvedLogoUri: string | null = null;
+          if (logoDataUrl) {
+            try {
+              resolvedLogoUri = await uploadLogo(logoDataUrl);
+            } catch {
+              resolvedLogoUri = logoDataUrl; // fallback: store base64 (not ideal but functional)
+            }
+          }
           const response = await registerToken({
             mint: mintStr,
             creator: anchorWallet.publicKey.toBase58(),
@@ -492,7 +501,7 @@ export function LaunchPage() {
             burnOption: burn,
             tier,
             certificateMint,
-            logoUri: logoDataUrl || null,
+            logoUri: resolvedLogoUri,
             description: description || null,
             website: website || null,
             twitter: twitter || null,
