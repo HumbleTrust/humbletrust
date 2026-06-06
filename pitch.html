@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HumbleTrust — Investor Pitch</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #050A0E;
+    color: #E2E8F0;
+    width: 210mm;
+    margin: 0 auto;
+  }
+
+  .page {
+    width: 210mm;
+    min-height: 148mm;
+    padding: 10mm 14mm;
+    position: relative;
+    page-break-after: always;
+    overflow: hidden;
+  }
+
+  /* ── SLIDE 1 — COVER ── */
+  .cover {
+    background: linear-gradient(135deg, #050A0E 0%, #0A1628 50%, #050A0E 100%);
+    min-height: 148mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border-bottom: 2px solid #00FF41;
+  }
+
+  .cover-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .cover-logo img {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+  }
+
+  .cover-logo-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    color: #00FF41;
+    letter-spacing: -0.5px;
+  }
+
+  .cover-tagline {
+    font-size: 36px;
+    font-weight: 800;
+    color: #E2E8F0;
+    line-height: 1.2;
+    margin-bottom: 12px;
+    max-width: 160mm;
+  }
+
+  .cover-tagline span { color: #00FF41; }
+
+  .cover-sub {
+    font-size: 14px;
+    color: #94A3B8;
+    margin-bottom: 28px;
+    max-width: 140mm;
+    line-height: 1.6;
+  }
+
+  .cover-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .pill {
+    background: rgba(0,255,65,0.08);
+    border: 1px solid rgba(0,255,65,0.25);
+    color: #00FF41;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 4px;
+  }
+
+  .pill.purple {
+    background: rgba(176,38,255,0.08);
+    border-color: rgba(176,38,255,0.3);
+    color: #B026FF;
+  }
+
+  .pill.amber {
+    background: rgba(255,219,43,0.08);
+    border-color: rgba(255,219,43,0.3);
+    color: #FFDB2B;
+  }
+
+  .cover-footer {
+    position: absolute;
+    bottom: 10mm;
+    right: 14mm;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #334155;
+  }
+
+  /* ── SECTION HEADER ── */
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #00FF41;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .section-title {
+    font-size: 22px;
+    font-weight: 800;
+    color: #E2E8F0;
+    margin-bottom: 16px;
+    line-height: 1.2;
+  }
+
+  .section-title span { color: #00FF41; }
+
+  /* ── PROBLEM SLIDE ── */
+  .problem {
+    background: #050A0E;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin: 16px 0;
+  }
+
+  .stat-card {
+    background: #0F1923;
+    border: 1px solid #1A2332;
+    border-radius: 8px;
+    padding: 14px 12px;
+    text-align: center;
+  }
+
+  .stat-card.red { border-color: rgba(255,68,68,0.4); }
+  .stat-card.amber { border-color: rgba(255,219,43,0.4); }
+
+  .stat-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 26px;
+    font-weight: 700;
+    color: #FF4444;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .stat-card.amber .stat-number { color: #FFDB2B; }
+  .stat-card.green .stat-number { color: #00FF41; }
+
+  .stat-label {
+    font-size: 11px;
+    color: #64748B;
+    line-height: 1.4;
+  }
+
+  .problem-text {
+    font-size: 13px;
+    color: #94A3B8;
+    line-height: 1.7;
+    margin-top: 12px;
+  }
+
+  .problem-text strong { color: #E2E8F0; }
+
+  /* ── SOLUTION SLIDE ── */
+  .feature-list {
+    list-style: none;
+    margin: 12px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .feature-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    color: #CBD5E1;
+    line-height: 1.5;
+  }
+
+  .feature-list li::before {
+    content: "→";
+    color: #00FF41;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .feature-list li strong { color: #E2E8F0; }
+
+  /* ── PRODUCT SLIDE ── */
+  .product-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 12px 0;
+  }
+
+  .product-card {
+    background: #0F1923;
+    border: 1px solid #1A2332;
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  .product-card-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: #00FF41;
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+  }
+
+  .product-card-desc {
+    font-size: 12px;
+    color: #64748B;
+    line-height: 1.5;
+  }
+
+  /* ── BUSINESS MODEL ── */
+  .revenue-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 12px;
+  }
+
+  .revenue-table th {
+    background: #0F1923;
+    color: #64748B;
+    font-weight: 600;
+    padding: 8px 10px;
+    text-align: left;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border-bottom: 1px solid #1A2332;
+  }
+
+  .revenue-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #0F1923;
+    color: #CBD5E1;
+  }
+
+  .revenue-table td:first-child { color: #E2E8F0; font-weight: 500; }
+  .revenue-table td.green { color: #00FF41; font-family: 'JetBrains Mono', monospace; }
+
+  /* ── TRACTION ── */
+  .traction-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 8px;
+    margin: 12px 0;
+  }
+
+  .traction-card {
+    background: #0F1923;
+    border: 1px solid #1A2332;
+    border-radius: 8px;
+    padding: 12px 10px;
+    text-align: center;
+  }
+
+  .traction-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: #00FF41;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .traction-label {
+    font-size: 10px;
+    color: #64748B;
+    line-height: 1.4;
+  }
+
+  .timeline {
+    margin: 12px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .timeline-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+  }
+
+  .timeline-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #00FF41;
+    flex-shrink: 0;
+  }
+
+  .timeline-dot.done { background: #00FF41; }
+  .timeline-dot.next { background: #1A2332; border: 2px solid #00FF41; }
+
+  .timeline-text { color: #94A3B8; }
+  .timeline-text strong { color: #E2E8F0; }
+  .timeline-date {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #334155;
+    margin-left: auto;
+  }
+
+  /* ── ASK SLIDE ── */
+  .ask-box {
+    background: linear-gradient(135deg, rgba(0,255,65,0.05), rgba(0,255,65,0.02));
+    border: 1px solid rgba(0,255,65,0.3);
+    border-radius: 12px;
+    padding: 18px;
+    margin: 12px 0;
+  }
+
+  .ask-amount {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 42px;
+    font-weight: 700;
+    color: #00FF41;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .ask-label { font-size: 13px; color: #64748B; margin-bottom: 16px; }
+
+  .ask-breakdown {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+
+  .ask-item {
+    text-align: center;
+  }
+
+  .ask-item-amount {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
+    font-weight: 700;
+    color: #E2E8F0;
+    display: block;
+  }
+
+  .ask-item-label { font-size: 10px; color: #64748B; }
+
+  .equity-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid #1A2332;
+  }
+
+  .equity-text { font-size: 13px; color: #94A3B8; }
+  .equity-amount {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: #B026FF;
+  }
+
+  /* ── CONTACT ── */
+  .contact-slide {
+    background: linear-gradient(135deg, #050A0E 0%, #0A1628 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 148mm;
+  }
+
+  .contact-big {
+    font-size: 32px;
+    font-weight: 800;
+    color: #E2E8F0;
+    line-height: 1.2;
+    margin-bottom: 8px;
+  }
+
+  .contact-big span { color: #00FF41; }
+
+  .contact-sub {
+    font-size: 14px;
+    color: #64748B;
+    margin-bottom: 28px;
+  }
+
+  .contact-links {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .contact-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 14px;
+  }
+
+  .contact-link-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #334155;
+    width: 60px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .contact-link-value {
+    color: #00FF41;
+    font-weight: 500;
+  }
+
+  /* ── DIVIDER ── */
+  .divider {
+    height: 1px;
+    background: #1A2332;
+    margin: 12px 0;
+  }
+
+  .green-line {
+    height: 2px;
+    background: linear-gradient(90deg, #00FF41, transparent);
+    margin-bottom: 8px;
+    border-radius: 1px;
+  }
+
+  @media print {
+    body { background: #050A0E; }
+    .page { page-break-after: always; }
+  }
+
+  @page {
+    size: A5 landscape;
+    margin: 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- SLIDE 1: COVER -->
+<div class="page cover">
+  <div class="cover-logo">
+    <img src="/HTlogo512.png" alt="HumbleTrust" onerror="this.style.display='none'">
+    <span class="cover-logo-text">HumbleTrust</span>
+  </div>
+
+  <div class="cover-tagline">
+    The <span>Trust Layer</span><br>for Solana Tokens
+  </div>
+
+  <div class="cover-sub">
+    Anti-rug launchpad with on-chain TrustScore oracle, bonding curve enforcement, and Token-2022 launch certificates. Built solo in 4 months. Devnet-tested. Mainnet-ready.
+  </div>
+
+  <div class="cover-pills">
+    <span class="pill">Solana</span>
+    <span class="pill">Rust / Anchor</span>
+    <span class="pill purple">Pre-Revenue</span>
+    <span class="pill amber">Seeking $30k Seed</span>
+  </div>
+
+  <div class="cover-footer">humbletrust.vercel.app · June 2026</div>
+</div>
+
+<!-- SLIDE 2: PROBLEM -->
+<div class="page problem">
+  <div class="green-line"></div>
+  <div class="section-label">01 — Problem</div>
+  <div class="section-title">Rug pulls are destroying<br><span>retail confidence in Solana</span></div>
+
+  <div class="stat-grid">
+    <div class="stat-card red">
+      <span class="stat-number">$500M+</span>
+      <span class="stat-label">Lost to Solana rug pulls in 2024</span>
+    </div>
+    <div class="stat-card amber">
+      <span class="stat-number">~30%</span>
+      <span class="stat-label">Of new token launches are rugs or abandoned</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-number" style="color:#FFDB2B">50k+</span>
+      <span class="stat-label">New tokens launched on Solana monthly</span>
+    </div>
+  </div>
+
+  <div class="problem-text">
+    Today anyone can launch a token in 30 seconds with <strong>zero accountability</strong>. No locked liquidity. No verified identity. No consequences. Retail traders have no way to know if a project is legitimate before they buy — and they keep losing money because of it.
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="problem-text">
+    <strong>The core issue:</strong> trust is not enforced at the infrastructure level. It's optional, self-reported, and easily faked.
+  </div>
+</div>
+
+<!-- SLIDE 3: SOLUTION -->
+<div class="page">
+  <div class="green-line"></div>
+  <div class="section-label">02 — Solution</div>
+  <div class="section-title">Trust enforced by<br><span>smart contract — not promises</span></div>
+
+  <ul class="feature-list">
+    <li>
+      <div><strong>TrustScore Oracle</strong> — on-chain score calculated from LP lock %, creator reputation, trading behaviour, and time. Public, immutable, unfakeable.</div>
+    </li>
+    <li>
+      <div><strong>Bonding Curve with LP Lock Enforcement</strong> — liquidity is locked by the smart contract at launch. Creator cannot rug — the contract won't allow it. Automatic Raydium CPMM migration at 50 SOL graduation.</div>
+    </li>
+    <li>
+      <div><strong>Token-2022 Launch Certificates</strong> — soulbound NFT issued to every verified launch. Lives on-chain forever. Proves the token went through HumbleTrust verification.</div>
+    </li>
+    <li>
+      <div><strong>Creator Reputation System</strong> — on-chain history of every creator's launches, exits, and community score. Bad actors can't hide behind new wallets.</div>
+    </li>
+    <li>
+      <div><strong>Chrome Extension</strong> — shows TrustScore on DexScreener, Birdeye, Jupiter, Raydium while users browse. Zero friction for traders.</div>
+    </li>
+  </ul>
+</div>
+
+<!-- SLIDE 4: PRODUCT -->
+<div class="page">
+  <div class="green-line"></div>
+  <div class="section-label">03 — Product</div>
+  <div class="section-title">Full-stack platform,<br><span>working on devnet</span></div>
+
+  <div class="product-grid">
+    <div class="product-card">
+      <div class="product-card-title">⟡ Launchpad</div>
+      <div class="product-card-desc">6-step wizard. Token creation, bonding curve setup, LP lock config, anti-bot delay. Rust/Anchor V2 program.</div>
+    </div>
+    <div class="product-card">
+      <div class="product-card-title">⟡ Trading Terminal</div>
+      <div class="product-card-desc">Real-time OHLCV charts, trade history, buy/sell on bonding curve and post-migration Raydium CPMM.</div>
+    </div>
+    <div class="product-card">
+      <div class="product-card-title">⟡ Trust Dashboard</div>
+      <div class="product-card-desc">TrustScore breakdown, health metrics, creator profile, token certificate, risk signals.</div>
+    </div>
+    <div class="product-card">
+      <div class="product-card-title">⟡ REST API + Extension</div>
+      <div class="product-card-desc">Public API with free/pro tiers. Chrome extension for DEX browsing overlays on 9 platforms.</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="traction-grid">
+    <div class="traction-card">
+      <span class="traction-number">4mo</span>
+      <span class="traction-label">Built solo, zero funding</span>
+    </div>
+    <div class="traction-card">
+      <span class="traction-number">E2E</span>
+      <span class="traction-label">Devnet tested, launch → migrate</span>
+    </div>
+    <div class="traction-card">
+      <span class="traction-number">$50</span>
+      <span class="traction-label">Monthly operating costs</span>
+    </div>
+    <div class="traction-card">
+      <span class="traction-number">0</span>
+      <span class="traction-label">External funding to date</span>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 5: BUSINESS MODEL -->
+<div class="page">
+  <div class="green-line"></div>
+  <div class="section-label">04 — Business Model</div>
+  <div class="section-title">Three revenue streams,<br><span>active from day one</span></div>
+
+  <table class="revenue-table">
+    <thead>
+      <tr>
+        <th>Stream</th>
+        <th>Mechanics</th>
+        <th>Unit Economics</th>
+        <th>At 200 launches/mo</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Launch Fees</td>
+        <td>Per token launch</td>
+        <td>0.057–0.28 SOL</td>
+        <td class="green">~$1,400–6,000/mo</td>
+      </tr>
+      <tr>
+        <td>Trading Fees</td>
+        <td>1% on all swaps</td>
+        <td>Split creator / platform</td>
+        <td class="green">Volume-dependent</td>
+      </tr>
+      <tr>
+        <td>API Subscriptions</td>
+        <td>Free / Pro tiers</td>
+        <td>Pro: ~$49/mo</td>
+        <td class="green">$500–2,000/mo</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="divider"></div>
+
+  <div style="display:flex; gap: 20px; font-size: 12px; color: #64748B;">
+    <div>
+      <span style="color:#00FF41; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:16px;">~$46/mo</span><br>
+      Fixed operating costs
+    </div>
+    <div>
+      <span style="color:#00FF41; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:16px;">~200</span><br>
+      Launches/mo to breakeven
+    </div>
+    <div>
+      <span style="color:#00FF41; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:16px;">Global</span><br>
+      Crypto is borderless
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 6: THE ASK -->
+<div class="page">
+  <div class="green-line"></div>
+  <div class="section-label">05 — The Ask</div>
+  <div class="section-title">Seed round to ship<br><span>mainnet in 90 days</span></div>
+
+  <div class="ask-box">
+    <span class="ask-amount">$30,000</span>
+    <div class="ask-label">Pre-seed round — first external capital</div>
+    <div class="ask-breakdown">
+      <div class="ask-item">
+        <span class="ask-item-amount">$8,000</span>
+        <span class="ask-item-label">Mainnet deployment + security audit</span>
+      </div>
+      <div class="ask-item">
+        <span class="ask-item-amount">$15,000</span>
+        <span class="ask-item-label">Paid growth — first 500 creators</span>
+      </div>
+      <div class="ask-item">
+        <span class="ask-item-amount">$7,000</span>
+        <span class="ask-item-label">3-month community + ops runway</span>
+      </div>
+    </div>
+    <div class="equity-row">
+      <span class="equity-text">Equity offered to lead investor</span>
+      <span class="equity-amount">10–15%</span>
+    </div>
+  </div>
+
+  <div class="timeline">
+    <div class="timeline-item">
+      <div class="timeline-dot done"></div>
+      <span class="timeline-text"><strong>Complete</strong> — Smart contracts, frontend, API, extension. Devnet E2E tested.</span>
+      <span class="timeline-date">Feb–Jun 2026</span>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot next"></div>
+      <span class="timeline-text"><strong>Month 1</strong> — Mainnet deployment, security audit, first 50 launches</span>
+      <span class="timeline-date">Jul 2026</span>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot next"></div>
+      <span class="timeline-text"><strong>Month 2–3</strong> — Paid growth, 500 creators, first revenue, Series A prep</span>
+      <span class="timeline-date">Aug–Sep 2026</span>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 7: CONTACT -->
+<div class="page contact-slide">
+  <div class="green-line"></div>
+  <div class="section-label">06 — Let's Talk</div>
+
+  <div class="contact-big">
+    Building the trust layer<br>
+    <span>Solana deserves.</span>
+  </div>
+
+  <div class="contact-sub">
+    4 months. Solo. Zero funding. Working product.<br>Now looking for the right partner to go mainnet.
+  </div>
+
+  <div class="contact-links">
+    <div class="contact-link">
+      <span class="contact-link-label">Web</span>
+      <span class="contact-link-value">humbletrust.vercel.app</span>
+    </div>
+    <div class="contact-link">
+      <span class="contact-link-label">Email</span>
+      <span class="contact-link-value">humble.trust@outlook.com</span>
+    </div>
+    <div class="contact-link">
+      <span class="contact-link-label">Demo</span>
+      <span class="contact-link-value">Live demo available on request</span>
+    </div>
+  </div>
+
+  <div style="position:absolute; bottom:10mm; right:14mm; font-family:'JetBrains Mono',monospace; font-size:10px; color:#1A2332;">
+    CONFIDENTIAL · HumbleTrust 2026
+  </div>
+</div>
+
+</body>
+</html>
