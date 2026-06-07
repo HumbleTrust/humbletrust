@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import TrustScoreDemo from "../components/TrustScoreDemo";
 import {
   Shield, Rocket, ArrowLeftRight, Compass, Lock,
   Zap, BarChart2, Users, TrendingUp, ChevronRight,
@@ -26,7 +27,7 @@ const TAB_CONTENT: Record<InfoTabId, { title: string; items: { icon: React.Eleme
   how: {
     title: "Launch protected tokens in 3 steps",
     items: [
-      { icon: Rocket,          title: "1. Configure & Launch",  desc: "Set token name, supply, and trust parameters. HumbleTrust deploys a bonding-curve smart contract on Solana devnet — no coding required." },
+      { icon: Rocket,          title: "1. Configure & Launch",  desc: "Set token name, supply, and trust parameters. HumbleTrust deploys a bonding-curve smart contract on the blockchain — no coding required." },
       { icon: ArrowLeftRight,  title: "2. Trade on the Curve",  desc: "Anyone can buy or sell on the V2 bonding curve. Price moves algorithmically based on supply and demand." },
       { icon: BarChart2,       title: "3. Track on Charts",     desc: "TradingView-powered charts show every trade with buy/sell markers. Watch your token price grow as demand increases." },
     ],
@@ -48,9 +49,9 @@ const TAB_CONTENT: Record<InfoTabId, { title: string; items: { icon: React.Eleme
     ],
   },
   roadmap: {
-    title: "Built in 3 months — from zero to devnet alpha",
+    title: "Built in 3 months — from zero to demo alpha",
     items: [
-      { icon: Rocket,     title: "Devnet Alpha — Live Now",      desc: "V2 bonding curve, TrustScore engine, 444-piece NFT badges, Chrome Extension, and Stripe monetisation — all running on devnet." },
+      { icon: Rocket,     title: "Demo Alpha — Live Now",        desc: "V2 bonding curve, TrustScore engine, 444-piece NFT badges, Chrome Extension, and Stripe monetisation — all running on live network." },
       { icon: BarChart2,  title: "Q3 2026 — Mainnet Launch",     desc: "Smart-contract audit + mainnet deployment. TrustScore becomes a public API for every Solana token in existence." },
       { icon: Users,      title: "2027 — NFT Certificate Market", desc: "Soulbound launch certificates for creators + open secondary market for the HumbleTrust Zodiac Badge collection." },
     ],
@@ -69,7 +70,7 @@ const MODULES = [
 
 // ── Architecture steps ────────────────────────────────────────────────────────
 const ARCH_STEPS = [
-  { icon: Wallet,         label: "Connect Wallet",    desc: "Phantom / Backpack / Solflare on devnet" },
+  { icon: Wallet,         label: "Connect Wallet",    desc: "Phantom / Backpack / Solflare wallet" },
   { icon: Rocket,         label: "Launch Token",       desc: "Choose curve type, lock %, LP policy" },
   { icon: TrendingUp,     label: "Curve Grows",        desc: "Automated price discovery via bonding curve" },
   { icon: CheckCircle2,   label: "Graduate",           desc: "50 SOL raised → Raydium CPMM migration" },
@@ -88,10 +89,10 @@ export function HomePage({ onTabChange }: HomePageProps) {
   }, []);
 
   const stats: { label: string; value: string | number | null; sub: string; green: boolean }[] = [
-    { label: "Protocol",       value: "V2 Curve",  sub: "Solana Devnet",   green: false },
+    { label: "Protocol",       value: "V2 Curve",  sub: "Live Demo",       green: false },
     { label: "Fee",            value: "1%",         sub: "Per trade",       green: false },
     { label: "Active Tokens",  value: tokenCount,   sub: "Indexed on-chain", green: false },
-    { label: "Status",         value: "Live",       sub: "Devnet active",   green: true  },
+    { label: "Status",         value: "Live",       sub: "Demo Active",     green: true  },
   ];
 
   return (
@@ -119,7 +120,7 @@ export function HomePage({ onTabChange }: HomePageProps) {
               {/* Text */}
               <div className="flex-1">
                 <div className="text-xs font-mono tracking-[0.2em] text-[#00FF41]/60 uppercase mb-2">
-                  First Layer · Solana · Decentralized
+                  Financial Security Layer · Fraud Prevention · DeFi Infrastructure
                 </div>
                 <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight mb-3">
                   <span
@@ -135,9 +136,9 @@ export function HomePage({ onTabChange }: HomePageProps) {
                   <span className="text-white"> Protocol</span>
                 </h1>
                 <p className="text-white/55 text-sm sm:text-base md:text-lg max-w-2xl leading-relaxed">
-                  The trust &amp; security layer for Solana token launches. Deploy bonding-curve tokens with
-                  built-in price discovery, slippage protection, and real-time charts visible to everyone —
-                  no rugs, no hidden fees, no surprises.
+                  Financial fraud prevention infrastructure for token-based asset launches. Built-in price
+                  discovery, automated liquidity protection, and real-time risk monitoring — enforced at
+                  smart contract level, not UI level.
                 </p>
               </div>
 
@@ -165,11 +166,24 @@ export function HomePage({ onTabChange }: HomePageProps) {
 
             {/* Feature pills */}
             <div className="flex flex-wrap gap-2 mt-6 pt-6 border-t border-white/5">
-              {["Protected Bonding Curve", "TrustScore System", "On-chain LP Lock", "Raydium CPMM Migration", "Soulbound NFT Cert"].map((pill) => (
+              {["Smart Custody System", "Fraud Risk Scoring", "Automated Liquidity Lock", "Automated Market Migration", "Immutable Launch Certificate"].map((pill) => (
                 <span key={pill} className="text-xs px-3 py-1 rounded-full bg-white/[0.06] border border-white/10 text-white/50 font-mono">
                   {pill}
                 </span>
               ))}
+            </div>
+
+            {/* iFX Hack 2026 badges */}
+            <div className="flex flex-wrap items-center gap-3 mt-6">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-[#FFDB2B]/30 bg-[#FFDB2B]/5">
+                <span className="text-[#FFDB2B] text-xs font-mono font-bold">⚡ iFX HACK 2026</span>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-[#FF9900]/30 bg-[#FF9900]/5">
+                <span className="text-[#FF9900] text-xs font-mono font-bold">☁ Powered by AWS</span>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-white/10 bg-white/[0.03]">
+                <span className="text-white/50 text-xs font-mono">Financial Security &amp; Fraud Prevention</span>
+              </div>
             </div>
           </div>
         </GlassPanel>
@@ -197,6 +211,9 @@ export function HomePage({ onTabChange }: HomePageProps) {
           </motion.div>
         ))}
       </div>
+
+      {/* TrustScore Live Demo */}
+      <TrustScoreDemo />
 
       {/* ── Module grid ── */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
@@ -408,7 +425,7 @@ export function HomePage({ onTabChange }: HomePageProps) {
               { phase: "May 2026",  label: "Platform & Monetisation",   done: true,  current: false, desc: "API key system with rate limiting, Stripe subscriptions (Free / Pro / Enterprise), Chrome Extension published to Web Store." },
               { phase: "May 2026",  label: "NFT Zodiac Badges",         done: true,  current: false, desc: "444-piece NFT collection with 4-tier aura system. On-chain reservation, payment binding, badge image API." },
               { phase: "May 2026",  label: "Market Page & Discovery",   done: true,  current: false, desc: "Real-time prices, New Pairs from Raydium/Meteora/Orca/PumpSwap, Gainers & Losers leaderboard, WatchList." },
-              { phase: "Jun 2026",  label: "Devnet Alpha — Live",       done: true,  current: true,  desc: "Mobile-first responsive UI, video branding, security hardening. Serverless functions optimised 12→7. Supabase auth wired in." },
+              { phase: "Jun 2026",  label: "Demo Alpha — Live",         done: true,  current: true,  desc: "Mobile-first responsive UI, video branding, security hardening. Serverless functions optimised 12→7. Supabase auth wired in." },
               { phase: "Q3 2026",   label: "Mainnet Launch",            done: false, current: false, desc: "Audited contracts on Solana mainnet. TrustScore becomes a public API for every token on the network." },
               { phase: "Q4 2026",   label: "Advanced Analytics",        done: false, current: false, desc: "Public TrustScore API tier, volume bars, indicator overlays, multi-token comparison charts." },
               { phase: "2027",      label: "NFT Certificate Market",    done: false, current: false, desc: "Soulbound launch certificates for every graduation + open secondary market for the Zodiac Badge collection." },

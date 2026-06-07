@@ -35,22 +35,22 @@ const ENDPOINTS = [
   {
     method: "GET",
     path: "/score/{mint}",
-    desc: "TrustScore for any Solana token — HumbleTrust tokens get full score, external tokens get on-chain mint analysis.",
-    params: [{ name: "mint", type: "string", desc: "Solana token mint address (base58)" }],
+    desc: "TrustScore for any digital asset — HumbleTrust assets get full score, external tokens get on-chain mint analysis.",
+    params: [{ name: "mint", type: "string", desc: "Asset identifier / token mint address (base58)" }],
     example: `curl "${BASE}/score/FGQ16c5cmDkmDRG27kt27VrZP3FnhHTH3qtrXoMg3PGr"`,
   },
   {
     method: "GET",
     path: "/wallets/{wallet}",
-    desc: "Reputation score and risk profile for a creator wallet based on launch history and trade patterns.",
-    params: [{ name: "wallet", type: "string", desc: "Solana wallet address (base58)" }],
+    desc: "Reputation score and counterparty risk profile for a wallet based on launch history and trade patterns.",
+    params: [{ name: "wallet", type: "string", desc: "Wallet address (base58)" }],
     example: `curl "${BASE}/wallets/{wallet}"`,
   },
   {
     method: "GET",
     path: "/tokens/{mint}?check=health",
     desc: "Real-time token health: 24h volume, buy/sell ratio, price change, anomaly detection.",
-    params: [{ name: "mint", type: "string", desc: "Solana token mint address (base58)" }],
+    params: [{ name: "mint", type: "string", desc: "Asset identifier / token mint address (base58)" }],
     example: `curl "${BASE}/tokens/{mint}?check=health"`,
   },
   {
@@ -67,13 +67,13 @@ const r = await fetch(\`${BASE}/score/\${mint}\`);
 const d = await r.json();
 // d.score        — 0-100
 // d.trust_level  — "ELITE" | "STRONG" | "OK" | "WEAK" | "DANGER"
-// d.rug_risk     — "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+// d.rug_risk     — fraud risk: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
 // d.token        — { name, symbol, logo_uri, description }
 // d.signals      — scored components array
 // d.flags        — active risk flags
 
 if (d.score < 50 || d.rug_risk === "HIGH") {
-  console.warn(\`⚠️ Risky token: \${d.trust_level} \${d.score}/100\`);
+  console.warn(\`⚠️ High fraud risk: \${d.trust_level} \${d.score}/100\`);
 }`;
 
 const CODE_REACT = `import { useState, useEffect } from "react";
@@ -116,10 +116,10 @@ def is_safe(mint: str, min_score: int = 60) -> bool:
         d.get("rug_risk") not in ("HIGH", "CRITICAL")
     )
 
-# Trading bot filter
+# Trading system filter
 for mint in watchlist:
     if not is_safe(mint):
-        print(f"SKIP {mint} — trust below threshold")
+        print(f"SKIP {mint} — fraud risk above threshold")
     else:
         place_buy_order(mint)`;
 
@@ -333,13 +333,13 @@ export function ScorePage() {
               <img src="/HTlogo512.png" alt="HumbleTrust" className="w-full h-full object-cover" />
             </div>
             <div>
-              <div className="text-xs font-mono tracking-widest uppercase text-[#00FF41]/60">Public API</div>
+              <div className="text-xs font-mono tracking-widest uppercase text-[#00FF41]/60">Financial Security &amp; Fraud Prevention</div>
               <h1 className="text-2xl font-extrabold text-white">TrustScore Infrastructure</h1>
             </div>
           </div>
           <p className="text-white/55 text-sm leading-relaxed max-w-2xl mb-5">
-            Free, public, no authentication required. Score any Solana token or wallet directly from your app, dashboard, or trading bot.
-            HumbleTrust is building trust-layer infrastructure for the entire Solana ecosystem.
+            Free, public, no authentication required. Score any digital asset for fraud risk directly from your app, dashboard, or trading system.
+            HumbleTrust is building fraud prevention and trust-layer infrastructure for digital asset markets.
           </p>
           <div className="flex flex-wrap gap-3">
             {[
@@ -399,15 +399,15 @@ export function ScorePage() {
       {/* Live Try It — Score */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
         <GlassPanel className="p-6">
-          <h2 className="text-base font-bold text-white mb-1">Try It — Token Score</h2>
-          <p className="text-xs text-white/40 mb-4">Enter any Solana token mint address to get its TrustScore live.</p>
+          <h2 className="text-base font-bold text-white mb-1">Try It — Asset Fraud Score</h2>
+          <p className="text-xs text-white/40 mb-4">Enter any asset identifier to get its TrustScore and fraud risk assessment live.</p>
           <div className="flex gap-2 mb-4">
             <input
               className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm placeholder-white/25 focus:outline-none focus:border-[#00FF41]/50 font-mono"
               value={mintInput}
               onChange={e => setMintInput(e.target.value)}
               onKeyDown={e => e.key === "Enter" && fetchScore()}
-              placeholder="Paste any Solana mint address…"
+              placeholder="Paste asset identifier…"
             />
             <motion.button
               whileTap={{ scale: 0.97 }}
@@ -483,7 +483,7 @@ export function ScorePage() {
                       borderColor: `${RISK_COLORS[scoreResult.rug_risk]}30`,
                       background:  `${RISK_COLORS[scoreResult.rug_risk]}08`,
                     }}>
-                      <div className="text-[9px] font-mono text-white/30 mb-0.5">RUG RISK</div>
+                      <div className="text-[9px] font-mono text-white/30 mb-0.5">FRAUD RISK</div>
                       <div className="font-bold text-sm font-mono" style={{ color: RISK_COLORS[scoreResult.rug_risk] }}>
                         {scoreResult.rug_risk}
                         <span className="text-white/30 font-normal text-[10px] ml-1.5">{scoreResult.rug_risk_score}/100</span>
@@ -630,15 +630,15 @@ export function ScorePage() {
       {/* Live Try It — Wallet Risk */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
         <GlassPanel className="p-6">
-          <h2 className="text-base font-bold text-white mb-1">Try It — Wallet Risk</h2>
-          <p className="text-xs text-white/40 mb-4">Enter any Solana wallet to see creator reputation and risk profile.</p>
+          <h2 className="text-base font-bold text-white mb-1">Try It — Counterparty Risk</h2>
+          <p className="text-xs text-white/40 mb-4">Enter any wallet address to see issuer reputation and counterparty risk profile.</p>
           <div className="flex gap-2 mb-4">
             <input
               className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm placeholder-white/25 focus:outline-none focus:border-[#B026FF]/50 font-mono"
               value={walletInput}
               onChange={e => setWalletInput(e.target.value)}
               onKeyDown={e => e.key === "Enter" && fetchRisk()}
-              placeholder="Paste any Solana wallet address…"
+              placeholder="Paste wallet address…"
             />
             <motion.button
               whileTap={{ scale: 0.97 }}
@@ -900,7 +900,7 @@ export function ScorePage() {
                 </div>
                 <div className="flex gap-2 pl-3">
                   <span className="text-white/20">→</span>
-                  <span className="text-[#FF7A2F]/80">⚠ SKIP — score below threshold, high rug risk</span>
+                  <span className="text-[#FF7A2F]/80">⚠ SKIP — score below threshold, high fraud risk</span>
                 </div>
               </div>
             </div>
