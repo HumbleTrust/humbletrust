@@ -24,7 +24,7 @@ const navItems = [
   { id: "portfolio",  label: "Portfolio",    icon: Wallet },
   { id: "market",     label: "Market",       icon: BarChart2 },
   { id: "nft",        label: "NFT Badges",   icon: Award },
-  { id: "score",      label: "Risk Score API", icon: Code2 },
+  { id: "score",      label: "Score API",    icon: Code2 },
   { id: "api",        label: "API Plans",    icon: Zap },
   { id: "about",      label: "About",        icon: Info },
   { id: "settings",   label: "Settings",     icon: Settings },
@@ -42,7 +42,7 @@ const moreNavItems = [
   { id: "dashboard", label: "Dashboard",  icon: LayoutDashboard },
   { id: "market",    label: "Market",     icon: BarChart2 },
   { id: "nft",       label: "NFT Badges", icon: Award },
-  { id: "score",     label: "Risk Score API", icon: Code2 },
+  { id: "score",     label: "Score API",  icon: Code2 },
   { id: "api",       label: "API Plans",  icon: Zap },
   { id: "about",     label: "About",      icon: Info },
   { id: "settings",  label: "Settings",   icon: Settings },
@@ -81,7 +81,7 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
             </motion.div>
             <div>
               <h1 className="font-bold text-xl text-white">HumbleTrust</h1>
-              <p className="text-xs text-white/50">Trust Layer · Security Infrastructure</p>
+              <p className="text-xs text-white/50">Trust Layer · Devnet</p>
             </div>
           </div>
         </div>
